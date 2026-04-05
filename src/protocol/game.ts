@@ -139,7 +139,9 @@ export function buildGamePacket(cmdIndex: number, args: Buffer, combat = false, 
 //
 // Wire layout (after the command byte 0x3B):
 //   [2 bytes: type_flag via FUN_00402b10(1) = encodeB85_1]
-//   [1 byte:  count via FUN_00402f40 = encodeAsByte]
+//   [1 byte:  count    via FUN_00402f40    = encodeAsByte]  CONFIRMED by capture analysis:
+//              the working 1-mech session sent 0x22 here (count=1); b85_1 would have given
+//              count=85 and produced garbage — encodeAsByte is definitively correct.
 //   Per mech (repeat count times):
 //     [3 bytes: mech_id via FUN_00402b10(2) = encodeB85_2]
 //     [1 byte:  type via FUN_00402f40]
@@ -164,7 +166,7 @@ export interface MechEntry {
 /**
  * Build command-26 (mech list) args buffer.
  * @param typeFlag  0 = normal, 0x20/'>' = show extended buttons.
- * @param mechs     Array of mech entries (≤ 84 entries).
+ * @param mechs     Array of mech entries.
  * @param footer    Optional footer string.
  */
 export function buildMechListArgs(
@@ -172,9 +174,14 @@ export function buildMechListArgs(
   typeFlag = 0,
   footer   = '',
 ): Buffer {
+  if (mechs.length > 84) {
+    throw new RangeError(
+      `buildMechListArgs: mechs.length=${mechs.length} exceeds the ARIES protocol limit of 84 entries per frame.`,
+    );
+  }
   const parts: Buffer[] = [
     encodeB85_1(typeFlag),          // 2 bytes: type_flag
-    encodeAsByte(mechs.length),     // 1 byte:  count
+    encodeAsByte(mechs.length),     // 1 byte:  count (FUN_00402f40 confirmed by capture; max 84)
   ];
 
   for (const m of mechs) {

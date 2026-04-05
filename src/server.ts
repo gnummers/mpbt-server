@@ -33,6 +33,7 @@ import { CaptureLogger } from './util/capture.js';
 
 const log = new Logger('server', 'debug', path.join('logs', 'server.log'));
 const players = new PlayerRegistry();
+const MECH_SEND_LIMIT = 4; // client UI shows 4 mech slots; cap until roster assignment is implemented.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -219,7 +220,16 @@ const CONFIRM_DIALOG_ID = 2;
 // Mech roster loaded from mechdata/*.MEC at startup.
 // See src/data/mechs.ts — no names are hardcoded; the client resolves chassis
 // display names internally via MechWin_LookupMechName (FUN_00438280).
-const MECHS: MechEntry[] = loadMechs();
+const MECHS: MechEntry[] = (() => {
+  try {
+    return loadMechs();
+  } catch (err) {
+    const message = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    log.error('Failed to load mechs: %s', message);
+    throw err;
+  }
+})();
+log.info('Loaded %d mechs from mechdata/', MECHS.length);
 
 /**
  * Advance and return the server's outgoing sequence number.
@@ -270,8 +280,13 @@ function handleGameData(
   if (cmdIdx === 3 && !session.mechListSent) {
     // cmd 3 = client-ready (FUN_0040d3c0): send mech list exactly once.
     // FUN_0043A370 reads it → FUN_00439f70 creates the mech-selection window.
-    connLog.info('[game] client-ready → sending MECH LIST (cmd 26) — %d mechs', MECHS.length);
-    const mechPkt = buildMechListPacket(MECHS, 0, '', nextSeq(session));
+    //
+    // The client stores mech entries in fixed-size static arrays; the UI shows
+    // 4 slots. Cap at MECH_SEND_LIMIT until player-specific roster assignment is implemented.
+    // TODO: load player-specific mech assignments rather than the global catalog.
+    const mechsToSend = MECHS.slice(0, MECH_SEND_LIMIT);
+    connLog.info('[game] client-ready → sending MECH LIST (cmd 26) — %d mechs (capped at %d)', mechsToSend.length, MECH_SEND_LIMIT);
+    const mechPkt = buildMechListPacket(mechsToSend, 0, '', nextSeq(session));
     send(session.socket, mechPkt, capture, 'MECH_LIST');
     session.mechListSent = true;
 
@@ -289,19 +304,34 @@ function handleGameData(
     if (listId === 0 && selection > 0 && session.mechListSent && !session.awaitingMechConfirm) {
       // Mech-window selection: user picked a mech (selection = mech.slot + 1).
       // Send server cmd-7 confirmation dialog — FUN_004112b0 shows a numbered menu.
+      // Two options: 1=Launch! 2=Cancel. ESC from inside this dialog type sends
+      // cmd 0x1D (handled below); both ESC and the Cancel item re-send the mech
+      // list so the client returns to the mech selection screen.
       connLog.info('[game] mech selected (slot=%d) → sending CONFIRM dialog', selection - 1);
-      const confirmPkt = buildMenuDialogPacket(CONFIRM_DIALOG_ID, 'CONFIRM', ['Launch!'], nextSeq(session));
+      const confirmPkt = buildMenuDialogPacket(CONFIRM_DIALOG_ID, 'CONFIRM', ['Launch!', 'Cancel'], nextSeq(session));
       send(session.socket, confirmPkt, capture, 'CONFIRM_DIALOG');
       session.awaitingMechConfirm = true;
 
     } else if (listId === CONFIRM_DIALOG_ID && selection > 0 && session.awaitingMechConfirm) {
-      // User confirmed from the dialog → redirect to game world.
-      // COMMEG32.DLL case 3: 120-byte payload [addr40|internet40|pw40],
-      // then FUN_100011c0 opens a new TCP connection to addr.
-      connLog.info('[game] confirmed (item=%d) → sending REDIRECT', selection);
-      const redir = buildRedirectPacket('127.0.0.1');
-      send(session.socket, redir, capture, 'REDIRECT');
-      session.phase = 'closing';
+      if (selection === 1) {
+        // Item 1 = "Launch!" → redirect to game world.
+        // COMMEG32.DLL case 3: 120-byte payload [addr40|internet40|pw40],
+        // then FUN_100011c0 opens a new TCP connection to addr.
+        connLog.info('[game] confirmed (Launch!) → sending REDIRECT');
+        const redir = buildRedirectPacket('127.0.0.1');
+        send(session.socket, redir, capture, 'REDIRECT');
+        session.phase = 'closing';
+      } else if (selection === 2) {
+        // Item 2 = "Cancel" → dismiss dialog, re-send mech list so client returns
+        // to mech selection screen.
+        connLog.info('[game] cancelled → re-sending mech list');
+        session.awaitingMechConfirm = false;
+        const mechsToSend = MECHS.slice(0, MECH_SEND_LIMIT);
+        const mechPkt = buildMechListPacket(mechsToSend, 0, '', nextSeq(session));
+        send(session.socket, mechPkt, capture, 'MECH_LIST');
+      } else {
+        connLog.warn('[game] CONFIRM dialog: unexpected selection=%d — ignoring', selection);
+      }
 
     } else {
       connLog.debug('[game] cmd 7 ignored (listId=%d sel=%d mechSent=%s awaitConfirm=%s)',
@@ -311,17 +341,24 @@ function handleGameData(
   } else if (cmdIdx === 0x1D) {
     // cmd 0x1D (29) = ESC/cancel pressed in a menu dialog.
     // Client format confirmed: [Frame_ReadByte(p1)] [type1 2B: p2] [type4 5B: p3]
-    // Server response: unknown — needs RE of g_lobby_DispatchTable[0x1D].
-    // Safe default: reset confirm state so client can re-select a mech.
+    // Response: re-send the mech list so the client dismisses the dialog and
+    // returns to the mech selection screen. Sending nothing leaves the dialog
+    // frozen (client waits indefinitely for a server packet to close it).
     const p1 = payload.length > 3 ? payload[3] - 0x21 : -1;
-    connLog.info('[game] cmd 0x1D (cancel/ESC): p1=%d — resetting confirm state', p1);
+    connLog.info('[game] cmd 0x1D (cancel/ESC): p1=%d — re-sending mech list to dismiss dialog', p1);
     session.awaitingMechConfirm = false;
+    const mechsToSend = MECHS.slice(0, MECH_SEND_LIMIT);
+    const mechPkt = buildMechListPacket(mechsToSend, 0, '', nextSeq(session));
+    send(session.socket, mechPkt, capture, 'MECH_LIST');
 
   } else if (cmdIdx === 20) {
     // cmd 20 = 'X' key — examine mech (requests mech stats from server).
+    // WARNING: sending no response locks the client (it waits indefinitely for
+    // the reply). Tracked in issues #3 (RE) and #4 (implementation). SKIP for M1.
     // TODO: respond with mech detail data once format is understood.
-    // RE target: Cmd20_MouseHandler (FUN_00401c90)
-    connLog.debug('[game] cmd 20 (examine mech) — noop for now');
+    // RE target: Cmd20_ParseTextDialog (FUN_00411D90) — see RESEARCH.md.
+    // (FUN_00401c90 is CombatTick_Mover, an unrelated function.)
+    connLog.debug('[game] cmd 20 (examine mech) — noop (client will lock; see issues #3/#4)');
 
   } else {
     connLog.debug('[game] cmd=%d ignored (mechListSent=%s)', cmdIdx, session.mechListSent);
@@ -329,6 +366,22 @@ function handleGameData(
 }
 
 // ── Server startup ────────────────────────────────────────────────────────────
+
+// Capture unhandled exceptions so they appear in logs/server.log.
+// Set exitCode first, then flush the log stream before exiting so buffered
+// output is not dropped. Child loggers share the root stream, so closing
+// `log` is sufficient.
+process.on('uncaughtException', (err: Error) => {
+  log.error('Uncaught exception: %s\n%s', err.message, err.stack ?? '');
+  process.exitCode = 1;
+  log.close(() => process.exit());
+});
+process.on('unhandledRejection', (reason: unknown) => {
+  const msg = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+  log.error('Unhandled rejection: %s', msg);
+  process.exitCode = 1;
+  log.close(() => process.exit());
+});
 
 const server = net.createServer(handleConnection);
 
