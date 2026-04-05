@@ -25,13 +25,20 @@ jobs:
 
             // Maintainers (repo owner or users with write access) may create
             // issues programmatically without the web form — skip enforcement.
-            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner,
-              repo:  context.repo.repo,
-              username: author,
-            }).catch(() => ({ data: { permission: 'none' } }));
-            const isMaintainer = ['admin', 'write'].includes(perm.permission);
-            if (isMaintainer) return;
+            // Note: getCollaboratorPermissionLevel returns 404 for the personal
+            // repo owner (owner is not a "collaborator"), so check login first.
+            const isOwner = author === context.repo.owner;
+            if (!isOwner) {
+              const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                username: author,
+              }).catch(() => ({ data: { permission: 'none' } }));
+              const isMaintainer = ['admin', 'write'].includes(perm.permission);
+              if (isMaintainer) return;
+            } else {
+              return; // repo owner always bypasses template enforcement
+            }
 
             // All five templates require multiple "### Heading" sections.
             // A bare/blank issue won't have these.

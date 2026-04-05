@@ -2,7 +2,7 @@ name: Add Accepted Issues to Project
 
 on:
   issues:
-    types: [labeled]
+    types: [labeled, closed]
 
 jobs:
   add-to-backlog:
@@ -49,5 +49,87 @@ jobs:
               `Issue #${context.payload.issue.number} added to project ${projectNumber} ` +
               `(item ${result.addProjectV2ItemById.item.id})`
             );
+        env:
+          PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
+
+  move-to-done:
+    # Fires when any issue is closed. Finds the item in the project and
+    # transitions its Status field to "Done".
+    if: |
+      github.event.action == 'closed' &&
+      vars.PROJECT_NUMBER != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_PAT }}
+          script: |
+            const projectNumber = parseInt(process.env.PROJECT_NUMBER, 10);
+            const issueNodeId   = context.payload.issue.node_id;
+
+            // Fetch the issue's project items and find the matching project.
+            const data = await github.graphql(
+              `query($issueId: ID!) {
+                 node(id: $issueId) {
+                   ... on Issue {
+                     projectItems(first: 10) {
+                       nodes {
+                         id
+                         project { id number }
+                         fieldValueByName(name: "Status") {
+                           ... on ProjectV2ItemFieldSingleSelectValue {
+                             field {
+                               ... on ProjectV2SingleSelectField {
+                                 id
+                                 options { id name }
+                               }
+                             }
+                           }
+                         }
+                       }
+                     }
+                   }
+                 }
+               }`,
+              { issueId: issueNodeId }
+            );
+
+            const item = data.node.projectItems.nodes
+              .find(n => n.project.number === projectNumber);
+            if (!item) {
+              core.info(`Issue #${context.payload.issue.number} not in project ${projectNumber} — skipping`);
+              return;
+            }
+
+            const field = item.fieldValueByName?.field;
+            if (!field) {
+              core.warning(`Issue #${context.payload.issue.number}: could not resolve Status field`);
+              return;
+            }
+
+            const doneOption = field.options.find(o => o.name === 'Done');
+            if (!doneOption) {
+              core.warning('No "Done" status option found in project');
+              return;
+            }
+
+            await github.graphql(
+              `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                 updateProjectV2ItemFieldValue(input: {
+                   projectId: $projectId
+                   itemId: $itemId
+                   fieldId: $fieldId
+                   value: { singleSelectOptionId: $optionId }
+                 }) { projectV2Item { id } }
+               }`,
+              {
+                projectId: item.project.id,
+                itemId:    item.id,
+                fieldId:   field.id,
+                optionId:  doneOption.id,
+              }
+            );
+
+            core.info(`Issue #${context.payload.issue.number} → Done`);
         env:
           PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
