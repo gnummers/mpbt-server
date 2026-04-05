@@ -218,6 +218,10 @@ and documented in detail in [`RESEARCH.md`](RESEARCH.md).  Key functions:
 | `MechWin_Create` | `FUN_00439f70` | MPBTWIN.EXE | Creates 640×480 mech selection window |
 | `Cmd7_ParseMenuDialog` | `FUN_004112b0` | MPBTWIN.EXE | Command 7 — creates numbered menu dialog |
 
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the full milestone plan from current state to a playable two-player game.
+
 ## Contributing
 
 This is an open research project. If you have:
