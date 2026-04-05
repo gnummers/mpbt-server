@@ -52,16 +52,17 @@ message explaining how to resubmit.
 
 ### Test Plans
 
-When opening a **Test Plan** issue, file each individual test case (T1, T2, …)
-as its own **subissue** on the parent:
+When opening a **Test Plan** issue, list each test case in the body using the
+exact format from the template (`- [ ] **T#** — description`). A workflow
+(`test-plan-subissues.yml`) fires on `issues: opened` and automatically:
 
-1. Open the Test Plan issue and list all T# cases in the body.
-2. For each T#, click **Create sub-issue** (or use the sub-issues API) and open a
-   brief issue titled `T# — <description>` under the parent.
-3. GitHub will display a progress bar on the parent issue that advances
-   automatically as each subissue is closed.
-4. Close each subissue (or check the checkbox in the parent body) as the test
-   passes; close the parent Test Plan issue when all T# are resolved.
+1. Parses every `T#` line from the **Test Cases** section.
+2. Creates a child issue for each case titled `T# — <description>`.
+3. Links each child as a GitHub sub-issue of the parent.
+
+The parent issue will show a progress bar that advances as each subissue is
+closed. Close subissues individually as tests pass; close the parent Test Plan
+issue when all cases are resolved.
 
 Subissue title format: `T# — <one-line summary of expected result>`
 Example: `T3 — Mech selection window shows 4 mechs from roster`

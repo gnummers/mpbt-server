@@ -1,0 +1,87 @@
+name: Create Test Plan Subissues
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  create-subissues:
+    # Only run for Test Plan issues (identified by the 'type: testing' label
+    # that the issue form applies automatically).
+    if: contains(github.event.issue.labels.*.name, 'type: testing')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body         = context.payload.issue.body ?? '';
+            const parentNumber = context.payload.issue.number;
+            const owner        = context.repo.owner;
+            const repo         = context.repo.repo;
+
+            // ── 1. Extract the "### Test Cases" section ─────────────────────
+            const sectionMatch = body.match(
+              /###\s+Test Cases\s*\n([\s\S]*?)(?=\n###|\s*$)/
+            );
+            if (!sectionMatch) {
+              core.info('No "Test Cases" section found — skipping subissue creation');
+              return;
+            }
+
+            // ── 2. Match lines: - [ ] **T1** — description ──────────────────
+            // Accepts both the em-dash (—) and a plain hyphen/dash as separators.
+            const lineRe = /^- \[ \] \*\*(T\d+[a-z]?)\*\*\s*(?:—|-+)\s*(.+)/gm;
+            const cases  = [];
+            let m;
+            while ((m = lineRe.exec(sectionMatch[1])) !== null) {
+              cases.push({ id: m[1], desc: m[2].trim() });
+            }
+
+            if (cases.length === 0) {
+              core.info('No T# lines matched — skipping subissue creation');
+              return;
+            }
+
+            core.info(
+              `Issue #${parentNumber}: creating ${cases.length} subissues ` +
+              `(${cases.map(c => c.id).join(', ')})`
+            );
+
+            // ── 3. Create + link each test case as a subissue ───────────────
+            for (const tc of cases) {
+              let subNumber;
+              try {
+                const { data: sub } = await github.rest.issues.create({
+                  owner,
+                  repo,
+                  title:  `${tc.id} — ${tc.desc}`,
+                  labels: ['type: testing'],
+                  body:   `Sub-issue of #${parentNumber}\n\n**${tc.id}** — ${tc.desc}`,
+                });
+                subNumber = sub.number;
+              } catch (err) {
+                core.warning(`Failed to create issue for ${tc.id}: ${err.message}`);
+                continue;
+              }
+
+              try {
+                await github.request(
+                  'POST /repos/{owner}/{repo}/issues/{issue_number}/sub_issues',
+                  {
+                    owner,
+                    repo,
+                    issue_number: parentNumber,
+                    sub_issue_id: subNumber,
+                    headers: { 'X-GitHub-Api-Version': '2022-11-28' },
+                  }
+                );
+                core.info(`  Created and linked #${subNumber} for ${tc.id}`);
+              } catch (err) {
+                core.warning(
+                  `Created #${subNumber} for ${tc.id} but could not link as subissue: ${err.message}`
+                );
+              }
+            }
