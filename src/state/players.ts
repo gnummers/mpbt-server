@@ -1,0 +1,71 @@
+/**
+ * Per-connection player session state.
+ */
+
+import type { Socket } from 'net';
+
+export type SessionPhase =
+  | 'connected'   // TCP accepted, waiting for first bytes
+  | 'auth'        // parsing login packet
+  | 'lobby'       // in the role-play shell, navigating rooms
+  | 'closing';    // disconnect in progress
+
+export interface ClientSession {
+  /** Unique session ID (UUID). */
+  id: string;
+  /** Authenticated username (empty until auth completes). */
+  username: string;
+  /** Current lifecycle phase. */
+  phase: SessionPhase;
+  /** Current room ID in the world. */
+  roomId: string;
+  /** Underlying TCP socket. */
+  socket: Socket;
+  /** Wall-clock time of connection. */
+  connectedAt: Date;
+  /**
+   * Byte offset in the incoming stream — used by logging to correlate
+   * packet captures with stream positions.
+   */
+  bytesReceived: number;
+  /** True once the mech list (cmd 26) has been sent to the client. */
+  mechListSent: boolean;
+  /** True once we sent the server cmd-7 confirm dialog; awaiting user's choice. */
+  awaitingMechConfirm: boolean;
+  /** Server→client sequence number 0..41, incremented per game frame. */
+  serverSeq: number;
+}
+
+export class PlayerRegistry {
+  private sessions = new Map<string, ClientSession>();
+
+  add(session: ClientSession): void {
+    this.sessions.set(session.id, session);
+  }
+
+  get(id: string): ClientSession | undefined {
+    return this.sessions.get(id);
+  }
+
+  remove(id: string): void {
+    this.sessions.delete(id);
+  }
+
+  /** Sessions currently in a given room. */
+  inRoom(roomId: string): ClientSession[] {
+    return [...this.sessions.values()].filter(s => s.roomId === roomId);
+  }
+
+  /** Broadcast raw bytes to all sessions in a room except the sender. */
+  broadcastToRoom(roomId: string, data: Buffer, excludeId: string): void {
+    for (const session of this.inRoom(roomId)) {
+      if (session.id !== excludeId && !session.socket.destroyed) {
+        session.socket.write(data);
+      }
+    }
+  }
+
+  get count(): number {
+    return this.sessions.size;
+  }
+}

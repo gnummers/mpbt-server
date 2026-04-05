@@ -1,0 +1,36 @@
+{
+  "name": "mpbt-server",
+  "version": "0.1.0",
+  "description": "Multiplayer BattleTech: Solaris — ARIES server emulator",
+  "author": "Ken Human",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kenhuman/mpbt-server.git"
+  },
+  "keywords": [
+    "battletech",
+    "mpbt",
+    "mux",
+    "reverse-engineering",
+    "game-server",
+    "aries-protocol"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "node --loader ts-node/esm src/server.ts",
+    "watch": "tsc --watch",
+    "gen-pcgi": "node --loader ts-node/esm src/scripts/gen-pcgi.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "_comment": "MPBT Solaris RE symbol dictionary. Maps canonical names to their Ghidra-default binary identifiers. Apply canonical names in Ghidra via Edit → Rename Symbol to make cross-references readable.",
+  "version": "1",
+  "naming_convention": {
+    "functions": "Module_VerbNoun — e.g. Lobby_RecvDispatch, Frame_VerifyCRC, MechWin_Create",
+    "globals":   "g_module_description (camelCase) — e.g. g_lobby_DispatchTable, g_cmd26_MechIdArr"
+  },
+  "COMMEG32.DLL": {
+    "functions": {
+      "Aries_RecvDispatch":    { "binary": "FUN_100014e0", "role": "Main recv loop; switch on ARIES packet type" },
+      "Aries_SendLoginPacket": { "binary": "FUN_10001420", "role": "Builds + sends type-0x15 LOGIN packet" },
+      "Aries_PacketAlloc":     { "binary": "FUN_10003600", "role": "Allocates outgoing packet; writes type + 12-byte header" },
+      "Aries_PacketSetLen":    { "binary": "FUN_10003680", "role": "Finalises header: fills payload_length field at offset 8" },
+      "Aries_PacketParse":     { "binary": "FUN_100036d0", "role": "Recv-side parser: validates 12-byte header, extracts type + payload" },
+      "Aries_Connect":         { "binary": "FUN_100011c0", "role": "Opens new TCP connection to addr (called on REDIRECT)" },
+      "Aries_RawWrite":        { "binary": "FUN_10002b10", "role": "Sends raw bytes on active socket" }
+    },
+    "data": {
+      "g_aries_GameWorldConn": { "binary": "DAT_1001a080", "role": "Pointer to secondary/game-world connection object; set after REDIRECT" },
+      "g_aries_LoginBuf":      { "binary": "DAT_1001f888", "role": "Outgoing LOGIN packet data buffer (layout confirmed from Set*() exports)" }
+    }
+  },
+  "MPBTWIN.EXE": {
+    "functions": {
+      "Frame_VerifyCRC":        { "binary": "FUN_00402e30", "role": "19-bit LFSR CRC validator for server→client inner frames" },
+      "Frame_EncodeArg":        { "binary": "FUN_00402be0", "role": "Base-85 arg encoder: Frame_EncodeArg(n, value) emits n+1 bytes" },
+      "Frame_DecodeArg":        { "binary": "FUN_00402b10", "role": "Base-85 arg decoder, symmetric to Frame_EncodeArg" },
+      "Frame_ReadByte":         { "binary": "FUN_00402f40", "role": "Read one encoded byte from parse buffer: returns *ptr++ - 0x21" },
+      "Frame_WriteCmdByte":     { "binary": "FUN_00403030", "role": "Write command byte to send buffer: *ptr++ = param + 0x21" },
+      "Frame_ReadString":       { "binary": "FUN_00403160", "role": "Read length-prefixed string: [len+0x21][ASCII bytes]" },
+      "Frame_CopyString":       { "binary": "FUN_0040c0d0", "role": "Calls Frame_ReadString then null-terminates destination buffer" },
+
+      "Lobby_RecvDispatch":     { "binary": "FUN_00402cf0", "role": "Inner frame processor; calls seq pre-handler + g_lobby_DispatchTable" },
+      "Lobby_SeqHandler":       { "binary": "FUN_0040C2A0", "role": "Seq-byte pre-handler; ACK path if decoded val > 42" },
+      "Lobby_SendAck":          { "binary": "FUN_0040c280", "role": "Send 2-byte ACK frame: [0x22, val+0x2b]" },
+      "Lobby_WelcomeGate":      { "binary": "FUN_00429a00", "role": "Accumulates recv bytes; strcmp to g_lobby_WelcomeStrMMW to unlock game loop" },
+      "Lobby_OnWelcomeA":       { "binary": "FUN_00433ef0", "role": "Called after welcome gate passes (path A — lobby UI init)" },
+      "Lobby_OnWelcomeB":       { "binary": "FUN_00429580", "role": "Called after welcome gate passes (path B)" },
+      "Lobby_OnDirectConnect":  { "binary": "FUN_00429620", "role": "MMC alternate welcome path (direct-connect mode)" },
+
+      "Cmd3_Thunk":             { "binary": "FUN_0040C190", "role": "Dispatch table entry for cmd 3; calls Cmd3_SendCapabilities" },
+      "Cmd3_SendCapabilities":  { "binary": "FUN_0040d3c0", "role": "Client-ready handler; sends capability flags [1,6,3,0]" },
+
+      "Cmd7_ParseMenuDialog":   { "binary": "FUN_004112b0", "role": "Parses server cmd 7 menu dialog payload; renders numbered choice list" },
+      "Cmd7_OnMenuPick":        { "binary": "FUN_00412190", "role": "User picks menu item; sends Cmd7_SendReply(listId, item_data[k-1]+1)" },
+      "Cmd7_OnMenuEsc":         { "binary": "FUN_004122d0", "role": "User presses ESC in menu; calls Cmd1d_Send" },
+      "Cmd7_SendReply":         { "binary": "FUN_0040d2f0", "role": "Send client cmd 7 reply: startCmd('\\a') + type1(listId) + type4(val)" },
+
+      "Cmd1d_Send":             { "binary": "FUN_00410cc0", "role": "Send cmd 0x1d cancel frame: byte(p1) + type1(p2) + type4(p3)" },
+
+      "Cmd20_Thunk":            { "binary": "FUN_00401D90", "role": "Dispatch table entry for cmd 20; jumps to Cmd20_MouseHandler" },
+      "Cmd20_MouseHandler":     { "binary": "FUN_00401c90", "role": "Cursor/mouse position handler for cmd 20 messages" },
+
+      "Cmd26_ParseMechList":    { "binary": "FUN_0043A370", "role": "Parse cmd 26 mech list payload; populate g_cmd26_* arrays" },
+      "Cmd26_ReadTypeFlag":     { "binary": "FUN_0040d4c0", "role": "Read 2-byte type_flag via Frame_DecodeArg(1)" },
+
+      "MechWin_Create":         { "binary": "FUN_00439f70", "role": "Create 640×480 mech selection window; set graphics mode 0x13" },
+      "MechWin_HighlightSlot":  { "binary": "FUN_004394b0", "role": "Highlight a mech row in selection window" },
+      "MechWin_ScrollCallback": { "binary": "FUN_00439580", "role": "Repaint callback; highlights g_mechWin_HighlightIdx slot" },
+      "MechWin_KeyHandler":     { "binary": "FUN_0043a990", "role": "Keyboard handler: S/Enter=select, X=examine, n/p=navigate" },
+      "MechWin_LookupMechName": { "binary": "FUN_00438280", "role": "Return mech name string from mech ID" }
+    },
+    "data": {
+      "g_lobby_DispatchTable":   { "binary": "DAT_00470198",    "role": "Lobby command function-pointer table (0x4C = 76 entries)" },
+      "g_lobby_SeqHandlerPtr":   { "binary": "PTR_FUN_00470190","role": "Points to Lobby_SeqHandler; installed as pre-handler in Lobby_RecvDispatch" },
+      "g_lobby_LastSeq":         { "binary": "DAT_004e2da4",    "role": "Stores most recently received client seq value (0–42)" },
+      "g_lobby_WelcomeGateOpen": { "binary": "DAT_004e2de8",    "role": "Set to 1 by Lobby_WelcomeGate when welcome string matches; unlocks main loop" },
+      "g_lobby_WelcomeStrMMW":   { "binary": "DAT_00474d48",    "role": "Literal: \"\\x1b?MMW Copyright Kesmai Corp. 1991\" (normal Windows login path)" },
+      "g_lobby_WelcomeStrMMC":   { "binary": "DAT_00474d70",    "role": "Literal: \"\\x1b?MMC ...\" (direct-connect alternate path)" },
+
+      "g_cmd7_ListIdTable":      { "binary": "DAT_00472c94",    "role": "Per-list-id callback/state array; index [0x512] used by menu dialog" },
+
+      "g_cmd26_TypeFlag":        { "binary": "DAT_004dc8dc",    "role": "Set by Cmd26_ParseMechList to received typeFlag value" },
+      "g_cmd26_MechIdArr":       { "binary": "DAT_004dc560",    "role": "mech_id values array, indexed by entry i" },
+      "g_cmd26_MechTypeArr":     { "binary": "DAT_004e2dc0",    "role": "mech_type values array, indexed by entry i" },
+      "g_cmd26_SlotArr":         { "binary": "DAT_004dc510",    "role": "slot values array, indexed by entry i (primary copy)" },
+      "g_cmd26_SlotArrAlt":      { "binary": "DAT_004dbd88",    "role": "slot values array, indexed by entry i (alternate copy)" },
+      "g_cmd26_TypeStrArr":      { "binary": "DAT_004dc5b8",    "role": "type_string array (e.g. \"SDR-5V\"), indexed by entry i" },
+      "g_cmd26_VariantArr":      { "binary": "DAT_004dc1d0",    "role": "variant string array (e.g. \"Spider\"), indexed by entry i" },
+      "g_cmd26_NameArr":         { "binary": "DAT_004dc028",    "role": "pilot name array; empty string triggers MechWin_LookupMechName fallback" },
+
+      "g_mechWin_ShowExtButtons":{ "binary": "DAT_004dbd84",    "role": "Non-zero when typeFlag triggers extended button display" },
+      "g_mechWin_HighlightIdx":  { "binary": "DAT_004dbd80",    "role": "Index of currently highlighted mech slot" }
+    }
+  }
+}
