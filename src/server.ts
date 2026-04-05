@@ -226,6 +226,17 @@ const SAMPLE_MECHS: MechEntry[] = [
   },
 ];
 
+/**
+ * Advance and return the server's outgoing sequence number.
+ * Sequence values 0–42 are valid data frames (val ≤ 42 → proceed in client pre-handler).
+ * Confirmed from Lobby_SeqHandler (FUN_0040C2A0): values > 42 are treated as ACK requests.
+ */
+function nextSeq(session: ClientSession): number {
+  const s = session.serverSeq;
+  session.serverSeq = (session.serverSeq + 1) % 43; // 0..42 inclusive
+  return s;
+}
+
 function handleGameData(
   session: ClientSession,
   payload: Buffer,
@@ -246,7 +257,18 @@ function handleGameData(
     return;
   }
 
-  const seq    = payload[1] - 0x21;
+  const seq = payload[1] - 0x21;
+
+  // ACK request: client uses seq > 42 to request server acknowledgment.
+  // Lobby_SendAck (FUN_0040c280) confirmed: reply = raw bytes [0x22, val+0x2b]
+  // wrapped in ARIES type-0. val = seq byte - 0x21, which is `seq` here.
+  if (seq > 42) {
+    const ackPayload = Buffer.from([0x22, seq + 0x2b]);
+    connLog.debug('[game] seq=%d > 42 → sending ACK [0x22, 0x%s]', seq, (seq + 0x2b).toString(16));
+    send(session.socket, buildPacket(Msg.SYNC, ackPayload), capture, 'ACK');
+    return;
+  }
+
   const cmdIdx = payload[2] - 0x21;
   connLog.info('[game] client seq=%d cmd=%d', seq, cmdIdx);
 
@@ -254,7 +276,7 @@ function handleGameData(
     // cmd 3 = client-ready (FUN_0040d3c0): send mech list exactly once.
     // FUN_0043A370 reads it → FUN_00439f70 creates the mech-selection window.
     connLog.info('[game] client-ready → sending MECH LIST (cmd 26) — %d mechs', SAMPLE_MECHS.length);
-    const mechPkt = buildMechListPacket(SAMPLE_MECHS);
+    const mechPkt = buildMechListPacket(SAMPLE_MECHS, 0, '', nextSeq(session));
     send(session.socket, mechPkt, capture, 'MECH_LIST');
     session.mechListSent = true;
 
@@ -273,7 +295,7 @@ function handleGameData(
       // Mech-window selection: user picked a mech (selection = mech.slot + 1).
       // Send server cmd-7 confirmation dialog — FUN_004112b0 shows a numbered menu.
       connLog.info('[game] mech selected (slot=%d) → sending CONFIRM dialog', selection - 1);
-      const confirmPkt = buildMenuDialogPacket(CONFIRM_DIALOG_ID, 'CONFIRM', ['Launch!']);
+      const confirmPkt = buildMenuDialogPacket(CONFIRM_DIALOG_ID, 'CONFIRM', ['Launch!'], nextSeq(session));
       send(session.socket, confirmPkt, capture, 'CONFIRM_DIALOG');
       session.awaitingMechConfirm = true;
 
@@ -291,9 +313,19 @@ function handleGameData(
         listId, selection, session.mechListSent, session.awaitingMechConfirm);
     }
 
+  } else if (cmdIdx === 0x1D) {
+    // cmd 0x1D (29) = ESC/cancel pressed in a menu dialog.
+    // Client format confirmed: [Frame_ReadByte(p1)] [type1 2B: p2] [type4 5B: p3]
+    // Server response: unknown — needs RE of g_lobby_DispatchTable[0x1D].
+    // Safe default: reset confirm state so client can re-select a mech.
+    const p1 = payload.length > 3 ? payload[3] - 0x21 : -1;
+    connLog.info('[game] cmd 0x1D (cancel/ESC): p1=%d — resetting confirm state', p1);
+    session.awaitingMechConfirm = false;
+
   } else if (cmdIdx === 20) {
     // cmd 20 = 'X' key — examine mech (requests mech stats from server).
     // TODO: respond with mech detail data once format is understood.
+    // RE target: Cmd20_MouseHandler (FUN_00401c90)
     connLog.debug('[game] cmd 20 (examine mech) — noop for now');
 
   } else {

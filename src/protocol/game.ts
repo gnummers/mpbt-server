@@ -195,10 +195,11 @@ export function buildMechListPacket(
   mechs:     MechEntry[],
   typeFlag = 0,
   footer   = '',
+  seq      = 0,
 ): Buffer {
   const CMD_MECH_LIST = 26;
   const args = buildMechListArgs(mechs, typeFlag, footer);
-  return buildGamePacket(CMD_MECH_LIST, args);
+  return buildGamePacket(CMD_MECH_LIST, args, false, seq);
 }
 
 // ── Client frame decoders ─────────────────────────────────────────────────────
