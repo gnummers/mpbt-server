@@ -45,6 +45,7 @@ import { launchRegistry } from './state/launch.js';
 import { loadMechs } from './data/mechs.js';
 import { Logger } from './util/logger.js';
 import { CaptureLogger } from './util/capture.js';
+import { findCharacter } from './db/characters.js';
 
 // ── Shared mech catalog (same on-disk data as lobby) ─────────────────────────
 // Loaded once at module import time.  Provides a fallback when a player's
@@ -85,12 +86,12 @@ function nextSeq(session: ClientSession): number {
 
 // ── Login handler ─────────────────────────────────────────────────────────────
 
-function handleWorldLogin(
+async function handleWorldLogin(
   session:  ClientSession,
   payload:  Buffer,
   connLog:  Logger,
   capture:  CaptureLogger,
-): void {
+): Promise<void> {
   if (session.phase !== 'auth') {
     connLog.warn('[world-login] received LOGIN in phase %s — ignoring', session.phase);
     return;
@@ -129,9 +130,26 @@ function handleWorldLogin(
     );
   }
 
+  // displayName and allegiance are set by the lobby before REDIRECT.
+  // If missing (e.g. direct connection for testing), fall back to DB lookup.
+  if (!session.displayName && session.accountId !== undefined) {
+    const character = await findCharacter(session.accountId);
+    if (character) {
+      session.displayName = character.display_name;
+      session.allegiance  = character.allegiance;
+      connLog.info(
+        '[world-login] character loaded from DB: displayName="%s" allegiance=%s',
+        character.display_name, character.allegiance,
+      );
+    }
+  }
+
   connLog.info(
-    '[world-login] accepted: user="%s" service="%s"',
-    session.username, login.serviceId,
+    '[world-login] accepted: user="%s" displayName="%s" allegiance=%s service="%s"',
+    session.username,
+    session.displayName ?? session.username,
+    session.allegiance ?? '(none)',
+    login.serviceId,
   );
 
   // SYNC ack — same timing packet as lobby.
@@ -228,7 +246,9 @@ function sendWorldInitSequence(
 ): void {
   const { socket } = session;
   const mechId     = session.selectedMechId ?? FALLBACK_MECH_ID;
-  const callsign   = session.username.slice(0, 84) || 'Pilot';
+  // Prefer the character display name (set from DB after login); fall back to
+  // the login username only when character data is unavailable.
+  const callsign   = (session.displayName ?? session.username).slice(0, 84) || 'Pilot';
 
   // Cmd6 — CursorBusy (hourglass while arena loads)
   send(socket, buildCmd6CursorBusyPacket(nextSeq(session)), capture, 'CMD6_BUSY');
@@ -324,7 +344,11 @@ function handleWorldConnection(socket: net.Socket, players: PlayerRegistry, log:
 
       switch (pkt.type) {
         case Msg.LOGIN:
-          handleWorldLogin(session, pkt.payload, connLog, capture);
+          handleWorldLogin(session, pkt.payload, connLog, capture).catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            connLog.error('[world] uncaught error in handleWorldLogin: %s', msg);
+            socket.destroy();
+          });
           break;
 
         case Msg.SYNC:
