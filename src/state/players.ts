@@ -8,6 +8,7 @@ export type SessionPhase =
   | 'connected'   // TCP accepted, waiting for first bytes
   | 'auth'        // parsing login packet
   | 'lobby'       // in the role-play shell, navigating rooms
+  | 'world'       // in the game world (RPS/arena) after REDIRECT
   | 'closing';    // disconnect in progress
 
 export interface ClientSession {
@@ -34,6 +35,16 @@ export interface ClientSession {
   awaitingMechConfirm: boolean;
   /** Server→client sequence number 0..41, incremented per game frame. */
   serverSeq: number;
+  /**
+   * Mech ID selected in the lobby and used to initialize the world arena.
+   * Set on world-server sessions (via launchRegistry.consume); undefined on lobby sessions.
+   */
+  selectedMechId?: number;
+  /**
+   * 0-based mech slot (sort position) for the selected mech.
+   * Set on world-server sessions; undefined on lobby sessions.
+   */
+  selectedMechSlot?: number;
 }
 
 export class PlayerRegistry {

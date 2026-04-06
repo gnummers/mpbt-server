@@ -20,13 +20,15 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import * as os from 'os';
 
-import { ARIES_PORT, Msg } from './protocol/constants.js';
+import { ARIES_PORT, WORLD_PORT, Msg } from './protocol/constants.js';
 import { PacketParser, buildPacket, hexDump } from './protocol/aries.js';
 import { parseLoginPayload, buildLoginRequest, buildSyncAck, buildWelcomePacket } from './protocol/auth.js';
 import { buildMechListPacket, buildMenuDialogPacket, buildRedirectPacket, buildCmd20Packet, parseClientCmd7, decodeArgType4, type MechEntry } from './protocol/game.js';
 import { loadMechs } from './data/mechs.js';
 import { MECH_STATS } from './data/mech-stats.js';
 import { PlayerRegistry, ClientSession } from './state/players.js';
+import { launchRegistry } from './state/launch.js';
+import { startWorldServer } from './server-world.js';
 import { Logger } from './util/logger.js';
 import { CaptureLogger } from './util/capture.js';
 
@@ -377,35 +379,45 @@ function handleGameData(
 
     if (listId === 0 && selection > 0 && session.mechListSent && !session.awaitingMechConfirm) {
       // Mech-window selection: user picked a mech (selection = mech.slot + 1).
-      // Send server cmd-7 confirmation dialog — FUN_004112b0 shows a numbered menu.
-      // Two options: 1=Launch! 2=Cancel. ESC from inside this dialog type sends
-      // cmd 0x1D (handled below); both ESC and the Cancel item re-send the mech
-      // list so the client returns to the mech selection screen.
-      connLog.info('[game] mech selected (slot=%d) → sending CONFIRM dialog', selection - 1);
+      // Stash the chosen slot index on the session so the REDIRECT handler can
+      // record it in the launch registry.
+      const chosenSlot = selection - 1;
+      (session as ClientSession & { _pendingSlot?: number })._pendingSlot = chosenSlot;
+      connLog.info('[game] mech selected (slot=%d) → sending CONFIRM dialog', chosenSlot);
       const confirmPkt = buildMenuDialogPacket(CONFIRM_DIALOG_ID, 'CONFIRM', ['Launch!', 'Cancel'], nextSeq(session));
       send(session.socket, confirmPkt, capture, 'CONFIRM_DIALOG');
       session.awaitingMechConfirm = true;
 
     } else if (listId === CONFIRM_DIALOG_ID && selection > 0 && session.awaitingMechConfirm) {
       if (selection === 1) {
-        // Item 1 = "Launch!" → redirect to game world.
+        // Item 1 = "Launch!" → redirect to game world server (WORLD_PORT 2001).
         // COMMEG32.DLL case 3: 120-byte payload [addr40|internet40|pw40],
-        // then FUN_100011c0 opens a new TCP connection to addr.
-        // No world listener exists yet (TODO M3). Redirect back to ARIES_PORT
-        // so the client re-connects to this server rather than hitting a dead port.
-        // When M3 is implemented, change this to WORLD_PORT and open a second listener.
-        connLog.info('[game] confirmed (Launch!) → sending REDIRECT to %s:%d (ARIES_PORT; world listener not yet implemented)', SERVER_HOST, ARIES_PORT);
+        // then FUN_100011c0 opens a new TCP connection to addr ("host:port" format).
+        // Record the selected mech in the launch registry so the world server
+        // can look it up when the client reconnects.
+        // pendingSlot was stashed on the session object at mech-select time.
+        const pendingSlot = (session as ClientSession & { _pendingSlot?: number })._pendingSlot ?? 0;
+        const selectedMech = MECHS.find(m => m.slot === pendingSlot) ?? MECHS[0];
+        launchRegistry.record(session.username, {
+          mechId:         selectedMech.id,
+          mechSlot:       selectedMech.slot,
+          mechTypeString: selectedMech.typeString,
+        });
+        connLog.info(
+          '[game] confirmed (Launch!) → recording launch mech=%s (id=%d) and REDIRECT to %s:%d',
+          selectedMech.typeString, selectedMech.id, SERVER_HOST, WORLD_PORT,
+        );
         // IMPORTANT: addr must be "host:port" format.
         // Aries_OpenSocket (COMMEG32.DLL) calls strchr(addr, ':') and returns -1
         // immediately if ':' is not found, silently failing the secondary connection.
         // SERVER_HOST defaults to 127.0.0.1 (loopback); set the SERVER_HOST env var
         // to the server's LAN/public IP for clients connecting from another machine.
-        const redirectAddr = `${SERVER_HOST}:${ARIES_PORT}`;
+        const redirectAddr = `${SERVER_HOST}:${WORLD_PORT}`;
         const redirectColonCount = (redirectAddr.match(/:/g) || []).length;
         const redirectAddrLength = Buffer.byteLength(redirectAddr, 'ascii');
         if (redirectColonCount !== 1 || redirectAddrLength > 39) {
           connLog.error(
-            '[game] invalid REDIRECT addr "%s" (expected exactly one ":" and max 39 ASCII bytes, got %d ":" and %d bytes); check SERVER_HOST/ARIES_PORT configuration',
+            '[game] invalid REDIRECT addr "%s" (expected exactly one ":" and max 39 ASCII bytes, got %d ":" and %d bytes); check SERVER_HOST/WORLD_PORT configuration',
             redirectAddr,
             redirectColonCount,
             redirectAddrLength,
@@ -520,6 +532,10 @@ server.on('error', (err: Error) => {
   log.error('Server error: %s', err.message);
   process.exit(1);
 });
+
+// Start the world server (M3) — listens on WORLD_PORT (2001).
+// Shares the same player registry and logger as the lobby server.
+startWorldServer(log, players);
 
 server.listen(ARIES_PORT, '0.0.0.0', () => {
   const addr = server.address() as net.AddressInfo;
