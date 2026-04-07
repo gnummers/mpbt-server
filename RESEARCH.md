@@ -1923,3 +1923,268 @@ The v1.23 Ghidra project has been created with all three binaries analyzed. Work
 | 4 | Re-verify world command dispatch table | MPBTWIN v1.23 | §18 addresses will have shifted; new entries may exist in v1.23 |
 | 5 | Trace `INITAR.DLL` launcher changes | INITAR v1.23 | Win32 API surface identical to v1.06 (confirmed by string extraction). Deeper RE needed to confirm pcgi field format is unchanged given +12 KB growth. |
 | 6 | Check `Speech32.dll` integration | MPBTWIN v1.23 | What events trigger speech? Any new server→client commands? |
+
+---
+
+### §19.1 — v1.23 Client→Server Frame Format (CONFIRMED)
+
+Static analysis of `MPBTWIN.EXE` v1.23 confirms the client-side TCP frame construction.
+
+**Buffer initialisation — `FUN_00401b90`:**
+```
+DAT_004f7278 = DAT_004f7274   // reset write-pointer to buffer start
+*ptr++ = 0x1B                 // ESC literal
+*ptr++ = 0x21                 // '!' literal
+```
+
+**Writing a data byte — `FUN_00401b50` / `FUN_00401b70` (identical twins):**
+```c
+*DAT_004f7278 = param_1 + 0x21;
+DAT_004f7278++;
+```
+Every value (command ID, data field, etc.) is biased by `+0x21` before writing.
+
+**TCP flush — `FUN_00435c10` (called via `thunk_FUN_00435c10`):**
+```c
+if (DAT_004f7278 - DAT_004f7274 > 2) {
+    FUN_00401a70('\0', 0);                     // append CRC byte(s)
+    if (DAT_0047d08c == 0)                     // skip if replay-mode flag set
+        SendTCPData(DAT_004f7274, buf_len);    // actual Winsock send
+    FUN_00401b90();                            // reset buffer (ESC+'!' written)
+}
+// flush skipped when buffer contains only the 2-byte ESC+'!' prefix
+```
+
+**Complete wire frame:**
+```
+0x1B  0x21  [cmd+0x21]  [field₁+0x21]  [field₂+0x21]  …  [CRC]
+ESC    '!'   command      data byte(s)                     checksum
+```
+
+**Multi-word field helper — `FUN_00401470(n_words, value)` = `Frame_WriteType(n, val)`:**  
+Encodes `value` into `2×n` bytes using base-85 (each pair of chars encodes one word). This is the frame-write primitive shared with v1.06.
+
+---
+
+### §19.2 — v1.23 Movement Protocol (CONFIRMED)
+
+**Sender:** `FUN_0040dca0` — a timer-based polling function called from the main game loop.
+
+**Rate limits:**
+- Full packet every **100 ms** (`param_3 − _DAT_00478d90 ≥ 100`)
+- Partial buffer flush at **50 ms** if output buffer already has pending bytes
+
+**Velocity accumulators (written by keyboard input handlers):**
+
+| Global | Divisor | Meaning |
+|--------|---------|---------|
+| `DAT_004f1f7a` | `÷ 0xb6 (182)` | `sVar1` — leg velocity (forward/back) |
+| `DAT_004f1f7c` | `÷ 0xb6 (182)` | `sVar2` — throttle velocity |
+| `DAT_004f1d5c` | `− 0x3ffc, ÷ 0xb6` | positional adjustment (`sVar4`) |
+
+Accumulator clamp: `±0x1ffe` (±8190). Bias applied before encoding: `+0xe1c` (3612), which centres the signed range into `[0..7224]` (= 85²−1, the base-85 single-word range).
+
+Rotation/heading value: `iVar5 = FUN_0042c7a0(...)` (fixed-point heading calculator).
+
+**Keyboard input chain:**
+```
+KeyDown → FUN_0040d090 / FUN_0040d0f0 (key state readers)
+         → FUN_0040d270 (leg accumulator → DAT_004f1f7a)
+         → FUN_0040d2d0 (throttle accumulator → DAT_004f1f7c)
+FUN_00447f70 (arrow-key dispatcher) also calls FUN_0043b110 to set dirty flag
+```
+
+**Cmd 8 — Coasting (`sVar1 == 0 AND sVar2 == 0`):**
+```
+Wire:  ESC '!'
+       [0x08 + 0x21 = 0x29]            // command byte
+       Frame_WriteType(3, x)            // 6 bytes — X position (base-85, 3 words)
+       Frame_WriteType(3, y)            // 6 bytes — Y position
+       Frame_WriteType(2, heading)      // 4 bytes — heading (2 words)
+       Frame_WriteType(1, sVar4+0xe1c)  // 2 bytes — positional-adj velocity
+       Frame_WriteType(1, iVar5+0xe1c)  // 2 bytes — rotation
+       [CRC]
+```
+
+**Cmd 9 — Moving (`sVar1 ≠ 0 OR sVar2 ≠ 0`):**
+```
+Wire:  ESC '!'
+       [0x09 + 0x21 = 0x2A]            // command byte
+       Frame_WriteType(3, x)            // 6 bytes — X position
+       Frame_WriteType(3, y)            // 6 bytes — Y position
+       Frame_WriteType(2, heading)      // 4 bytes — heading
+       Frame_WriteType(1, sVar4+0xe1c)  // 2 bytes — turn momentum
+       Frame_WriteType(1, 0xe1c)        // 2 bytes — constant neutral (always 0xe1c)
+       Frame_WriteType(1, sVar2+0xe1c)  // 2 bytes — throttle velocity
+       Frame_WriteType(1, sVar1+0xe1c)  // 2 bytes — leg velocity
+       Frame_WriteType(1, iVar5+0xe1c)  // 2 bytes — rotation
+       [CRC]
+```
+
+---
+
+### §19.3 — v1.23 Jump Jet and Supplementary Commands (CONFIRMED)
+
+**Jump jet fire — `FUN_0040eb20('\x04')` (called from `FUN_00422c50`):**
+```
+Wire:  ESC '!'  [0x0C+0x21=0x2D]  [0x04+0x21=0x25]  [CRC]
+                 cmd = 12 (0x0C)    action = 4
+```
+`FUN_0040eb20` is a generic 2-byte command sender: writes cmd byte then data byte, then flushes. `FUN_00422c50` (jump jet handler) reads `DAT_004ef174` bit flags, calls this when jets fire, and plays the associated sound effect.
+
+**Channel / mode command — `FUN_0043d920()`:**
+```
+RPS mode    (DAT_0047d05c == 3):  cmd byte 0x21 ('!') + data byte 0x21 → raw 0x42
+Combat mode (DAT_0047d05c == 4):  cmd byte 0x14 + data byte 0x21 → raw 0x35
+```
+This is the single-wire-byte mode-selection packet (no multi-word fields).
+
+**Text send — `FUN_0043eb10(char *text)` (cmd 4):**
+```
+Wire prefix: [0x04 + 0x21 = 0x25]  // cmd byte
+RPS:          Frame_WriteString(text) via FUN_00401c20  (length-prefixed, base-85)
+Combat:       FUN_00401bc0(text):
+                *ptr++ = len + 0x21   // length byte (max 0x54 = 84 chars)
+                memcpy(ptr, text, len) // raw ASCII, NOT base-85
+```
+
+---
+
+### §19.4 — v1.23 F7/F8 Key Behavior (CONFIRMED — NO NETWORK COMMAND)
+
+F7 (action index 56) and F8 (action index 57) do **not** emit any network packet.
+
+**Full dispatch chain (v1.23):**
+1. `FUN_00434350` (WndProc) receives `WM_KEYDOWN`
+2. `FUN_0043d500(vk, lParam)` → `FUN_0040b700(scancode)` → resolves to action index 56 or 57  
+   *(keymap lookup at `DAT_00478c50`, 77 entries; F7 = scancode 0x41, F8 = scancode 0x42)*
+3. `(*DAT_0047a37c[0x1434])(action_index)` → calls `FUN_0042ec60` (vtable slot `[0x50d]`)
+4. `FUN_0042ec60` → calls `FUN_0042dc30(scene, action_index)` — UI button key matcher
+5. `scene[0x50c]` is **0** (null secondary handler) in the combat scene  
+   *(set by `FUN_0042f7c0`, the combat scene init: `piVar4[0x50c] = 0`, `piVar4[0x50d] = FUN_0042ec60`)*
+
+**Result:** `FUN_0042dc30` maps action index 56/57 to a visual button state toggle (active chat-channel indicator). No `FUN_0040eb20` call and no `thunk_FUN_00435c10` call occurs. The actual chat text is transmitted only when the user presses **Enter**, via `FUN_0043eb10` (cmd 4, §19.3).
+
+The ROADMAP items "F7 — team/lance channel" and "F8 — all-comm/chat-window toggle" have **no client→server wire format** in v1.23 because F7/F8 are local UI state only. The combat-scoped channel is selected implicitly by the mode command (`FUN_0043d920`, §19.3).
+
+---
+
+### §19.5 — v1.23 ACK Mechanism (CONFIRMED — STUB IN v1.23)
+
+`FUN_0040eb40` decompiles to:
+```c
+undefined4 FUN_0040eb40(void) { return 0; }
+```
+This is the function called by `FUN_0040de90` (sequence + ACK handler) when `param_1 < 0`.  
+In v1.23 it is a **no-op stub** — no ACK packet is constructed or sent.
+
+The ROADMAP "ACK reply for seq > 42" item applies historically. In v1.23 the client simply does not ACK the sequence byte; the server must therefore not require ACKs from the combat client in this version.
+
+---
+
+### §19.6 — v1.23 Dispatch Table Addresses (CONFIRMED)
+
+| Table | Address | Entry count | Usage |
+|-------|---------|-------------|-------|
+| RPS command dispatch | `DAT_00478070` | 77 | Cmds 0–76 (server→client) |
+| Combat command dispatch | `DAT_004782d8` | 82 | Cmds 0–81 (server→client) |
+
+**Mode flag:** `DAT_0047d05c` — `3` = RPS (Solaris social), `4` = Combat.  
+*(v1.06 used `DAT_004e2cd0`; the flag value semantics are unchanged.)*
+
+**CRC seed selection:** `FUN_004018e0` reads `DAT_0047d05c` to pick the CRC seed, same formula as v1.06 but referencing the new global address.
+
+**Key globals (v1.23 addresses):**
+
+| Global | Address | Meaning |
+|--------|---------|---------|
+| Mode flag | `DAT_0047d05c` | 3 = RPS, 4 = Combat |
+| Map type | `DAT_0047d048` | 0 = IS.MAP, 1 = SOLARIS.MAP |
+| Input bitmask | `DAT_004ef174` | Live held-key state (bits 0–20) |
+| Leg vel accumulator | `DAT_004f1f7a` | ±8190, leg velocity (forward/back) |
+| Throttle vel accumulator | `DAT_004f1f7c` | ±8190, throttle |
+| Third vel accumulator | `DAT_004f1d5c` | positional adjust |
+| TCP outbuf start | `DAT_004f7274` | Buffer base address |
+| TCP outbuf write ptr | `DAT_004f7278` | Current write position |
+
+---
+
+### §19.7 — v1.23 IS.MAP / SOLARIS.MAP Binary Format (CONFIRMED)
+
+Both map files share the same binary layout (confirmed from `MPBTWIN.EXE` v1.23 loader).
+
+**File header (2 bytes):**
+```
+Offset  Size  Field
+──────  ────  ──────────────────────────────────────────
+ 0      2     record_count   uint16 LE
+```
+
+**Per-record layout (fixed prefix, then variable-length strings):**
+```
+Offset  Size  Field
+──────  ────  ──────────────────────────────────────────
+ 0      2     room_id        uint16 LE
+ 2      2     faction        uint16 LE  (house allegiance)
+ 4      2     raw_x          int16 LE   (map coordinate)
+ 6      2     raw_y          int16 LE
+ 8      2     field_8        uint16 LE  (flags / type)
+10      2     field_a        uint16 LE
+12      2     field_c        uint16 LE
+14      2     field_e        uint16 LE
+16      1     name_len       uint8      (length of following name string)
+17      name_len  name       char[]     (room name, no NUL terminator)
+17+name_len  1  desc_len    uint8
+18+name_len  desc_len  desc char[]     (room description)
+```
+Total fixed bytes per record before strings: 18.
+
+**Display coordinate transform:**
+
+| Map | X display | Y display |
+|-----|-----------|-----------|
+| IS.MAP | `raw_x / 3 + 380` | `raw_y / −3 + 248` |
+| SOLARIS.MAP | `raw_x + 184` | `raw_y` (identity) |
+
+---
+
+### §19.8 — v1.23 Function Address Reference
+
+Key `MPBTWIN.EXE` v1.23 function addresses discovered this RE session:
+
+| Address | Name / Purpose |
+|---------|---------------|
+| `0x00401470` | `Frame_WriteType(n_words, val)` — base-85 multi-word field encoder |
+| `0x00401b50` | Write `param+0x21` to outbuf |
+| `0x00401b70` | Write `param+0x21` to outbuf (identical twin) |
+| `0x00401b90` | Outbuf init — writes `ESC '!'` at buffer start |
+| `0x00401bc0` | Combat text write — `len+0x21` byte + raw ASCII (max 84 chars) |
+| `0x00401c20` | `Frame_WriteString` — length-prefixed base-85 string writer |
+| `0x0040b700` | Scancode → action-index lookup |
+| `0x0040d050` | Third velocity accumulator → `DAT_004f1d5c` |
+| `0x0040d270` | Leg velocity accumulator → `DAT_004f1f7a` (±8190) |
+| `0x0040d2d0` | Throttle velocity accumulator → `DAT_004f1f7c` (±8190) |
+| `0x0040dca0` | **Movement packet builder** (100 ms timer, cmd 8/9) |
+| `0x0040de90` | Sequence + ACK handler — calls ACK stub |
+| `0x0040eb20` | Generic 2-byte command sender: cmd + data |
+| `0x0040eb40` | **ACK stub** — returns 0, no-op |
+| `0x00401a70` | Append CRC to outbuf |
+| `0x00422aa0` | Momentum / jump-jet input processor |
+| `0x00422c50` | Jump jet firing handler; calls `FUN_0040eb20('\x04')` |
+| `0x00433d10` | `.MEC` file loader (`mechdata\*.MEC`) |
+| `0x00434350` | WndProc / main window message handler |
+| `0x00435c10` | TCP flush thunk — CRC + `SendTCPData` + buffer reset |
+| `0x00442870` | XOR decrypt loop (549 iterations) for `.MEC` |
+| `0x004427f0` | Extract 4-char seed from `.MEC` filename stem |
+| `0x004428a0` | LCG PRNG for `.MEC` XOR key: `s = s*0xf0f1+1; s += rotate16(s)` |
+| `0x00447e10` | HUD direction-indicator updater (NOT a network sender) |
+| `0x00447f70` | Arrow-key throttle/turn dispatcher |
+| `0x0042c7a0` | Rotation / heading calculator (fixed-point) |
+| `0x0042dc30` | UI button key matcher (visual only) |
+| `0x0042ec60` | F7/F8 vtable handler (`scene[0x50d]`) |
+| `0x0042f7c0` | Combat scene allocator / init |
+| `0x0043b110` | Connection context dirty-flag setter |
+| `0x0043b3e0` | Connection context accessor (called from jump-jet handler) |
+| `0x0043d500` | VK → scancode resolver |
+| `0x0043d920` | Channel / mode command sender (RPS=0x42, Combat=0x35) |
+| `0x0043eb10` | Text send (cmd 4): RPS vs combat encoding branch |
