@@ -50,6 +50,21 @@ npm run map:dump
 
 Use `npm run map:dump` only when map/parser work is involved.
 
+## Copilot CLI + Ghidra MCP
+
+- Copilot CLI is installed via WinGet as `GitHub.Copilot` and should be available as `copilot` in new shells.
+- If an existing shell cannot find it, use `C:\Users\moose\AppData\Local\Microsoft\WinGet\Links\copilot.exe` or restart the shell so it inherits the updated user PATH.
+- Copilot's user MCP config is `C:\Users\moose\.copilot\mcp-config.json`.
+- The configured MCP server name is `ghidra`; it launches `C:\Users\moose\Downloads\bridge_mcp_ghidra.py` over stdio.
+- The Ghidra plugin REST bridge must already be running in Ghidra on `http://127.0.0.1:8089/`.
+- Verified on 2026-04-07: Copilot used the `ghidra` MCP server to call `list_open_programs` and reported current program `Mpbtwin.exe`.
+
+Useful Copilot launch command:
+
+```powershell
+copilot --add-dir C:\MPBT\mpbt-server --allow-tool=ghidra
+```
+
 ## Copilot Prompt Starter
 
 Use this when starting a Copilot session:
