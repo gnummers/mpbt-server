@@ -2023,14 +2023,40 @@ Wire:  ESC '!'
 
 ---
 
-### §19.3 — v1.23 Jump Jet and Supplementary Commands (CONFIRMED)
+### §19.3 — v1.23 Fire, Jump Jet, and Supplementary Commands (PARTIAL)
 
-**Jump jet fire — `FUN_0040eb20('\x04')` (called from `FUN_00422c50`):**
+**Generic combat action sender — `Combat_SendCmd12Action_v123(action)` (`0x0040eb20`):**
+```c
+Frame_WriteByte(0x0c);   // client cmd 12
+Frame_WriteByte(action);
+Frame_Flush();
+```
+
+Confirmed call sites:
+
+| Action | Caller | Current read |
+|--------|--------|--------------|
+| `0` | `Combat_InputActionDispatch_v123` (`0x004231c0`), case `0x15` | Primary client-to-server weapon-fire request. It is gated by combat-ready state, selected target/weapon state (`DAT_004f1f42`/`DAT_004f1f44`), and heat/animation guards, then emits only `cmd 12, action 0`. Dynamic capture is still needed to prove whether this means selected weapon, selected TIC group, or all queued fire. |
+| `4` | `Combat_JumpJetInputTick_v123` (`0x00422c50`) | Jump jet fire request. Requires jump input bit, remaining jump fuel/energy (`DAT_004f21a2 > 0x32`), no active jump flags, and not in a blocked animation state. |
+| `6` | `FUN_00448d80` | Jump/landing transition request. Sent when an airborne actor reaches ground contact and the local jump-state flags are cleared. |
+
+**Jump jet fire — `Combat_SendCmd12Action_v123('\x04')`:**
 ```
 Wire:  ESC '!'  [0x0C+0x21=0x2D]  [0x04+0x21=0x25]  [CRC]
                  cmd = 12 (0x0C)    action = 4
 ```
-`FUN_0040eb20` is a generic 2-byte command sender: writes cmd byte then data byte, then flushes. `FUN_00422c50` (jump jet handler) reads `DAT_004ef174` bit flags, calls this when jets fire, and plays the associated sound effect.
+
+**Weapon/TIC local-selection paths — `Combat_InputActionDispatch_v123`:**
+
+| Input action | Current read |
+|--------------|--------------|
+| `0x16`..`0x1f` | Select weapon slot `0`..`9` via `Combat_SelectWeaponSlot_v123`. |
+| `0x20` / `0x21` | Previous / next weapon slot. |
+| `0x23` / `0x24` / `0x25` | Toggle the currently selected weapon into TIC A/B/C (`DAT_004f2128`, `DAT_004f2150`, `DAT_004f2178`) and refresh the HUD via `FUN_00422860`. |
+| `0x3c` / `0x3d` / `0x3e` | Call `Combat_FireSelectedTicGroup_v123(..., group 0/1/2)`. This path computes local projectile/effect previews through `FUN_00427300`/`FUN_00427400` or `FUN_00424120`, but no separate network sender was found on this path. |
+| `0xb1`..`0xce` | Mouse/HUD grid toggles weapon membership for TIC columns; computes `weapon = (action - 0xb1) / 3`, `tic = (action - 0xb1) % 3`, updates the same TIC arrays, then reselects the weapon slot. |
+
+Current implication: the TIC/weapon UI is mostly local state, and the confirmed wire request is the compact `cmd 12, action 0` fire command. The likely server response chain is still `Cmd68` projectile/effect spawn plus `Cmd70` actor animation/status and later damage packets, but hit/damage semantics are not yet decoded.
 
 **Channel / mode command — `FUN_0043d920()`:**
 ```
@@ -2199,11 +2225,14 @@ Key `MPBTWIN.EXE` v1.23 function addresses discovered this RE session:
 | `0x0040d2d0` | Throttle velocity accumulator → `DAT_004f1f7c` (±8190) |
 | `0x0040dca0` | **Movement packet builder** (100 ms timer, cmd 8/9) |
 | `0x0040de90` | Sequence + ACK handler — calls ACK stub |
-| `0x0040eb20` | Generic 2-byte command sender: cmd + data |
+| `0x0040eb20` | `Combat_SendCmd12Action_v123`: generic client cmd-12 action sender |
 | `0x0040eb40` | **ACK stub** — returns 0, no-op |
 | `0x00401a70` | Append CRC to outbuf |
 | `0x00422aa0` | Momentum / jump-jet input processor |
-| `0x00422c50` | Jump jet firing handler; calls `FUN_0040eb20('\x04')` |
+| `0x00422c50` | `Combat_JumpJetInputTick_v123`: jump jet firing handler; calls `Combat_SendCmd12Action_v123('\x04')` |
+| `0x004231c0` | `Combat_InputActionDispatch_v123`: combat UI/input action dispatcher; sends cmd-12 action `0` for weapon fire |
+| `0x00423f10` | `Combat_FireSelectedTicGroup_v123`: local TIC group fire/effect path |
+| `0x00424c70` | `Combat_SelectWeaponSlot_v123`: selected weapon slot/HUD highlighter |
 | `0x00433d10` | `.MEC` file loader (`mechdata\*.MEC`) |
 | `0x00434350` | WndProc / main window message handler |
 | `0x00435c10` | TCP flush thunk — CRC + `SendTCPData` + buffer reset |
