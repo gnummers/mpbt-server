@@ -12,6 +12,7 @@ This file is the shared handoff surface between Codex, GitHub Copilot, and the h
 - Active upstream thread: Ken PR #55, `feat/re-research`
 - Branch base: `upstream/feat/re-research`
 - Current branch status before Copilot migration: clean and pushed
+- After Copilot session (2026-04-07): `src/protocol/combat.ts` added, committed as `b827136`
 
 ## Open Work Threads
 
@@ -33,12 +34,28 @@ This file is the shared handoff surface between Codex, GitHub Copilot, and the h
 - `Cmd73` / wire `0x6e`: actor rate/bias fields; exact meaning pending.
 - v1.23 `.MEC` correction: `weapon_count` at `0x3a`, signed critical/equipment bound at `0x3c`, weapon ids at `0x3e + slot*2`.
 
+## Completed This Session (Copilot, 2026-04-07)
+
+- Created `src/protocol/combat.ts` with server→client builders for Cmd64–Cmd73.
+- All commands from §19.6.1 are prototyped: Cmd65 (position sync), Cmd66/67
+  (damage), Cmd68 (projectile spawn), Cmd69 (impact coord), Cmd70 (animation
+  transition), Cmd71 (reset effect state), Cmd72 (local bootstrap), Cmd73
+  (rate/bias fields).
+- Naming convention documented: `ResearchCmdN` uses `buildGamePacket(N + 4, ..., true)`.
+- Build passes clean (`npm run build`); `git diff --check` clean.
+
 ## Recommended Next Tasks
 
-1. Prototype a minimal `Cmd72` builder in `src/protocol/combat.ts` or equivalent, but only after choosing whether to keep code work on this stacked branch or start a separate branch.
-2. Add server-side combat packet builders for `Cmd64`, `Cmd65`, `Cmd66`, `Cmd67`, `Cmd68`, and `Cmd70`.
-3. Capture a live combat entry session to label the remaining `Cmd72` identity/status fields and signed `Cmd65` motion conventions.
-4. Correlate damage-code ranges with `.MEC` fields and live hit feedback before implementing final damage semantics.
+1. Capture a live combat entry session to label the remaining `Cmd72`
+   identity/status fields (`unknownByte0`, `globalA/B/C`, `statusByte`,
+   `unknownType1Raw`) and confirm signed `Cmd65` motion conventions.
+2. Confirm `Cmd64` identity-string count and order matches the 5-string layout
+   assumed in `buildCmd64RemoteActorPacket` (mirrors Cmd72).
+3. Wire `buildCmd72LocalBootstrapPacket` + `buildCmd64RemoteActorPacket` into
+   the world server's combat-entry handoff so a client can enter an arena.
+4. Correlate damage-code ranges with `.MEC` fields and live hit capture before
+   finalizing `buildCmd66ActorDamagePacket` / `buildCmd67LocalDamagePacket`
+   semantics.
 
 ## Validation Commands
 
