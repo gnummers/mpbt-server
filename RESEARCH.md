@@ -1552,8 +1552,8 @@ full `ParseProtocolMessage` switch-table and timing histogram structures.
 ## 20. MEC File Binary Format
 
 **Source**: `mechdata/*.MEC` (161 files, 552 bytes each)  
-**Loader**: `FUN_004387f0` (`MecFile_Load`) @ `0x004387f0`, MPBTWIN.EXE  
-**Confirmed against**: AS7-D (Atlas 100t), BJ-1 (Blackjack 45t), SDR-5V (Spider 30t)
+**Loader**: v1.23 `FUN_00433d10` (`MecFile_Load`) @ `0x00433d10`, MPBTWIN.EXE
+**Confirmed against**: AS7-D (Atlas 100t), BJ-1 (Blackjack 45t), SDR-5V (Spider 30t), plus a full local v1.23 `mechdata/*.MEC` offset spot-check
 
 ### 20.1 Encryption
 
@@ -1629,7 +1629,8 @@ All fields are little-endian.  Offsets are from the start of the decrypted buffe
 | `0x36` | u16  | *(zero)*              | — |
 | `0x38` | u16  | `jump_mp`             | Jump hexes-per-turn (0 if no jump jets) |
 | `0x3A` | u16  | `weapon_count`        | Number of weapon slots |
-| `0x3C` | u16[] | `weapon_ids[weapon_count]` | Array of weapon type IDs (see §20.3) |
+| `0x3C` | i16  | `crit_state_extra_count` | v1.23 correction: used by `Combat_ClassifyDamageCode_v123` as the signed bound for a post-weapon class-0 damage-code range; this is **not** `weapon_ids[0]` |
+| `0x3E` | u16[] | `weapon_ids[weapon_count]` | Array of weapon type IDs (see §20.3) |
 | *var*  | …    | *(unknown fields)*    | Critical-hit slot data, ammo tracking; see §20.4 |
 | `0xDE` | u16[45] | `crit_slot_table` | Critical-hit slot assignments; 0xFFFF = empty |
 | `0x1EC` | u16 | `ammo_bin_count`      | Number of ammo bin records that follow |
@@ -1647,12 +1648,15 @@ All fields are little-endian.  Offsets are from the start of the decrypted buffe
 |----|--------|---------|
 | `3`  | Medium Laser | Present in Atlas ×4, Blackjack ×3, Spider ×1; most ubiquitous energy weapon in 3025 |
 | `6`  | AC/2 (Autocannon/2) | Appears in BJ-1 weapon list and matched ammo bin type |
-| `8`  | Unconfirmed (missile?) | Atlas position 0, BJ-1 position 0; presumed SRM variant |
-| `9`  | Unconfirmed (missile/beam?) | Atlas position 1, Spider position 0 |
-| `16` | AC/20 (Autocannon/20) | Atlas position 2; 2 ammo bins of 5 rounds each = 10 total ✓ |
+| `8`  | Unconfirmed | Present in ANH-1A ×4 after the v1.23 offset correction; no longer from AS7-D/BJ-1 shifted reads |
+| `9`  | Unconfirmed missile | AS7-D weapon slot and matching ammo-bin type |
+| `12` | Unconfirmed missile | AS7-D weapon slot and matching ammo-bin type; likely the old shifted read hid this slot |
+| `16` | AC/20 (Autocannon/20) | AS7-D weapon index 1; 2 ammo bins of 5 rounds each = 10 total ✓ |
 
-IDs `1`, `2`, `4`, `12` appear in other mechs and remain unresolved without
+IDs `1`, `2`, `4`, `5`, `7`, `8`, `10`, `11`, `12`, `13`, `14`, and `15` appear in local v1.23 mechdata and remain unresolved without
 cross-referencing the weapon global table at `DAT_00477b58` (stride `0x5C`, 0-indexed).
+Prior notes treated `0x3C+` as the weapon-id array. v1.23 `FUN_00433910` reads weapon ids from `0x3E + slot*2`, and `Combat_ClassifyDamageCode_v123` reads `0x3C` separately as a signed count/bound for damage-state codes. Local decode examples:
+AS7-D `field_0x3c=8`, weapons `[9,16,3,3,3,3,12]`; BJ-1 `field_0x3c=8`, weapons `[6,6,3,3,3,3]`; SDR-5V `field_0x3c=9`, weapons `[3,3]`.
 
 ### 20.4 Cross-Validation Table
 
@@ -1663,6 +1667,7 @@ cross-referencing the weapon global table at `DAT_00477b58` (stride `0x5C`, 0-in
 | `walk_mp` (0x16) | **3** | **4** | **8** |
 | `jump_mp` (0x38) | **0** | **4** | **8** |
 | `heat_sinks` (0x34) | **20** | **11** | **10** |
+| `crit_state_extra_count` (0x3C) | 8 | 8 | 9 |
 | `speed_raw` (0x2E) | 27 → 18 | 27 → 18 | 18 → 12 |
 | `armor_la` (0x1A) | **34** | **12** | **5** |
 | `armor_ra` (0x1C) | **34** | **12** | **5** |
@@ -1675,7 +1680,7 @@ cross-referencing the weapon global table at `DAT_00477b58` (stride `0x5C`, 0-in
 | `armor_lt_rear` (0x2A) | **10** | **6** | **2** |
 | `armor_rt_rear` (0x2C) | **10** | **6** | **2** |
 | `weapon_count` (0x3A) | 7 | 6 | 2 |
-| `weapon_ids` (0x3C+) | `[8,9,16,3,3,3,3]` | `[8,6,6,3,3,3]` | `[9,3]` |
+| `weapon_ids` (0x3E+) | `[9,16,3,3,3,3,12]` | `[6,6,3,3,3,3]` | `[3,3]` |
 | `ammo_bin_count` (0x1EC) | 5 | 1 | 0 |
 
 **Variant name**: sourced from `MechWin_LookupMechName` (§Appendix A) which reads the
@@ -2240,11 +2245,11 @@ The shared helper first checks whether the current projectile/effect id in `DAT_
 
 | Class | Code range / basis | Current read |
 |-------|--------------------|--------------|
-| `0` | `0x00..0x14`, plus a later equipment/critical range after the weapon slots | Critical/system/mech state update through `Combat_UpdateCriticalDamageState_v123` (`0x0042bd90`). Some cases refresh engine/heat-sink style derived state and local HUD. |
-| `1` | `0x15..0x1f` | Armor-like section state update under the actor struct near offset `0x28`; the client keeps the lower value when a new value is smaller. |
-| `2` | `0x20..0x27` | Internal-structure-like section update under the actor struct near offset `0xe8`; can trigger local critical/death flags and visual hit feedback. |
-| `3` | `0x28..0x28 + weaponCount - 1` | Weapon damage/state update through `Combat_UpdateWeaponDamageState_v123` (`0x0042bd10`) and local weapon/TIC HUD refresh. |
-| `4` | Post-critical ammo-bin range, after weapon and critical/equipment ranges | Ammo-bin update through `Combat_UpdateAmmoBinState_v123` (`0x0042c020`); local refresh also updates weapons using the same ammo type. |
+| `0` | `0x00..0x14`, plus `0x28 + weaponCount .. 0x27 + weaponCount + crit_state_extra_count` | Critical/system/mech state update through `Combat_UpdateCriticalDamageState_v123` (`0x0042bd90`). The early range indexes the `.MEC` critical-slot table at `0xde + index*2`; the post-weapon range is bounded by the signed field at `.MEC` offset `0x3c`. |
+| `1` | `0x15..0x1f` | `.MEC` offset-backed section state under the actor struct near offset `0x28`. Indexes map to `.MEC` offsets `0x1a..0x2e`; the first ten match the documented armor fields, while index 10 uses the v1.23 speed parameter at `0x2e`, so it should not be called head armor. The client keeps the lower value when a new value is smaller. |
+| `2` | `0x20..0x27` | Internal-structure state under the actor struct near offset `0xe8`; indexes 0/1 use the arm internal table value, 2/3 legs, 4 center torso, 5/6 side torso, and 7 hardcoded `9`. It can trigger local critical/death flags and visual hit feedback. |
+| `3` | `0x28..0x28 + weaponCount - 1` | Weapon damage/state update through `Combat_UpdateWeaponDamageState_v123` (`0x0042bd10`) and local weapon/TIC HUD refresh. v1.23 weapon ids start at `.MEC` offset `0x3e`, not `0x3c`. |
+| `4` | `0x28 + weaponCount + crit_state_extra_count .. total-1` | Ammo-bin update through `Combat_UpdateAmmoBinState_v123` (`0x0042c020`); local refresh also updates weapons using the same ammo type. The total upper bound is `weaponCount + crit_state_extra_count + 0x28 + ammo_bin_count`. |
 
 The exact labels for the early code ranges still need correlation against `.MEC` fields and live hit capture, but cmd 66/67 are now the first strong server→client damage-result packet path. `Cmd68` makes clients see the shot/effect, `Cmd66`/`Cmd67` carry the damage code/value pairs, and `Cmd70` covers actor animation/status transitions such as stand/fall/jump/destruction-style state changes without itself carrying damage numbers.
 
@@ -2301,13 +2306,21 @@ Key `MPBTWIN.EXE` v1.23 function addresses discovered this RE session:
 | `0x00401b90` | Outbuf init — writes `ESC '!'` at buffer start |
 | `0x00401bc0` | Combat text write — `len+0x21` byte + raw ASCII (max 84 chars) |
 | `0x00401c20` | `Frame_WriteString` — length-prefixed base-85 string writer |
+| `0x00407ba0` | `Combat_GetDamageCodeUpperBound_v123`: total upper bound for classifying weapon/critical/ammo damage-code ranges |
+| `0x00407bc0` | `Combat_ClassifyDamageCode_v123`: partitions cmd-66/67 `damageCode` bytes into critical/system, armor-like, internal-like, weapon, and ammo-bin classes |
 | `0x0040b700` | Scancode → action-index lookup |
 | `0x0040d050` | Third velocity accumulator → `DAT_004f1d5c` |
 | `0x0040d270` | Leg velocity accumulator → `DAT_004f1f7a` (±8190) |
 | `0x0040d2d0` | Throttle velocity accumulator → `DAT_004f1f7c` (±8190) |
 | `0x0040dca0` | **Movement packet builder** (100 ms timer, cmd 8/9) |
-| `0x0040de90` | Sequence + ACK handler — calls ACK stub |
+| `0x0040de50` | `Combat_Cmd66_ActorDamageUpdate_v123`: server cmd-66 actor damage code/value update |
+| `0x0040de80` | `Combat_Cmd67_LocalDamageUpdate_v123`: server cmd-67 local-actor damage code/value update |
+| `0x0040de90` | `Combat_ApplyDamagePairOrQueueEffect_v123`: shared cmd-66/67 damage helper; queues onto current projectile/effect or applies immediately |
+| `0x0040e100` | `Combat_ApplyDamageCodeValue_v123`: applies classified damage code/value to actor mech state |
+| `0x0040e2f0` | `Combat_Cmd73_UpdateActorRateFields_v123`: actor rate/bias-field update; exact meaning pending |
 | `0x0040e230` | `Combat_WriteCmd10ShotGeometry_v123`: client cmd-10 shot geometry write helper; no local flush |
+| `0x0040e570` | `Combat_Cmd69_ImpactEffectAtCoord_v123`: impact/effect-at-coordinate feedback |
+| `0x0040eae0` | `Combat_Cmd71_ResetEffectState_v123`: clears current projectile/effect globals |
 | `0x0040eb20` | `Combat_SendCmd12Action_v123`: generic client cmd-12 action sender |
 | `0x0040eb40` | **ACK stub** — returns 0, no-op |
 | `0x00401a70` | Append CRC to outbuf |
@@ -2320,7 +2333,12 @@ Key `MPBTWIN.EXE` v1.23 function addresses discovered this RE session:
 | `0x004272c0` | `Combat_CalcProjectileDistance_v123`: source-to-impact distance |
 | `0x00427300` | `Combat_CalcProjectilePath_v123`: source muzzle + target attachment/fallback impact resolver |
 | `0x00427400` | `Combat_AllocateProjectileEffect_v123`: projectile/effect object allocator |
+| `0x00427650` | `Combat_CanQueueProjectileDamagePair_v123`: validates whether a cmd-66/67 damage pair can attach to the current projectile/effect |
+| `0x004276a0` | `Combat_QueueProjectileDamagePair_v123`: appends a damage code/value pair to the current projectile/effect object |
 | `0x004276e0` | `Combat_GetLastProjectileEffectId_v123`: returns last projectile/effect slot id |
+| `0x0042bd10` | `Combat_UpdateWeaponDamageState_v123`: applies weapon-slot damage state and refreshes local weapon/TIC HUD |
+| `0x0042bd90` | `Combat_UpdateCriticalDamageState_v123`: applies critical/system/mech damage state and side effects |
+| `0x0042c020` | `Combat_UpdateAmmoBinState_v123`: applies ammo-bin damage state and refreshes local weapons using that ammo type |
 | `0x00433d10` | `.MEC` file loader (`mechdata\*.MEC`) |
 | `0x00434350` | WndProc / main window message handler |
 | `0x00435c10` | TCP flush thunk — CRC + `SendTCPData` + buffer reset |
