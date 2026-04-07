@@ -43,19 +43,39 @@ This file is the shared handoff surface between Codex, GitHub Copilot, and the h
   (rate/bias fields).
 - Naming convention documented: `ResearchCmdN` uses `buildGamePacket(N + 4, ..., true)`.
 - Build passes clean (`npm run build`); `git diff --check` clean.
+- **Ghidra live analysis (same session):** Used MCP to decompile
+  `Combat_Cmd64_AddActor_v123` (0x0040d390) and `Combat_Cmd72_InitLocalActor_v123`
+  (0x00445110) fully. Key findings applied:
+  - Cmd64 was missing **two bytes**: `actorTypeByte` (slot[1]) and `statusByte`
+    (after identity4, before mechId). Both added to interface and builder — bug
+    would have caused client desync on every remote-actor packet.
+  - 5-string identity layout (max 11/31/39/15/31) **confirmed** for both Cmd64
+    and Cmd72 (identical strncpy sizes in decompile).
+  - Cmd72 `unknownByte0` confirmed as a filler byte: client reads and discards it.
+  - Terrain/arena point list formats confirmed: terrainResourceId (type2) + count +
+    {type3 X, type3 Y, type2 Z} per point; arena = count + {type3 X, type3 Y}.
+  - `Combat_ReadLocalActorMechState_v123` (0x004456c0) field sequence confirmed.
+
+## Remaining Ghidra Assumptions (updated)
+
+| Field | Status | Notes |
+|---|---|---|
+| Cmd64 `actorTypeByte` | semantics TBD | stored at DAT_004f2036+slot*0x49c; send 0 |
+| Cmd64/72 `statusByte` | semantics TBD | stored at DAT_004f1fe6+slot*0x4ec; send 0 |
+| Cmd72 `globalA/B/C` | semantics TBD | type2; DAT_004f56b4/1d24/5684; send 0 |
+| Cmd72 `unknownType1Raw` | semantics TBD | type1; DAT_004ee944; send MOTION_NEUTRAL |
+| Cmd65 signed conventions | needs capture | facing zero-north vs zero-east, ±throttle |
+| Cmd73 `rateA`/`rateB` | semantics TBD | bias (val-0x2a)*0x38e; purpose unclear |
 
 ## Recommended Next Tasks
 
-1. Capture a live combat entry session to label the remaining `Cmd72`
-   identity/status fields (`unknownByte0`, `globalA/B/C`, `statusByte`,
-   `unknownType1Raw`) and confirm signed `Cmd65` motion conventions.
-2. Confirm `Cmd64` identity-string count and order matches the 5-string layout
-   assumed in `buildCmd64RemoteActorPacket` (mirrors Cmd72).
-3. Wire `buildCmd72LocalBootstrapPacket` + `buildCmd64RemoteActorPacket` into
-   the world server's combat-entry handoff so a client can enter an arena.
-4. Correlate damage-code ranges with `.MEC` fields and live hit capture before
-   finalizing `buildCmd66ActorDamagePacket` / `buildCmd67LocalDamagePacket`
-   semantics.
+1. Wire `buildCmd72LocalBootstrapPacket` + `buildCmd64RemoteActorPacket` into
+   the world server's combat-entry handoff so a client can actually enter an arena.
+2. Capture a live combat entry to label `actorTypeByte`, `statusByte`, `globalA/B/C`,
+   `unknownType1Raw`, and confirm Cmd65 signed motion conventions.
+3. Correlate damage-code ranges with `.MEC` fields and live hit capture before
+   finalizing `buildCmd66ActorDamagePacket` / `buildCmd67LocalDamagePacket`.
+4. Decompile `FUN_0040e2f0` (Cmd73 handler) to confirm `rateA`/`rateB` semantics.
 
 ## Validation Commands
 
