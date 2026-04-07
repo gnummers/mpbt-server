@@ -2056,7 +2056,7 @@ Wire:  ESC '!'  [0x0C+0x21=0x2D]  [0x04+0x21=0x25]  [CRC]
 | `0x3c` / `0x3d` / `0x3e` | Call `Combat_FireSelectedTicGroup_v123(..., group 0/1/2)`. This path computes local projectile/effect previews through `FUN_00427300`/`FUN_00427400` or `FUN_00424120`, but no separate network sender was found on this path. |
 | `0xb1`..`0xce` | Mouse/HUD grid toggles weapon membership for TIC columns; computes `weapon = (action - 0xb1) / 3`, `tic = (action - 0xb1) % 3`, updates the same TIC arrays, then reselects the weapon slot. |
 
-Current implication: the TIC/weapon UI is mostly local state, and the confirmed wire request is the compact `cmd 12, action 0` fire command. The likely server response chain is still `Cmd68` projectile/effect spawn plus `Cmd70` actor animation/status and later damage packets, but hit/damage semantics are not yet decoded.
+Current implication: the TIC/weapon UI is mostly local state, and the confirmed wire request is the compact `cmd 12, action 0` fire command. The likely server response chain now starts with `Cmd68` projectile/effect spawn, then `Cmd66`/`Cmd67` damage code/value updates and optional `Cmd70` actor animation/status. Dynamic capture is still needed to prove exact fire sequencing and selected-weapon/TIC semantics.
 
 **Client shot-geometry writer — `Combat_WriteCmd10ShotGeometry_v123` (`0x0040e230`):**
 ```c
@@ -2160,9 +2160,14 @@ Key handlers for combat bootstrap and position sync:
 |-----|-----------|---------|--------------|
 | 64 | `0x65` | `FUN_0040d390` | Remote actor/mech add. Reads a server slot byte, maps it through `DAT_00478d98`, copies multiple identity strings into the per-mech struct at `DAT_004f1d30 + index*0x49c`, reads a mech id via `FUN_004013a0(2)`, loads the local `.MEC`/mech data, and marks the actor active. |
 | 65 | `0x66` | `FUN_0040d830` | Primary server→client combat position/velocity sync. Reads one server slot byte, then `type3 x`, `type3 y`, `type2 z/altitude`, and four `type1` motion fields now mapped to facing/heading accumulator, throttle velocity, leg velocity, and a forward/speed magnitude term. It writes `DAT_004f1d4c/50/54`, `DAT_004f1d5c`, `DAT_004f1f7c`, `DAT_004f1f7a`, `DAT_004f20a2`, `DAT_004f1d9e`, and the corresponding delta/absolute-delta fields under the same per-mech struct. |
+| 66 | `0x67` | `FUN_0040de50` | Actor damage-state update. Reads an actor slot byte, maps it through `DAT_00478d98`, then reads a `damageCode` byte and `damageValue` byte through the shared damage helper. If a current projectile/effect is active for that actor, the pair can be queued onto the effect; otherwise it applies directly to the actor mech state. |
+| 67 | `0x68` | `FUN_0040de80` | Local actor damage-state update. No actor slot is present; it applies the next `damageCode` and `damageValue` byte pair to local actor index 0 through the same shared helper as cmd 66. |
 | 68 | `0x69` | `FUN_0040e390` | Projectile/effect spawn. Reads source actor, source weapon slot, optional target actor/attachment, two angle/offset seed fields, and fallback `type3/type3/type2` impact coordinates. It resolves source muzzle geometry, target attachment or fallback impact coordinates, allocates a transient projectile/effect object, and records the new effect id in `DAT_00478df8` for later follow-up. This is visual/effect sync, not yet a decoded damage result. |
+| 69 | `0x6a` | `FUN_0040e570` | Impact/effect at coordinate. Reads an actor slot, skips one byte, reads target/attachment-like bytes and fallback `type3/type3/type2` coordinates, then triggers impact audio/visual helpers. It does not apply mech damage state directly. |
 | 70 | `0x6b` | `FUN_0040e700` | Actor animation/status transition. Reads actor slot + subcommand and fans into animation helpers (`FUN_0043b400`/`470`/`4a0`/`4e0`/`500`/`520`/`540`) for stand/fall/jump/destruction-style transitions. |
+| 71 | `0x6c` | `FUN_0040eae0` | Resets the current projectile/effect globals by setting `DAT_00478df8` and `DAT_00478dfc` to `-1`. This likely brackets or clears the effect context used by cmd 66/67 follow-up damage pairs. |
 | 72 | `0x6d` | `FUN_00445110` | Local combat bootstrap. Reads a scenario/title string, maps the local server slot to local actor index 0, initializes global arena/mech fields, reads local actor identity strings, reads initial coordinates, loads mech data via `FUN_004456c0`, sets `DAT_0047ef60 |= 1`, and initializes local actor state at `DAT_004f1d30`. |
+| 73 | `0x6e` | `FUN_0040e2f0` | Actor rate/bias-field update. Reads actor slot plus two bytes, stores each as `(value - 0x2a) * 0x38e` into per-actor fields near `DAT_004f202a`/`DAT_004f202e`, and marks `_DAT_00478df4 = 1`. Exact combat meaning still needs dynamic capture. |
 
 `FUN_0040d830` field transforms:
 
@@ -2179,7 +2184,7 @@ speedMag = Frame_ReadType(1) - 0x0e1c;          // DAT_004f20a2 and DAT_004f1d9e
 
 Dynamic capture is still needed for signed direction conventions, but the four trailing `type1` fields are no longer generic: the client derives interpolation deltas toward the decoded facing/throttle/leg targets and `FUN_004488e0` applies them into `DAT_004f1d5c`, `DAT_004f1f7c`, and `DAT_004f1f7a`, while `FUN_0042c830` consumes the `DAT_004f20a2`/`DAT_004f1d9e` forward/speed magnitude term. This is no longer an unknown server→client packet family: cmd 65 is the combat position/motion update that complements the client→server cmd 8/9 movement packets in §19.2.
 
-Implementation impact: a minimal combat prototype likely needs the `MMC` welcome/state handoff, then `Cmd72` to seed the local player, `Cmd64` for remote actors/bots, and periodic `Cmd65` actor position updates. `Cmd68`/`Cmd70` are likely needed once firing, projectile effects, and destruction/animation states enter scope.
+Implementation impact: a minimal combat prototype likely needs the `MMC` welcome/state handoff, then `Cmd72` to seed the local player, `Cmd64` for remote actors/bots, and periodic `Cmd65` actor position updates. `Cmd68`, `Cmd66`/`Cmd67`, and `Cmd70` are the current strongest server-response chain for firing, projectile effects, damage-state updates, and destruction/animation states.
 
 `Combat_Cmd68_SpawnWeaponEffect_v123` field flow:
 
@@ -2213,7 +2218,35 @@ Helper chain:
 | `Combat_AllocateProjectileEffect_v123` (`0x00427400`) | Allocates a projectile/effect object from `DAT_0047eb10`, stamps source/target actors, weapon slot, angles, coordinates, timing, effect class, and target impact metadata. |
 | `Combat_GetLastProjectileEffectId_v123` (`0x004276e0`) | Returns `DAT_004da2dc`, the projectile/effect slot selected by the allocator. |
 
-The current server implication is: answer confirmed fire requests (`cmd 12/action 0`) with `Cmd68` to make remote clients see the shot/effect, then later send still-unresolved hit/damage packets. `Cmd70` covers actor animation/status transitions such as stand/fall/jump/destruction-style state changes, but does not itself carry decoded damage numbers.
+`Cmd66` / `Cmd67` damage-state update flow:
+
+```c
+// Cmd66 / wire 0x67
+actorSlot   = Frame_ReadByte();
+actorIndex  = DAT_00478d98[actorSlot];
+damageCode  = Frame_ReadByte();
+damageValue = Frame_ReadByte();
+Combat_ApplyDamagePairOrQueueEffect_v123(actorIndex, actorStruct);
+
+// Cmd67 / wire 0x68
+damageCode  = Frame_ReadByte();
+damageValue = Frame_ReadByte();
+Combat_ApplyDamagePairOrQueueEffect_v123(0, localActorStruct);
+```
+
+The shared helper first checks whether the current projectile/effect id in `DAT_00478df8` is active, owned by the target actor, and has fewer than `0x14` queued pairs. If so, `Combat_QueueProjectileDamagePair_v123` (`0x004276a0`) appends the `(damageCode, damageValue)` pair to the effect object's small pair arrays. Otherwise it applies the pair directly through `Combat_ApplyDamageCodeValue_v123` (`0x0040e100`). Local-actor damage also triggers HUD/audio feedback through `FUN_004461c0(7)` and `FUN_00422260(DAT_00478dfc, 100)`.
+
+`Combat_ClassifyDamageCode_v123` (`0x00407bc0`) partitions the `damageCode` byte relative to the loaded `.MEC` struct:
+
+| Class | Code range / basis | Current read |
+|-------|--------------------|--------------|
+| `0` | `0x00..0x14`, plus a later equipment/critical range after the weapon slots | Critical/system/mech state update through `Combat_UpdateCriticalDamageState_v123` (`0x0042bd90`). Some cases refresh engine/heat-sink style derived state and local HUD. |
+| `1` | `0x15..0x1f` | Armor-like section state update under the actor struct near offset `0x28`; the client keeps the lower value when a new value is smaller. |
+| `2` | `0x20..0x27` | Internal-structure-like section update under the actor struct near offset `0xe8`; can trigger local critical/death flags and visual hit feedback. |
+| `3` | `0x28..0x28 + weaponCount - 1` | Weapon damage/state update through `Combat_UpdateWeaponDamageState_v123` (`0x0042bd10`) and local weapon/TIC HUD refresh. |
+| `4` | Post-critical ammo-bin range, after weapon and critical/equipment ranges | Ammo-bin update through `Combat_UpdateAmmoBinState_v123` (`0x0042c020`); local refresh also updates weapons using the same ammo type. |
+
+The exact labels for the early code ranges still need correlation against `.MEC` fields and live hit capture, but cmd 66/67 are now the first strong server→client damage-result packet path. `Cmd68` makes clients see the shot/effect, `Cmd66`/`Cmd67` carry the damage code/value pairs, and `Cmd70` covers actor animation/status transitions such as stand/fall/jump/destruction-style state changes without itself carrying damage numbers.
 
 ---
 
