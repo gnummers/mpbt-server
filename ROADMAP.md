@@ -186,6 +186,7 @@ The world uses two distinct room types: **bar** (social spaces, Tier Ranking ter
 
 | Task | Status | Notes |
 |---|---|---|
+| RE server→client combat bootstrap / position sync | 🔧 | v1.23 partial decode in RESEARCH.md §19.6.1: Cmd72 seeds local combat actor state, Cmd64 adds remote actors/bots, Cmd65 is the server→client combat position/motion update. Exact field names for Cmd65's four trailing motion fields still need live capture. |
 | RE weapon fire packets | 🔬 | Client → server fire command; server → client hit/miss result |
 | RE TIC system | 🔬 | Three Targeting Interlock Circuits (A/B/C); `[`/`]`/`\\` fire each; Space fires selected single weapon — wire format unknown |
 | RE damage model | 🔬 | Location-based armor/internal structure; heat states: green → yellow (system degradation) → red → shutdown |

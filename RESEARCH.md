@@ -2107,6 +2107,39 @@ The ROADMAP "ACK reply for seq > 42" item applies historically. In v1.23 the cli
 | TCP outbuf start | `DAT_004f7274` | Buffer base address |
 | TCP outbuf write ptr | `DAT_004f7278` | Current write position |
 
+#### §19.6.1 — v1.23 Combat Server→Client Position Path (PARTIAL)
+
+Follow-up Ghidra pass against `C:\MPBT\Mpbtwin.exe` v1.23, starting from the combat dispatch table at `DAT_004782d8`.
+
+Combat dispatch entries are 8-byte records (`arity/kind`, `handler`). The allocated combat table spans commands 0–81, but most entries are null; the non-null combat-only cluster is 59–81.
+
+Key handlers for combat bootstrap and position sync:
+
+| Cmd | Wire byte | Handler | Current read |
+|-----|-----------|---------|--------------|
+| 64 | `0x65` | `FUN_0040d390` | Remote actor/mech add. Reads a server slot byte, maps it through `DAT_00478d98`, copies multiple identity strings into the per-mech struct at `DAT_004f1d30 + index*0x49c`, reads a mech id via `FUN_004013a0(2)`, loads the local `.MEC`/mech data, and marks the actor active. |
+| 65 | `0x66` | `FUN_0040d830` | Primary server→client combat position/velocity sync. Reads one server slot byte, then `type3 x`, `type3 y`, `type2 heading/z`, and four `type1` motion fields. It writes `DAT_004f1d4c/50/54`, `DAT_004f1d5c`, `DAT_004f1f7c`, `DAT_004f1f7a`, and the corresponding delta/absolute-delta fields under the same per-mech struct. |
+| 68 | `0x69` | `FUN_0040e390` | Weapon/projectile/effect spawn candidate. Reads source actor, weapon/slot, optional target actor/slot, two `type1` angle/offset fields, and `type3/type3/type2` position; calls `FUN_00427300`/`FUN_00427400` and records an effect id in `DAT_00478df8` for later follow-up. |
+| 70 | `0x6b` | `FUN_0040e700` | Actor animation/status transition. Reads actor slot + subcommand and fans into animation helpers (`FUN_0043b400`/`470`/`4a0`/`4e0`/`500`/`520`/`540`) for stand/fall/jump/destruction-style transitions. |
+| 72 | `0x6d` | `FUN_00445110` | Local combat bootstrap. Reads a scenario/title string, maps the local server slot to local actor index 0, initializes global arena/mech fields, reads local actor identity strings, reads initial coordinates, loads mech data via `FUN_004456c0`, sets `DAT_0047ef60 |= 1`, and initializes local actor state at `DAT_004f1d30`. |
+
+`FUN_0040d830` field transforms:
+
+```c
+slot     = Frame_ReadByte();       // FUN_00401a60(), maps via DAT_00478d98[slot]
+x        = Frame_ReadType(3) - 0x18e4258;
+y        = Frame_ReadType(3) - 0x18e4258;
+heading  = Frame_ReadType(2);
+field4   = (Frame_ReadType(1) - 0x0dc2) * 0xb6;
+field5   = (0x0e1c - Frame_ReadType(1)) * 0xb6;
+field6   = (Frame_ReadType(1) - 0x0e1c) * 0xb6;
+field7   = Frame_ReadType(1) - 0x0e1c;
+```
+
+Exact names for `field4`–`field7` still need live capture, but this is no longer an unknown server→client packet family: cmd 65 is the combat position/motion update that complements the client→server cmd 8/9 movement packets in §19.2.
+
+Implementation impact: a minimal combat prototype likely needs the `MMC` welcome/state handoff, then `Cmd72` to seed the local player, `Cmd64` for remote actors/bots, and periodic `Cmd65` actor position updates. `Cmd68`/`Cmd70` are likely needed once firing, projectile effects, and destruction/animation states enter scope.
+
 ---
 
 ### §19.7 — v1.23 IS.MAP / SOLARIS.MAP Binary Format (CONFIRMED)
