@@ -2171,8 +2171,75 @@ Key handlers for combat bootstrap and position sync:
 | 69 | `0x6a` | `FUN_0040e570` | Impact/effect at coordinate. Reads an actor slot, skips one byte, reads target/attachment-like bytes and fallback `type3/type3/type2` coordinates, then triggers impact audio/visual helpers. It does not apply mech damage state directly. |
 | 70 | `0x6b` | `FUN_0040e700` | Actor animation/status transition. Reads actor slot + subcommand and fans into animation helpers (`FUN_0043b400`/`470`/`4a0`/`4e0`/`500`/`520`/`540`) for stand/fall/jump/destruction-style transitions. |
 | 71 | `0x6c` | `FUN_0040eae0` | Resets the current projectile/effect globals by setting `DAT_00478df8` and `DAT_00478dfc` to `-1`. This likely brackets or clears the effect context used by cmd 66/67 follow-up damage pairs. |
-| 72 | `0x6d` | `FUN_00445110` | Local combat bootstrap. Reads a scenario/title string, maps the local server slot to local actor index 0, initializes global arena/mech fields, reads local actor identity strings, reads initial coordinates, loads mech data via `FUN_004456c0`, sets `DAT_0047ef60 |= 1`, and initializes local actor state at `DAT_004f1d30`. |
+| 72 | `0x6d` | `FUN_00445110` | Local combat bootstrap. Reads the scenario/title, local actor slot, terrain/resource point lists, actor identity strings, initial coordinates, and local mech/damage-state block via `Combat_ReadLocalActorMechState_v123`; then sets `DAT_0047ef60 |= 1` and initializes local actor state at `DAT_004f1d30`. This is now traced enough for a conservative prototype builder, but several identity/status fields still need live capture labels. |
 | 73 | `0x6e` | `FUN_0040e2f0` | Actor rate/bias-field update. Reads actor slot plus two bytes, stores each as `(value - 0x2a) * 0x38e` into per-actor fields near `DAT_004f202a`/`DAT_004f202e`, and marks `_DAT_00478df4 = 1`. Exact combat meaning still needs dynamic capture. |
+
+`Combat_Cmd72_InitLocalActor_v123` field flow:
+
+```c
+scenarioTitle = Frame_ReadString();      // copied to DAT_004ee830, max 159 bytes
+localSlot     = Frame_ReadByte();        // DAT_00478d98[localSlot] = 0
+unknownByte0  = Frame_ReadByte();        // consumed, currently unused
+terrainId     = Frame_ReadByte();        // later passed to Combat_SelectTerrainFileSet_v123
+
+// Combat_ReadTerrainPointList_v123
+terrainResourceId = Frame_ReadType(2);
+terrainPointCount = Frame_ReadByte();
+repeat terrainPointCount {
+  pointX = Frame_ReadType(3) - 0x18e4258;
+  pointY = Frame_ReadType(3) - 0x18e4258;
+  pointZ = Frame_ReadType(2);
+}
+
+// Combat_ReadArenaPointList_v123
+arenaPointCount = Frame_ReadByte();
+repeat min(arenaPointCount, 10) {
+  arenaPointX = Frame_ReadType(3) - 0x18e4258;
+  arenaPointY = Frame_ReadType(3) - 0x18e4258;
+}
+repeat remaining arena points { Frame_ReadType(3); Frame_ReadType(3); } // consumed/discarded
+
+globalA       = Frame_ReadType(2);
+globalB       = Frame_ReadType(2);
+globalC       = Frame_ReadType(2);
+headingBias   = Frame_ReadType(1) - 0x0e1c;
+identity0     = Frame_ReadString();      // max 11 bytes; trailing digits parsed into DAT_004f1ff6
+identity1     = Frame_ReadString();      // max 31 bytes
+identity2     = Frame_ReadString();      // max 39 bytes
+identity3     = Frame_ReadString();      // max 15 bytes
+identity4     = Frame_ReadString();      // max 31 bytes
+statusByte    = Frame_ReadByte();
+initialX      = Frame_ReadType(3) - 0x18e4258;
+initialY      = Frame_ReadType(3) - 0x18e4258;
+boundsFlag    = Frame_ReadByte();
+if (boundsFlag != 0) {
+  boundsX = Frame_ReadType(3) - 0x18e4258;
+  boundsY = Frame_ReadType(3) - 0x18e4258;
+}
+extraType2Count = Frame_ReadByte();
+repeat extraType2Count { Frame_ReadType(2); } // consumed, currently unlabeled
+remainingActorCount = Frame_ReadByte();       // if zero, DAT_0047ef60 |= 4
+unknownType1        = Frame_ReadType(1);
+Combat_ReadLocalActorMechState_v123(localActor);
+```
+
+`Combat_ReadLocalActorMechState_v123` then appends the local player's mech-specific state:
+
+```c
+mechId = Frame_ReadType(2);              // loads mechdata\<variant>.MEC
+if (crit_state_extra_count >= -20 && crit_state_extra_count != -21) {
+  repeat 0x15 + crit_state_extra_count { criticalStateByte = Frame_ReadByte(); }
+}
+extraStateCount = Frame_ReadByte();
+repeat extraStateCount { extraStateByte = Frame_ReadByte(); }
+repeat 11 { armorLikeStateByte = Frame_ReadByte(); }
+repeat 8  { internalStateByte = Frame_ReadByte(); }
+ammoStateCount = Frame_ReadByte();
+repeat ammoStateCount { ammoStateValue = Frame_ReadType(1); }
+actorDisplayName = Frame_ReadString();   // max 31 bytes
+```
+
+The static initializer `Combat_InitDamageStateFromMec_v123` copies the `.MEC` maxima into the actor state before those server-supplied bytes arrive: 11 values from `.MEC` offsets `0x1a..0x2e`, one zeroed weapon damage state per weapon, critical-slot defaults from the `.MEC` table at `0xde`, ammo-bin caps from `.MEC` ammo types, and 8 internal-structure maxima from `Combat_GetInternalStructureForSection_v123`. This means a minimal `Cmd72` builder should not omit the variable-length local damage block; it seeds the same state that later `Cmd66`/`Cmd67` mutate.
 
 `FUN_0040d830` field transforms:
 
@@ -2339,12 +2406,19 @@ Key `MPBTWIN.EXE` v1.23 function addresses discovered this RE session:
 | `0x0042bd10` | `Combat_UpdateWeaponDamageState_v123`: applies weapon-slot damage state and refreshes local weapon/TIC HUD |
 | `0x0042bd90` | `Combat_UpdateCriticalDamageState_v123`: applies critical/system/mech damage state and side effects |
 | `0x0042c020` | `Combat_UpdateAmmoBinState_v123`: applies ammo-bin damage state and refreshes local weapons using that ammo type |
+| `0x00433910` | `Combat_InitActorRuntimeFromMec_v123`: initializes actor runtime fields from the loaded `.MEC` |
+| `0x00433b50` | `Combat_InitDamageStateFromMec_v123`: initializes armor-like, weapon, critical, ammo, and internal-state maxima from `.MEC` |
+| `0x00433c70` | `Combat_GetInternalStructureForSection_v123`: tonnage-table lookup for internal structure by section; head returns 9 |
 | `0x00433d10` | `.MEC` file loader (`mechdata\*.MEC`) |
 | `0x00434350` | WndProc / main window message handler |
 | `0x00435c10` | TCP flush thunk — CRC + `SendTCPData` + buffer reset |
+| `0x00440270` | `Combat_SelectTerrainFileSet_v123`: selects `terrain\ter_%03d.{bin,dat,pal}` from the cmd-72 terrain id |
+| `0x00440ff0` | `Combat_ReadTerrainPointList_v123`: reads cmd-72 terrain resource id plus x/y/z point list |
 | `0x00442870` | XOR decrypt loop (549 iterations) for `.MEC` |
 | `0x004427f0` | Extract 4-char seed from `.MEC` filename stem |
 | `0x004428a0` | LCG PRNG for `.MEC` XOR key: `s = s*0xf0f1+1; s += rotate16(s)` |
+| `0x00445080` | `Combat_ReadArenaPointList_v123`: reads cmd-72 arena x/y point list, storing at most 10 entries |
+| `0x004456c0` | `Combat_ReadLocalActorMechState_v123`: reads cmd-72 local mech id, initial damage-state blocks, ammo state, and actor display name |
 | `0x00447e10` | HUD direction-indicator updater (NOT a network sender) |
 | `0x00447f70` | Arrow-key throttle/turn dispatcher |
 | `0x0042c7a0` | Rotation / heading calculator (fixed-point) |
