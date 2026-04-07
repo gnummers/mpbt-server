@@ -45,7 +45,7 @@ import {
 const COORD_BIAS = 0x18e4258; // 26,099,288
 
 /** Neutral-point bias for type1 velocity/motion fields. CONFIRMED §19.2. */
-const MOTION_NEUTRAL = 0x0e1c; // 3,612
+export const MOTION_NEUTRAL = 0x0e1c; // 3,612
 
 /**
  * Base for the facing/heading type1 field in Cmd65.

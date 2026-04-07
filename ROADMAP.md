@@ -194,7 +194,7 @@ The world uses two distinct room types: **bar** (social spaces, Tier Ranking ter
 | RE torso/leg independence | 🔬 | Legs = heading (KP4/6/2/8); torso = facing (WASD); server must track both; compass shows both simultaneously |
 | RE turn timer / match end | 🔬 | 15-minute server-enforced limit; how does server signal mech destruction / match end? |
 | RE physical combat | 🔬 | Death-from-above (DFA) and alpha strike — dedicated commands or derived from positional data? |
-| Implement `src/protocol/combat.ts` | ❌ | All combat packet builders and parsers |
+| Implement `src/protocol/combat.ts` | ✅ | All combat packet builders: Cmd64–Cmd73 implemented; combat entry wired in server-world.ts via `/fight` text command; MMC welcome + Cmd72 bootstrap sent on trigger |
 | Scripted dummy opponent | ❌ | Server-controlled bot mech that fires back, for single-player testing |
 
 **Verification:** Player can enter an arena, fire weapons, receive damage feedback, and reach a win/lose screen.
