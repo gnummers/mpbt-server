@@ -54,10 +54,12 @@ import {
 import { PlayerRegistry, ClientSession } from './state/players.js';
 import { launchRegistry } from './state/launch.js';
 import { loadMechs } from './data/mechs.js';
+
 import { Logger } from './util/logger.js';
 import { CaptureLogger } from './util/capture.js';
 import {
   buildCmd72LocalBootstrapPacket,
+  buildCmd65PositionSyncPacket,
   MOTION_NEUTRAL,
 } from './protocol/combat.js';
 
@@ -76,6 +78,9 @@ try {
 
 /** Mech ID used when the player's launch record is missing. */
 const FALLBACK_MECH_ID = WORLD_MECHS.length > 0 ? WORLD_MECHS[0].id : 0;
+
+/** Fast lookup from mech ID to MechEntry (for extraCritCount etc.). */
+const WORLD_MECH_BY_ID = new Map(WORLD_MECHS.map(m => [m.id, m]));
 
 // Default arena name shown in the window title.
 const DEFAULT_SCENE_NAME = 'Solaris Arena';
@@ -499,6 +504,14 @@ function sendCombatBootstrapSequence(
   const mechId   = session.selectedMechId ?? FALLBACK_MECH_ID;
   const callsign = getDisplayName(session);
 
+  // Look up the mech's extra crit count (confirmed by RE of
+  // Combat_ReadLocalActorMechState_v123 @ 0x004456c0 — the client reads
+  // extraCritCount + 21 bytes from the packet, where extraCritCount comes from
+  // the mech's .MEC file at offset 0x3c after decryption).
+  const mechEntry       = WORLD_MECH_BY_ID.get(mechId);
+  const extraCritCount  = mechEntry?.extraCritCount ?? 0;
+  const critBytes       = Math.max(0, extraCritCount + 21);
+
   // 1. MMC SYNC — plain ARIES packet; no game-frame CRC.
   send(socket, buildCombatWelcomePacket(), capture, 'COMBAT_WELCOME_MMC');
 
@@ -533,8 +546,8 @@ function sendCombatBootstrapSequence(
       unknownType1Raw:    MOTION_NEUTRAL,
       mech: {
         mechId,
-        critStateExtraCount:  0,               // standard: emit 21 crit bytes
-        criticalStateBytes:   Array<number>(21).fill(0),  // all slots empty
+        critStateExtraCount:  extraCritCount,
+        criticalStateBytes:   Array<number>(critBytes).fill(0),
         extraStateBytes:      [],
         armorLikeStateBytes:  Array<number>(11).fill(0),  // full armor
         internalStateBytes:   Array<number>(8).fill(0),   // full internals
@@ -547,6 +560,15 @@ function sendCombatBootstrapSequence(
 
   connLog.info('[world] sending Cmd72 combat bootstrap (mech_id=%d callsign="%s")', mechId, callsign);
   send(socket, cmd72, capture, 'CMD72_COMBAT_BOOTSTRAP');
+
+  // 3. Cmd65 — initial position for the local actor at the origin.
+  //    Gives the client something to render immediately after bootstrap.
+  //    facing/throttle/legVel/speedMag = 0 (stationary, no heading).
+  const cmd65 = buildCmd65PositionSyncPacket(
+    { slot: 0, x: 0, y: 0, z: 0, facing: 0, throttle: 0, legVel: 0, speedMag: 0 },
+    nextSeq(session),
+  );
+  send(socket, cmd65, capture, 'CMD65_INITIAL_POSITION');
 
   session.combatInitialized = true;
   connLog.info('[world] combat entry complete for "%s"', callsign);
@@ -871,9 +893,17 @@ function handleWorldGameData(
     connLog.debug('[world] cmd-7 ignored: unsupported listId=%d', parsed.listId);
   } else if (session.phase === 'combat') {
     // Combat-mode inbound frame (client sends Cmd8/Cmd9 for movement/fire).
-    // Exact encoding of combat client→server cmd indices is unconfirmed
-    // (live capture needed); log and drop for M6.
-    connLog.debug('[world/combat] inbound combat cmd=%d len=%d — not yet handled', cmdIdx, payload.length);
+    if (cmdIdx === 20) {
+      // Cmd20 — "examine self": correct combat-mode response is unconfirmed.
+      // Sending the lobby-phase buildCmd20Packet here (world CRC seed) caused
+      // the client to dispatch a garbage byte as "command 13 not handled".
+      // Drop silently until the combat-specific response format is captured.
+      connLog.debug('[world/combat] cmd-20 examine-self — no response (combat response unconfirmed)');
+    } else {
+      // Exact encoding of combat client→server cmd indices is unconfirmed
+      // (live capture needed for Cmd8/9 movement); log and drop.
+      connLog.debug('[world/combat] inbound combat cmd=%d len=%d — not yet handled', cmdIdx, payload.length);
+    }
   } else {
     connLog.debug('[world] cmd=%d — not yet handled (M3 stub)', cmdIdx);
   }
