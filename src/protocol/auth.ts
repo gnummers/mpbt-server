@@ -152,3 +152,24 @@ export const WELCOME_ESCAPE = '\x1b?MMW Copyright Kesmai Corp. 1991';
 export function buildWelcomePacket(): Buffer {
   return buildPacket(Msg.SYNC, Buffer.from(WELCOME_ESCAPE, 'ascii'));
 }
+
+/**
+ * ARIES escape sequence sent by the server to switch the client from RPS
+ * (world/lobby) dispatch mode to combat dispatch mode.
+ *
+ * CONFIRMED by Ghidra RE of Main_ModePacketDispatch_v123 (v1.23 client):
+ * the client compares the first 0x21 bytes of the received SYNC payload
+ * against DAT_0047d240; on match it calls Main_SetModeName_v123(1) and
+ * Combat_InitMode_v123() which loads scenes.dat locally — no server data
+ * is needed for that step.
+ */
+export const COMBAT_WELCOME_ESCAPE = '\x1b?MMC Copyright Kesmai Corp. 1991';
+
+/**
+ * Build the combat-mode welcome packet (type 0x00, payload = COMBAT_WELCOME_ESCAPE).
+ * Sent by the server to trigger the client RPS→combat dispatch-table switch.
+ * Must be followed immediately by a Cmd72 local-bootstrap game frame.
+ */
+export function buildCombatWelcomePacket(): Buffer {
+  return buildPacket(Msg.SYNC, Buffer.from(COMBAT_WELCOME_ESCAPE, 'ascii'));
+}
