@@ -23,6 +23,11 @@ music/
 sound/
 terrain/
 
+# Ken doesn't need these
+docs/
+screenshots/
+AI_HANDOFF.md
+
 # Research / reference materials — proprietary Kesmai/EA source materials and
 # private correspondence.  Place these in research/ for local use; they must
 # never be committed.
