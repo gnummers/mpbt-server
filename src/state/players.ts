@@ -57,6 +57,11 @@ export interface ClientSession {
   /** True once the combat bootstrap sequence (MMC welcome + Cmd72) has been sent. */
   combatInitialized?: boolean;
   /**
+   * Interval handle for the scripted bot opponent's position-update loop.
+   * Set by sendCombatBootstrapSequence; cleared on disconnect.
+   */
+  botInterval?: ReturnType<typeof setInterval>;
+  /**
    * Stable per-connection roster identifier used by world presence packets
    * (Cmd10/Cmd11/Cmd12/Cmd13). This is distinct from accountId and only needs to be
    * unique within the current server process.

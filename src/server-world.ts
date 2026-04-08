@@ -64,6 +64,7 @@ import { CaptureLogger } from './util/capture.js';
 import { ARIES_KEEPALIVE_INTERVAL_MS, SOCKET_IDLE_TIMEOUT_MS } from './config.js';
 
 import {
+  buildCmd64RemoteActorPacket,
   buildCmd72LocalBootstrapPacket,
   buildCmd65PositionSyncPacket,
   MOTION_NEUTRAL,
@@ -713,7 +714,7 @@ function sendCombatBootstrapSequence(
       initialX:           0,
       initialY:           0,
       extraType2Values:   [],
-      remainingActorCount: 0,     // solo arena — no remote actors
+      remainingActorCount: 1,     // one remote actor (bot opponent)
       unknownType1Raw:    MOTION_NEUTRAL,
       mech: {
         mechId,
@@ -732,6 +733,30 @@ function sendCombatBootstrapSequence(
   connLog.info('[world] sending Cmd72 combat bootstrap (mech_id=%d callsign="%s")', mechId, callsign);
   send(socket, cmd72, capture, 'CMD72_COMBAT_BOOTSTRAP');
 
+  // 2b. Cmd64 — add scripted bot opponent as remote actor in slot 1.
+  //     Must arrive immediately after Cmd72 (remainingActorCount=1 tells the
+  //     client to expect exactly one Cmd64 before processing further packets).
+  //     mechId matches the player's own mech; actorTypeByte/statusByte = 0
+  //     (semantics unconfirmed per AI_HANDOFF.md — 0 is safe for prototype).
+  const botMechId = session.selectedMechId ?? FALLBACK_MECH_ID;
+  const botCallsign = 'Opponent';
+  const cmd64 = buildCmd64RemoteActorPacket(
+    {
+      slot:          1,
+      actorTypeByte: 0,
+      identity0:     botCallsign,
+      identity1:     botCallsign,
+      identity2:     '',
+      identity3:     '',
+      identity4:     '',
+      statusByte:    0,
+      mechId:        botMechId,
+    },
+    nextSeq(session),
+  );
+  send(socket, cmd64, capture, 'CMD64_BOT_ACTOR');
+  connLog.info('[world] added bot opponent (mech_id=%d callsign="%s" slot=1)', botMechId, botCallsign);
+
   // 3. Cmd65 — initial position for the local actor at the origin.
   //    Gives the client something to render immediately after bootstrap.
   //    facing/throttle/legVel/speedMag = 0 (stationary, no heading).
@@ -740,6 +765,41 @@ function sendCombatBootstrapSequence(
     nextSeq(session),
   );
   send(socket, cmd65, capture, 'CMD65_INITIAL_POSITION');
+
+  // 4. Cmd65 — initial position for the bot (500 units away along X-axis).
+  const BOT_ORBIT_RADIUS = 500;
+  let botAngle = 0;
+  send(
+    socket,
+    buildCmd65PositionSyncPacket(
+      { slot: 1, x: BOT_ORBIT_RADIUS, y: 0, z: 0, facing: 0, throttle: 0, legVel: 0, speedMag: 0 },
+      nextSeq(session),
+    ),
+    capture,
+    'CMD65_BOT_INITIAL',
+  );
+
+  // 5. Bot movement loop: orbit the arena centre every ~2 minutes (π/60 rad/s).
+  const BOT_ANGULAR_VEL = Math.PI / 60;
+  session.botInterval = setInterval(() => {
+    if (session.socket.destroyed) {
+      clearInterval(session.botInterval);
+      session.botInterval = undefined;
+      return;
+    }
+    botAngle += BOT_ANGULAR_VEL;
+    const bx = Math.round(BOT_ORBIT_RADIUS * Math.cos(botAngle));
+    const by = Math.round(BOT_ORBIT_RADIUS * Math.sin(botAngle));
+    send(
+      session.socket,
+      buildCmd65PositionSyncPacket(
+        { slot: 1, x: bx, y: by, z: 0, facing: 0, throttle: 0, legVel: 0, speedMag: 0 },
+        nextSeq(session),
+      ),
+      capture,
+      'CMD65_BOT_POSITION',
+    );
+  }, 1000);
 
   session.combatInitialized = true;
   connLog.info('[world] combat entry complete for "%s"', callsign);
@@ -1367,6 +1427,9 @@ function handleWorldConnection(socket: net.Socket, players: PlayerRegistry, log:
     worldCaptures.delete(session.id);
     if (keepaliveTimer !== undefined) {
       clearInterval(keepaliveTimer);
+    }
+    if (session.botInterval !== undefined) {
+      clearInterval(session.botInterval);
     }
     capture.close();
   });
