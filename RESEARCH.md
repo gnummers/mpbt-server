@@ -2703,6 +2703,133 @@ Key `MPBTWIN.EXE` v1.23 function addresses discovered this RE session:
 
 ---
 
+### §19.9 — v1.23 Cmd62 / Combat-Start Signal (`DAT_0047ef60`) (CONFIRMED)
+
+**Confirmed by decompiling `FUN_0040d7f0` in `MPBTWIN.EXE` v1.23 via Ghidra (M6 RE, 2026-04-xx).**
+
+#### Cmd62 — "All actors ready / combat start" (wire `0x5F`)
+
+| Field | Value |
+|-------|-------|
+| Handler | `FUN_0040d7f0` @ `0x0040d7f0` |
+| Wire byte | `0x5F` (= cmd 62 + `0x21`) |
+| Payload | **None** — zero bytes read from packet buffer |
+
+**Effect on `DAT_0047ef60`:**
+```c
+DAT_0047ef60 = (DAT_0047ef60 & 0xffffffdf) | 0x14;
+_DAT_0047ef70 = 0;
+```
+
+- `& 0xffffffdf` = clear bit `0x20` — **unblocks SPACEBAR / weapon fire**
+- `| 0x04` = set "all remote actors joined" flag
+- `| 0x10` = set "combat active" flag
+- `_DAT_0047ef70 = 0` = clear the expected-actor counter
+
+Cmd62 **must** be sent after all Cmd64 (remote actor add) and initial Cmd65 (position sync)
+packets. Without Cmd62, bit `0x20` of `DAT_0047ef60` remains set (written by `FUN_00445e70`
+at combat init), and the client's weapon-fire input gate in `Combat_InputActionDispatch_v123`
+(case `0x15`) is permanently blocked — SPACEBAR appears to do nothing.
+
+#### `DAT_0047ef60` — Combat State Guard Flags (fully reconstructed)
+
+| Bit | Mask | Meaning | Set by | Cleared by |
+|-----|------|---------|--------|------------|
+| 0 | `0x01` | Local actor initialized | `Cmd72` handler (`FUN_00445110`) | — |
+| 1 | `0x02` | Arena scene/UI ready | `Cmd63` handler (`FUN_00445870`) | — |
+| 2 | `0x04` | All remote actors joined | `Cmd72` (when `_DAT_0047ef70==0`); also `Cmd62` | — |
+| 3 | `0x08` | Second stage init | `FUN_00445a90` | — |
+| 4 | `0x10` | Combat active | `Cmd62` | `Combat_InitMode_v123` |
+| 5 | `0x20` | **WEAPON FIRE BLOCKED** | `FUN_00445e70` (combat init) | **`Cmd62`** |
+| 6 | `0x40` | — | — | `Combat_InitMode_v123` |
+
+#### Secondary Combat Dispatch Table at `0x4784b0` (8 bytes/entry, base = Cmd59)
+
+Confirmed by anchoring on `Combat_Cmd64_AddActor_v123` (`0x0040d390`) at index 5, then
+back-computing the table base. Each entry is 8 bytes: 4-byte zero-padding + 4-byte function
+pointer.
+
+**Note:** This secondary table at `0x4784b0` handles the combat bootstrap/status cluster
+(Cmd59–Cmd74) within the broader v1.23 combat dispatch table at `DAT_004782d8` (§19.6).
+
+| Index | Cmd | Wire byte | Handler |
+|-------|-----|-----------|---------|
+| 0 | 59 | `0x5C` | `FUN_0040ec30` |
+| 1 | 60 | `0x5D` | `FUN_0040ebc0` |
+| 2 | 61 | `0x5E` | `FUN_0040eb50` |
+| 3 | **62** | **`0x5F`** | **`FUN_0040d7f0`** — combat-start; clears `DAT_0047ef60` bit `0x20`; enables SPACEBAR |
+| 4 | 63 | `0x60` | `FUN_00445870` — arena scene init; sets bit `0x02`; reads zero payload bytes |
+| 5 | 64 | `0x61` | `Combat_Cmd64_AddActor_v123` (`0x0040d390`) |
+| 6 | 65 | `0x62` | `Combat_Cmd65_UpdateActorPosition_v123` (`0x0040d830`) |
+| 7 | 66 | `0x63` | `FUN_0040de50` — remote actor damage (see §19.6.1) |
+| 8 | 67 | `0x64` | `FUN_0040de80` — local actor damage |
+| 9 | 68 | `0x65` | `FUN_0040e390` — projectile/effect spawn |
+| 10 | 69 | `0x66` | `FUN_0040e570` — impact effect at coordinate |
+| 11 | 70 | `0x67` | `FUN_0040e700` — actor animation/status transition |
+| 12 | 71 | `0x68` | `FUN_0040eae0` — reset current projectile/effect state |
+| 13 | **72** | **`0x69`** | **`FUN_00445110`** — local actor bootstrap (Cmd72) |
+| 14 | 73 | `0x6A` | `FUN_0040e2f0` — actor rate/bias-field update |
+| 15 | 74 | `0x6B` | `FUN_004459f0` |
+
+#### Cmd63 (`FUN_00445870`) — Arena Scene Init (no payload)
+
+- Wire byte: `0x60` (cmd 63 + `0x21`)
+- **Reads zero bytes** from the packet buffer
+- Guard: if `DAT_0047ef60 & 0x02 != 0`, returns immediately (runs only once)
+- Effect: sets `DAT_0047ef60 |= 0x02` (arena scene ready flag)
+- Must be received before Cmd62 executes its `| 0x14` write
+
+#### Ally Mode — ENTER Target Cycling
+
+ENTER target cycling in combat requires "ally mode" to be active. This is a **client-side
+toggle only** — the server cannot send it directly. The player must press `=` twice after
+entering combat:
+
+| Press | Global written | Value |
+|-------|---------------|-------|
+| First `=` | `DAT_00479a48` | `0 → 1` |
+| Second `=` | `DAT_0047a7d4` | `|= 1` (ally mode ON) |
+
+With ally mode ON, ENTER cycles available targets using `DAT_004f54d8` (target slot index).
+The remote bot actor added at slot 1 by Cmd64 is cycled into the crosshair on ENTER press.
+
+#### Complete Confirmed Combat Bootstrap Sequence
+
+```
+Step 1: Cmd72 (wire 0x69) — local mech init
+        Slot 0 = player identity + selected mech
+        Payload: scenario/title, terrain point lists, identity strings,
+                 initial coordinates, mech id, initial local damage-state blocks
+        Effect: DAT_0047ef60 |= 0x01 (local actor initialized)
+
+Step 2: Cmd64 (wire 0x61) — add remote bot actor
+        Slot 1 = "Opponent/Opponent"
+        Loads bot mech .MEC data and identity strings
+
+Step 3: Cmd65 (wire 0x62) — player initial position
+        Slot 0 at world coords x=0, y=0, z=0 (origin)
+
+Step 4: Cmd65 (wire 0x62) — bot initial position
+        Slot 1 at x=0, y=0, z=300000
+        (~300 m out from origin, clear of the center arena building)
+
+Step 5: Cmd62 (wire 0x5F) — combat start (NO PAYLOAD)
+        Clears DAT_0047ef60 bit 0x20 → enables SPACEBAR weapon fire
+        Sets bits 0x04 and 0x10; resets _DAT_0047ef70
+
+Step 6: Cmd65 timer (every 1000 ms) — keep bot position fresh
+        Slot 1, same coordinates, prevents client interpolation drift
+```
+
+#### Coordinate Encoding
+
+- `COORD_BIAS = 0x18e4258` is added to all type3 world coordinates in Cmd65/Cmd72 payloads
+- Bot at `x=5000, z=0`: within ~100 m of origin, lands on the center arena building (avoid this)
+- Bot at `x=0, z=300000`: ~300 m out in open arena space, clear of obstacles — confirmed working
+- `z` maps to depth/forward in the arena coordinate system; `y` maps to altitude
+
+---
+
 ## 22. Windowed Mode — DirectDraw Rendering Architecture
 
 This section documents the game's DirectDraw rendering pipeline as discovered through
