@@ -58,9 +58,22 @@ export interface ClientSession {
   combatInitialized?: boolean;
   /**
    * Interval handle for the scripted bot opponent's position-update loop.
-   * Set by sendCombatBootstrapSequence; cleared on disconnect.
+   * Set by sendCombatBootstrapSequence; cleared on disconnect or bot death.
    */
   botInterval?: ReturnType<typeof setInterval>;
+  /**
+   * Bot opponent hit-point pool (server-side only; does not map 1:1 to client
+   * mech damage state).  Initialized by sendCombatBootstrapSequence.
+   * When it reaches 0 the server sends the Cmd70 death animation.
+   */
+  botHealth?: number;
+  /**
+   * Last known player world-X from cmd=8 position heartbeat.
+   * Stored in game-world units (bias-subtracted); 0 until first cmd=8 received.
+   */
+  playerX?: number;
+  /** Last known player world-Y from cmd=8 position heartbeat. */
+  playerY?: number;
   /**
    * Stable per-connection roster identifier used by world presence packets
    * (Cmd10/Cmd11/Cmd12/Cmd13). This is distinct from accountId and only needs to be

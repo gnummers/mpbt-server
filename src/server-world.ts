@@ -65,8 +65,13 @@ import { ARIES_KEEPALIVE_INTERVAL_MS, SOCKET_IDLE_TIMEOUT_MS } from './config.js
 
 import {
   buildCmd64RemoteActorPacket,
-  buildCmd72LocalBootstrapPacket,
   buildCmd65PositionSyncPacket,
+  buildCmd66ActorDamagePacket,
+  buildCmd68ProjectileSpawnPacket,
+  buildCmd70ActorTransitionPacket,
+  buildCmd71ResetEffectStatePacket,
+  buildCmd72LocalBootstrapPacket,
+  COORD_BIAS,
   MOTION_NEUTRAL,
 } from './protocol/combat.js';
 
@@ -93,6 +98,11 @@ const WORLD_MECH_BY_ID = new Map(WORLD_MECHS.map(m => [m.id, m]));
 // Default arena name shown in the window title.
 const DEFAULT_SCENE_NAME = 'Solaris Arena';
 const WELCOME_TEXT       = 'Welcome to the game world.';
+
+/** Server-side HP counter for the scripted bot; triggers Cmd70 death on reaching 0. */
+const BOT_INITIAL_HEALTH = 100;
+/** Damage applied to the bot per weapon-fire hit (cmd=10). */
+const BOT_DAMAGE_PER_HIT = 20;
 const DEFAULT_MAP_ROOM_ID = 146; // Solaris Starport
 const SOLARIS_SCENE_ROOMS = [
   { roomId: 146, name: 'Solaris Starport' },
@@ -781,8 +791,15 @@ function sendCombatBootstrapSequence(
 
   // 5. Bot movement loop: orbit the arena centre every ~2 minutes (π/60 rad/s).
   const BOT_ANGULAR_VEL = Math.PI / 60;
+  session.botHealth = BOT_INITIAL_HEALTH;
   session.botInterval = setInterval(() => {
     if (session.socket.destroyed) {
+      clearInterval(session.botInterval);
+      session.botInterval = undefined;
+      return;
+    }
+    // Stop sending position updates once the bot is destroyed.
+    if (session.botHealth !== undefined && session.botHealth <= 0) {
       clearInterval(session.botInterval);
       session.botInterval = undefined;
       return;
@@ -1259,17 +1276,68 @@ function handleWorldGameData(
 
     connLog.debug('[world] cmd-7 ignored: unsupported listId=%d', parsed.listId);
   } else if (session.phase === 'combat') {
-    // Combat-mode inbound frame (client sends Cmd8/Cmd9 for movement/fire).
-    if (cmdIdx === 20) {
-      // Cmd20 — "examine self": correct combat-mode response is unconfirmed.
-      // Sending the lobby-phase buildCmd20Packet here (world CRC seed) caused
-      // the client to dispatch a garbage byte as "command 13 not handled".
-      // Drop silently until the combat-specific response format is captured.
-      connLog.debug('[world/combat] cmd-20 examine-self — no response (combat response unconfirmed)');
+    // ── Combat-mode inbound client commands ──────────────────────────────────
+
+    if (cmdIdx === 8) {
+      // Cmd8 — client position/motion heartbeat.
+      // Wire (after cmd byte): [x:type3=4bytes] [y:type3=4bytes] [z:type2=3bytes] [heading:type1=2bytes] [throttle:type1=2bytes]
+      // Confirmed by capture: all 0x4b bytes = player stationary at origin;
+      // type3 decode of 0x4b×4 → 42*85^3+…+42 = COORD_BIAS → coord=0.
+      if (payload.length >= 11) {
+        const rX = (payload[3] - 0x21) * 614125 + (payload[4] - 0x21) * 7225 +
+                   (payload[5] - 0x21) * 85     + (payload[6] - 0x21);
+        const rY = (payload[7] - 0x21) * 614125 + (payload[8] - 0x21) * 7225 +
+                   (payload[9] - 0x21) * 85     + (payload[10] - 0x21);
+        session.playerX = rX - COORD_BIAS;
+        session.playerY = rY - COORD_BIAS;
+        connLog.debug('[world/combat] cmd-8 pos x=%d y=%d', session.playerX, session.playerY);
+      } else {
+        connLog.debug('[world/combat] cmd-8 pos heartbeat (len=%d)', payload.length);
+      }
+
+    } else if (cmdIdx === 10) {
+      // Cmd10 — weapon fire (client→server).
+      // Wire: [targetId] [weaponSlot+1] [flag+1] [type1×2] [type3×2] [type2×1]
+      // Confirmed from Combat_WriteCmd10ShotGeometry_v123 @ 0040e230 in MPBTWIN.EXE.
+      if (session.botHealth === undefined || session.botHealth <= 0) {
+        connLog.debug('[world/combat] cmd-10 shot ignored — bot already destroyed');
+        return;
+      }
+
+      const weaponSlot = payload.length > 4 ? Math.max(0, payload[4] - 0x22) : 0;
+      session.botHealth = Math.max(0, session.botHealth - BOT_DAMAGE_PER_HIT);
+      connLog.info('[world/combat] cmd-10 weapon fire: weaponSlot=%d botHealth=%d', weaponSlot, session.botHealth);
+
+      // Projectile sequence: Cmd71 reset → Cmd68 spawn → Cmd66 damage → Cmd71 close.
+      send(session.socket, buildCmd71ResetEffectStatePacket(nextSeq(session)), capture, 'CMD71_RESET');
+      send(session.socket, buildCmd68ProjectileSpawnPacket(
+        { sourceSlot: 0, weaponSlot, targetRaw: 2, targetAttach: 0,
+          angleSeedA: 0, angleSeedB: 0, impactX: 0, impactY: 0, impactZ: 0 },
+        nextSeq(session),
+      ), capture, 'CMD68_PROJECTILE');
+      send(session.socket, buildCmd66ActorDamagePacket(1, 1, BOT_DAMAGE_PER_HIT, nextSeq(session)), capture, 'CMD66_BOT_DAMAGE');
+      send(session.socket, buildCmd71ResetEffectStatePacket(nextSeq(session)), capture, 'CMD71_CLOSE');
+
+      if (session.botHealth <= 0) {
+        connLog.info('[world/combat] bot destroyed — sending Cmd70 death animation');
+        send(session.socket, buildCmd70ActorTransitionPacket(1, 4, nextSeq(session)), capture, 'CMD70_BOT_DEATH');
+        if (session.botInterval) {
+          clearInterval(session.botInterval);
+          session.botInterval = undefined;
+        }
+      }
+
+    } else if (cmdIdx === 12) {
+      // Cmd12 — combat action (e.g. jump-jet engage).
+      // Confirmed from Combat_SendCmd12Action_v123 @ 0040eb20; no server reply needed.
+      connLog.debug('[world/combat] cmd-12 combat action — acknowledged (no response)');
+
+    } else if (cmdIdx === 20) {
+      // Cmd20 — examine self: combat-specific response unconfirmed; drop silently.
+      connLog.debug('[world/combat] cmd-20 examine-self — no response (unconfirmed)');
+
     } else {
-      // Exact encoding of combat client→server cmd indices is unconfirmed
-      // (live capture needed for Cmd8/9 movement); log and drop.
-      connLog.debug('[world/combat] inbound combat cmd=%d len=%d — not yet handled', cmdIdx, payload.length);
+      connLog.debug('[world/combat] inbound cmd=%d len=%d — not yet handled', cmdIdx, payload.length);
     }
   } else {
     connLog.debug('[world] cmd=%d — not yet handled (M3 stub)', cmdIdx);

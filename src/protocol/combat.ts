@@ -42,7 +42,7 @@ import {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** World-coordinate bias added before type3 encoding. CONFIRMED §19.6.1. */
-const COORD_BIAS = 0x18e4258; // 26,100,312
+export const COORD_BIAS = 0x18e4258; // 26,100,312
 
 /** Neutral-point bias for type1 velocity/motion fields. CONFIRMED §19.2. */
 export const MOTION_NEUTRAL = 0x0e1c; // 3,612
