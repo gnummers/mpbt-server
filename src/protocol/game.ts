@@ -261,12 +261,19 @@ export function buildGamePacket(cmdIndex: number, args: Buffer, combat = false, 
 // type_flag 0x20 or 0x3E → extended buttons shown
 
 export interface MechEntry {
-  id:         number;   // mech_id: stored in DAT_004dc560[i]
-  mechType:   number;   // 1-byte type: stored in DAT_004e2dc0[i]
-  slot:       number;   // slot_info: stored in DAT_004dc510[i]
-  typeString: string;   // e.g. "SDR-5V" → DAT_004dc5b8[i]
-  variant:    string;   // e.g. "Spider"  → DAT_004dc1d0[i]
-  name:       string;   // player name or ""  (empty = use FUN_00438280 lookup)
+  id:             number;   // mech_id: stored in DAT_004dc560[i]
+  mechType:       number;   // 1-byte type: stored in DAT_004e2dc0[i]
+  slot:           number;   // slot_info: stored in DAT_004dc510[i]
+  typeString:     string;   // e.g. "SDR-5V" → DAT_004dc5b8[i]
+  variant:        string;   // e.g. "Spider"  → DAT_004dc1d0[i]
+  name:           string;   // player name or ""  (empty = use FUN_00438280 lookup)
+  /**
+   * Extra crit-slot count from the mech's .MEC file (signed 16-bit at offset
+   * 0x3c after decryption).  The Cmd72 handler reads `extraCritCount + 21`
+   * crit bytes when `extraCritCount != -21 && extraCritCount >= -20`.
+   * CONFIRMED via RE of Combat_ReadLocalActorMechState_v123 @ 0x004456c0.
+   */
+  extraCritCount: number;
 }
 
 /**
@@ -701,7 +708,7 @@ export function buildCmd20Packet(
 }
 
 // ── REDIRECT (ARIES type 0x03) ────────────────────────────────────────────────
-// CONFIRMED by COMMEG32.DLL FUN_100014e0 case 3:
+// CONFIRMED by COMMEG32.DLL REDIRECT dispatch case 3:
 //   Payload is exactly 120 bytes: addr[40] | internet[40] | password[40]
 //   All fields are null-terminated ASCII strings.
 //   addr → CString → FUN_100011c0 (establish new TCP connection)
