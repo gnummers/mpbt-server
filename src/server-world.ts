@@ -58,7 +58,10 @@ import {
 import { PlayerRegistry, ClientSession } from './state/players.js';
 import { launchRegistry } from './state/launch.js';
 import { loadMechs } from './data/mechs.js';
-
+import {
+  storeMessage,
+  claimUndeliveredMessages,
+} from './db/messages.js';
 import { Logger } from './util/logger.js';
 import { CaptureLogger } from './util/capture.js';
 import { ARIES_KEEPALIVE_INTERVAL_MS, SOCKET_IDLE_TIMEOUT_MS } from './config.js';
@@ -505,45 +508,76 @@ function handleComstarTextReply(
     return;
   }
 
+  const senderName   = getDisplayName(session);
+  const senderComstarId = getComstarId(session);
+  const formattedBody   = buildComstarDeliveryText(senderName, clean);
+
   const target = findWorldTargetBySelectionId(players, dialogId);
-  if (!target) {
-    connLog.warn('[world] cmd-21 ComStar target unavailable: id=%d', dialogId);
+  if (target) {
+    // Recipient is online — deliver immediately.
+    const targetName = getDisplayName(target);
+    connLog.info(
+      '[world] cmd-21 ComStar (online): from="%s" to="%s" target=%d text=%j',
+      senderName, targetName, dialogId, clean,
+    );
+    sendToWorldSession(
+      target,
+      buildCmd36MessageViewPacket(senderComstarId, formattedBody, nextSeq(target)),
+      'CMD36_COMSTAR_DELIVERY',
+    );
+    send(
+      session.socket,
+      buildCmd3BroadcastPacket(`ComStar sent to ${targetName}.`, nextSeq(session)),
+      capture,
+      'CMD3_COMSTAR_ACK',
+    );
+    return;
+  }
+
+  // Recipient is offline (or their session ended between roster fetch and now).
+  // comstarId = 100_000 + accountId for authenticated players;
+  // 900_000 + worldRosterId for anonymous sessions (cannot persist).
+  const recipientAccountId =
+    dialogId > 100_000 && dialogId < 900_000 ? dialogId - 100_000 : undefined;
+  const senderAccountId = session.accountId;
+
+  if (senderAccountId !== undefined && recipientAccountId !== undefined) {
+    connLog.info(
+      '[world] cmd-21 ComStar (offline): from=%d to account=%d text=%j — persisting',
+      senderAccountId, recipientAccountId, clean,
+    );
+    storeMessage(senderAccountId, recipientAccountId, senderComstarId, formattedBody)
+      .then(() => {
+        connLog.info('[world] ComStar message stored for offline delivery (account=%d)', recipientAccountId);
+        send(
+          session.socket,
+          buildCmd3BroadcastPacket('ComStar message queued for offline delivery.', nextSeq(session)),
+          capture,
+          'CMD3_COMSTAR_QUEUED',
+        );
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        connLog.error('[world] failed to store offline ComStar: %s', msg);
+        send(
+          session.socket,
+          buildCmd3BroadcastPacket('ComStar delivery failed \u2014 please try again.', nextSeq(session)),
+          capture,
+          'CMD3_COMSTAR_FAIL',
+        );
+      });
+  } else {
+    connLog.warn(
+      '[world] cmd-21 ComStar target unavailable and cannot persist: dialogId=%d senderAccId=%s',
+      dialogId, senderAccountId,
+    );
     send(
       session.socket,
       buildCmd3BroadcastPacket('ComStar target unavailable.', nextSeq(session)),
       capture,
       'CMD3_COMSTAR_MISSING',
     );
-    return;
   }
-
-  const senderName = getDisplayName(session);
-  const targetName = getDisplayName(target);
-  const ack = `ComStar sent to ${targetName}.`;
-
-  connLog.info(
-    '[world] cmd-21 ComStar: from="%s" to="%s" target=%d text=%j',
-    senderName,
-    targetName,
-    dialogId,
-    clean,
-  );
-
-  sendToWorldSession(
-    target,
-    buildCmd36MessageViewPacket(
-      getComstarId(session),
-      buildComstarDeliveryText(senderName, clean),
-      nextSeq(target),
-    ),
-    'CMD36_COMSTAR_DELIVERY',
-  );
-  send(
-    session.socket,
-    buildCmd3BroadcastPacket(ack, nextSeq(session)),
-    capture,
-    'CMD3_COMSTAR_ACK',
-  );
 }
 
 function nextAvailableBooth(players: PlayerRegistry, roomId: string, excludeId: string): number {
@@ -1066,6 +1100,27 @@ function handleWorldGameData(
     session.worldInitialized = true;
     notifyRoomArrival(players, session, connLog);
 
+    // Deliver any ComStar messages that arrived while this player was offline.
+    const recipientAccountId = session.accountId;
+    if (recipientAccountId !== undefined) {
+      claimUndeliveredMessages(recipientAccountId)
+        .then((pending) => {
+          if (pending.length === 0) return;
+          connLog.info('[world] delivering %d pending ComStar message(s)', pending.length);
+          for (const msg of pending) {
+            if (session.socket.destroyed) break;
+            session.socket.write(
+              buildCmd36MessageViewPacket(msg.sender_comstar_id, msg.body, nextSeq(session)),
+            );
+          }
+          connLog.info('[world] delivered %d ComStar message(s)', pending.length);
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          connLog.error('[world] failed to claim/deliver pending ComStar messages: %s', msg);
+        });
+    }
+
   } else if (cmdIdx === 1) {
     // Cmd-1 PingAck: client acknowledging a server ping; no server reply needed.
     connLog.debug('[world] cmd-1 (ping-ack) — noted');
@@ -1112,7 +1167,8 @@ function handleWorldGameData(
       connLog.warn('[world] cmd-10 map reply parse failed');
       return;
     }
-    handleMapTravelReply(players, session, parsed.contextId, parsed.selection, parsed.selectedRoomId, connLog, capture);
+    handleMapTravelReply(players, session, parsed.contextId, parsed.selection, parsed.selectedRoomId, connLog, capture);
+
   } else if (cmdIdx === 21) {
     const parsed = parseClientCmd21TextReply(payload);
     if (!parsed) {
