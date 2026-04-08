@@ -1131,6 +1131,10 @@ function handleWorldGameData(
     connLog.debug('[world] cmd-2 (ping-request) — client handles reply via COMMEG32');
 
   } else if (cmdIdx === 4) {
+    if (session.phase === 'combat') {
+      connLog.debug('[world] cmd-4 in combat phase — different encoding, ignoring');
+      return;
+    }
     const parsed = parseClientCmd4(payload);
     if (!parsed) {
       connLog.warn('[world] cmd-4 parse failed');
@@ -1156,15 +1160,27 @@ function handleWorldGameData(
     }
     connLog.info('[world] cmd-5 scene action: type=%d', parsed.actionType);
     if (parsed.actionType === 4) {
+      if (session.phase !== 'world') {
+        connLog.warn('[world] cmd-5 travel-map request ignored outside world phase: phase=%s', session.phase);
+        return;
+      }
       sendSolarisTravelMap(session, connLog, capture);
       return;
     }
     connLog.warn('[world] cmd-5 unsupported scene action type=%d', parsed.actionType);
 
   } else if (cmdIdx === 10) {
+    if (session.phase !== 'world') {
+      connLog.debug('[world] cmd-10 ignored outside world phase: phase=%s', session.phase);
+      return;
+    }
     const parsed = parseClientCmd10MapReply(payload);
     if (!parsed) {
       connLog.warn('[world] cmd-10 map reply parse failed');
+      return;
+    }
+    if (parsed.contextId !== SOLARIS_TRAVEL_CONTEXT_ID) {
+      connLog.warn('[world] cmd-10 ignored: unexpected map contextId=%d', parsed.contextId);
       return;
     }
     handleMapTravelReply(players, session, parsed.contextId, parsed.selection, parsed.selectedRoomId, connLog, capture);
@@ -1416,7 +1432,7 @@ function handleWorldConnection(socket: net.Socket, players: PlayerRegistry, log:
       '[world] client disconnected (phase=%s, bytes=%d)',
       session.phase, session.bytesReceived,
     );
-    if (session.phase === 'world' && session.worldInitialized) {
+    if (session.worldInitialized) {
       notifyRoomDeparture(players, session, connLog);
     }
     players.remove(session.id);
