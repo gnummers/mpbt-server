@@ -1,4 +1,4 @@
-﻿/**
+/**
  * MPBT World Server — game world (RPS) TCP connection handler.
  *
  * Accepts the secondary TCP connection that the client opens after the lobby
@@ -830,6 +830,11 @@ function handleMapTravelReply(
 
   if (selectedRoomId === undefined) {
     connLog.warn('[world] cmd-10 map reply missing selected room: context=%d selection=%d', contextId, selection);
+    return;
+  }
+
+  if (!SOLARIS_ROOM_BY_ID.has(selectedRoomId)) {
+    connLog.warn('[world] cmd-10 map reply: unknown selectedRoomId=%d, ignoring', selectedRoomId);
     return;
   }
 

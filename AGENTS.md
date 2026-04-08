@@ -1,4 +1,4 @@
-﻿
+
 # Agent Instructions
 
 This repository is a reverse-engineered MPBT server. Treat current upstream

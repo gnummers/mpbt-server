@@ -1,4 +1,4 @@
-﻿# MPBT Solaris — Reverse Engineering Research
+# MPBT Solaris — Reverse Engineering Research
 
 This document records every confirmed protocol detail found through static analysis
 of the original game binaries using Ghidra. It is intended as a reference for
