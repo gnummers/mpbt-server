@@ -59,7 +59,7 @@ import {
 import { PlayerRegistry, ClientSession } from './state/players.js';
 import { launchRegistry } from './state/launch.js';
 import { loadMechs } from './data/mechs.js';
-import { loadSolarisRooms, WorldRoom } from './data/maps.js';
+import { loadSolarisRooms, WorldRoom, loadWorldMap, WorldMapRoom } from './data/maps.js';
 import {
   storeMessage,
   claimUndeliveredMessages,
@@ -160,6 +160,23 @@ try {
 const SOLARIS_ROOM_BY_ID = new Map<number, WorldRoom>(
   solarisRooms.map(room => [room.roomId, room]),
 );
+
+// ── World map (navigation graph from world-map.json) ─────────────────────────
+
+let worldMapByRoomId = new Map<number, WorldMapRoom>();
+try {
+  const worldMap = loadWorldMap();
+  if (worldMap) {
+    worldMapByRoomId = new Map(worldMap.rooms.map(r => [r.roomId, r]));
+    process.stderr.write(`[world] loaded world-map.json (${worldMap.rooms.length} rooms)\n`);
+  } else {
+    process.stderr.write('[world] WARNING: world-map.json not found — using provisional linear topology\n');
+  }
+} catch (err) {
+  const msg = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  process.stderr.write(`[world] WARNING: failed to parse world-map.json: ${msg}\n`);
+}
+
 const ALL_ROSTER_LIST_ID = 0x3F4;
 // 0x3E8 (1000) is reserved by the client for its own local "Personal inquiry on:"
 // submenu (FUN_00412980).  Sending Cmd7 with that listId triggers special client
@@ -234,11 +251,17 @@ function uniqueRoomIds(roomIds: number[]): number[] {
  * Until it is, use a provisional linear topology: room 146 is the Solaris
  * hub, each room connects back to the hub and to its immediate neighbours
  * in the loaded room list, with sector-row links for Solaris district rooms.
- *
- * TODO(#M5): RE actual server connection table and replace this stub.
  */
 function getSolarisRoomExits(roomId: number): number[] {
-  // Provisional topology (placeholder until server connection table is RE'd).
+  // Use world-map.json if loaded.
+  const mapRoom = worldMapByRoomId.get(roomId);
+  if (mapRoom) {
+    const { north, south, east, west } = mapRoom.exits;
+    // Slot order: 0=N 1=S 2=E 3=W.  Skip nulls (no exit in that direction).
+    return [north, south, east, west].filter((id): id is number => id !== null);
+  }
+
+  // Provisional linear topology fallback.
   if (roomId === 146) return [147, 152, 157, 162];
 
   const index = solarisRooms.findIndex(r => r.roomId === roomId);
@@ -253,6 +276,16 @@ function getSolarisRoomExits(roomId: number): number[] {
   }
 
   return uniqueRoomIds(exits).filter(exit => exit !== roomId).slice(0, 4);
+}
+
+/**
+ * Return the Cmd4 location icon ID (mechId) for a room.
+ * Uses the icon field from world-map.json if present; falls back to sceneIndex.
+ */
+function getSolarisRoomIcon(roomId: number): number {
+  const mapRoom = worldMapByRoomId.get(roomId);
+  if (mapRoom?.icon !== null && mapRoom?.icon !== undefined) return mapRoom.icon;
+  return getSolarisSceneIndex(roomId);
 }
 
 function getPresenceStatus(session: ClientSession): number {
@@ -389,17 +422,38 @@ function sendSolarisTravelMap(
 function buildSceneInitForSession(session: ClientSession) {
   const roomId = session.worldMapRoomId ?? DEFAULT_MAP_ROOM_ID;
   const sceneIndex = getSolarisSceneIndex(roomId);
-  const exits = getSolarisRoomExits(roomId);
-  const exitMask = exits.reduce((mask, _roomId, slot) => mask | (1 << slot), 0);
+
+  // Build a 4-slot array (N=0, S=1, E=2, W=3) preserving direction positions.
+  // When using world-map.json the exits array already has nulls for empty slots.
+  // When using the fallback, compact exits are back-filled starting at slot 0.
+  const mapRoom = worldMapByRoomId.get(roomId);
+  let slottedExits: (number | null)[];
+  if (mapRoom) {
+    const { north, south, east, west } = mapRoom.exits;
+    slottedExits = [north, south, east, west];
+  } else {
+    const exits = getSolarisRoomExits(roomId);
+    slottedExits = [
+      exits[0] ?? null,
+      exits[1] ?? null,
+      exits[2] ?? null,
+      exits[3] ?? null,
+    ];
+  }
+
+  const exitMask = slottedExits.reduce<number>(
+    (mask, id, slot) => (id !== null ? mask | (1 << slot) : mask),
+    0,
+  );
 
   return buildCmd4SceneInitPacket(
     {
       sessionFlags:     0x30 | exitMask,
       playerScoreSlot:  sceneIndex,
-      playerMechId:     sceneIndex,
-      opponents:        exits.map(exitRoomId => {
-        const exitSceneIndex = getSolarisSceneIndex(exitRoomId);
-        return { type: exitSceneIndex, mechId: exitSceneIndex };
+      playerMechId:     getSolarisRoomIcon(roomId),
+      opponents:        slottedExits.map(exitRoomId => {
+        if (exitRoomId === null) return null as unknown as { type: number; mechId: number };
+        return { type: getSolarisSceneIndex(exitRoomId), mechId: getSolarisRoomIcon(exitRoomId) };
       }),
       callsign:         getDisplayName(session),
       sceneName:        getSolarisRoomName(roomId),
@@ -862,6 +916,48 @@ function handleWorldTextCommand(
     return;
   }
 
+  // /icons [start] — send a fake scene with 4 exit slots showing icons N, N+1,
+  // N+2, N+3.  Used to empirically map icon IDs to their displayed graphics.
+  const iconsMatch = clean.match(/^\/icons(?:\s+(\d+))?$/i);
+  if (iconsMatch) {
+    const base = parseInt(iconsMatch[1] ?? '0', 10);
+    connLog.info('[world] /icons test: base=%d', base);
+    send(
+      session.socket,
+      buildCmd4SceneInitPacket(
+        {
+          sessionFlags:    0x30 | 0x0F,  // all 4 slots enabled
+          playerScoreSlot: 0,
+          playerMechId:    base,
+          opponents: [
+            { type: 0, mechId: base },
+            { type: 0, mechId: base + 1 },
+            { type: 0, mechId: base + 2 },
+            { type: 0, mechId: base + 3 },
+          ],
+          callsign:  getDisplayName(session),
+          sceneName: `Icons ${base}–${base + 3}`,
+          arenaOptions: [
+            { type: 0, label: 'Help' },
+            { type: 4, label: 'Travel' },
+          ],
+        },
+        nextSeq(session),
+      ),
+      capture,
+      'CMD4_ICONS_TEST',
+    );
+    send(
+      session.socket,
+      buildCmd3BroadcastPacket(
+        `N=${base} S=${base+1} E=${base+2} W=${base+3}  (center=${base})  Type /icons ${base+4} for next batch.`,
+        nextSeq(session),
+      ),
+      capture,
+      'CMD3_ICONS_LABEL',
+    );
+    return;
+  }
   const line = `${getDisplayName(session)}: ${clean}`;
   connLog.info('[world] cmd-4 text: %s', line);
 

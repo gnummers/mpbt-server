@@ -230,3 +230,73 @@ export function loadSolarisRooms(filePath?: string): WorldRoom[] | null {
     sceneIndex: index,
   }));
 }
+
+// ── World map (navigation graph) ───────────────────────────────────────────
+
+/**
+ * Room type tags used in world-map.json.
+ * bar | arena | hub | terminal | bank | street | sector | path
+ */
+export type RoomType = 'bar' | 'arena' | 'hub' | 'terminal' | 'bank' | 'street' | 'sector' | 'path';
+
+/** One entry from world-map.json, representing navigation data for a single room. */
+export interface WorldMapRoom {
+  roomId: number;
+  sector: string;
+  type: RoomType;
+  /**
+   * Location icon ID sent in Cmd4 mechId field.
+   * null = not yet known; server falls back to scene-slot index.
+   */
+  icon: number | null;
+  /** Cardinal exits.  null = no exit in that direction.  Values are roomIds. */
+  exits: {
+    north: number | null;
+    south: number | null;
+    east:  number | null;
+    west:  number | null;
+  };
+}
+
+/** Parsed world-map.json. */
+export interface WorldMap {
+  rooms: WorldMapRoom[];
+}
+
+/**
+ * Load world-map.json from the project root (or MPBT_DATA_DIR).
+ *
+ * Returns `null` if the file is absent — callers fall back to provisional
+ * linear topology.  Throws if the file exists but is malformed JSON.
+ */
+export function loadWorldMap(filePath?: string): WorldMap | null {
+  const resolved = filePath ?? findMapFile('world-map.json');
+  if (!resolved) return null;
+
+  const raw = fs.readFileSync(resolved, 'utf8');
+  const parsed = JSON.parse(raw) as { rooms?: unknown };
+  if (!Array.isArray(parsed.rooms)) {
+    throw new Error('world-map.json: "rooms" must be an array');
+  }
+
+  const rooms: WorldMapRoom[] = (parsed.rooms as Record<string, unknown>[]).map((r, i) => {
+    if (typeof r['roomId'] !== 'number') {
+      throw new Error(`world-map.json: rooms[${i}] missing numeric roomId`);
+    }
+    const exits = (r['exits'] ?? {}) as Record<string, unknown>;
+    return {
+      roomId: r['roomId'] as number,
+      sector: String(r['sector'] ?? ''),
+      type:   String(r['type']   ?? 'street') as RoomType,
+      icon:   typeof r['icon'] === 'number' ? r['icon'] as number : null,
+      exits: {
+        north: typeof exits['north'] === 'number' ? exits['north'] as number : null,
+        south: typeof exits['south'] === 'number' ? exits['south'] as number : null,
+        east:  typeof exits['east']  === 'number' ? exits['east']  as number : null,
+        west:  typeof exits['west']  === 'number' ? exits['west']  as number : null,
+      },
+    };
+  });
+
+  return { rooms };
+}

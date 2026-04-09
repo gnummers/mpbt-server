@@ -1,0 +1,281 @@
+{
+  "_comment": "MPBT Solaris VII world map.  Hand-authored navigation graph.",
+  "_schema": {
+    "rooms": "Array of room definitions.",
+    "roomId": "Must match the id in SOLARIS.MAP.  Server uses this to look up room name/description.",
+    "sector": "Which of the six Solaris sectors (or 'starport') this room belongs to.",
+    "type": "bar | arena | hub | terminal | bank | street | sector | path",
+    "icon": "Location icon ID sent in Cmd4 (mechId field).  null = TBD (use sceneIndex fallback).",
+    "exits": {
+      "_comment": "Explicit N/S/E/W exits.  null = no exit in that direction.  Values are roomIds.",
+      "north": "roomId or null",
+      "south": "roomId or null",
+      "east": "roomId or null",
+      "west": "roomId or null"
+    }
+  },
+  "rooms": [
+    {
+      "_name": "Solaris Starport",
+      "roomId": 146,
+      "sector": "international",
+      "type": "hub",
+      "icon": null,
+      "exits": { "north": 168, "south": null, "east": 169, "west": null }
+    },
+
+    {
+      "_name": "International Sector",
+      "roomId": 1,
+      "sector": "international",
+      "type": "sector",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": null }
+    },
+
+    {
+      "_name": "Black Hills Sector",
+      "roomId": 6,
+      "sector": "blackhills",
+      "type": "sector",
+      "icon": null,
+      "exits": { "north": 170, "south": 168, "east": 169, "west": null }
+    },
+    {
+      "_name": "Sortek Building",
+      "roomId": 168,
+      "sector": "blackhills",
+      "type": "terminal",
+      "icon": null,
+      "exits": { "north": 6, "south": null, "east": 169, "west": null }
+    },
+    {
+      "_name": "Guzman Park",
+      "roomId": 169,
+      "sector": "blackhills",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": 170, "south": 146, "east": 167, "west": 168 }
+    },
+    {
+      "_name": "Davion Arena",
+      "roomId": 167,
+      "sector": "blackhills",
+      "type": "arena",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": 169 }
+    },
+    {
+      "_name": "Marina",
+      "roomId": 170,
+      "sector": "blackhills",
+      "type": "bar",
+      "icon": null,
+      "exits": { "north": null, "south": 169, "east": null, "west": 171 }
+    },
+    {
+      "_name": "Viewpoint",
+      "roomId": 171,
+      "sector": "blackhills",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": 170, "south": 168, "east": null, "west": null }
+    },
+
+    {
+      "_name": "Kobe Sector",
+      "roomId": 2,
+      "sector": "kobe",
+      "type": "sector",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": null }
+    },
+    {
+      "_name": "Ishiyama Arena",
+      "roomId": 147,
+      "sector": "kobe",
+      "type": "arena",
+      "icon": null,
+      "exits": { "north": null, "south": 150, "east": 148, "west": 149 }
+    },
+    {
+      "_name": "Government House",
+      "roomId": 148,
+      "sector": "kobe",
+      "type": "terminal",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": 147 }
+    },
+    {
+      "_name": "White Lotus",
+      "roomId": 149,
+      "sector": "kobe",
+      "type": "bar",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": 147, "west": null }
+    },
+    {
+      "_name": "Waterfront",
+      "roomId": 150,
+      "sector": "kobe",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": 147, "south": null, "east": null, "west": null }
+    },
+    {
+      "_name": "Kobe Slums",
+      "roomId": 151,
+      "sector": "kobe",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": null }
+    },
+
+    {
+      "_name": "Silesia Sector",
+      "roomId": 3,
+      "sector": "silesia",
+      "type": "sector",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": null }
+    },
+    {
+      "_name": "Steiner Stadium",
+      "roomId": 152,
+      "sector": "silesia",
+      "type": "arena",
+      "icon": null,
+      "exits": { "north": 155, "south": 156, "east": 153, "west": null }
+    },
+    {
+      "_name": "Lyran Building",
+      "roomId": 153,
+      "sector": "silesia",
+      "type": "terminal",
+      "icon": null,
+      "exits": { "north": null, "south": 154, "east": null, "west": 152 }
+    },
+    {
+      "_name": "Chahar Park",
+      "roomId": 154,
+      "sector": "silesia",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": 153, "south": null, "east": null, "west": null }
+    },
+    {
+      "_name": "Riverside",
+      "roomId": 155,
+      "sector": "silesia",
+      "type": "bar",
+      "icon": null,
+      "exits": { "north": null, "south": 152, "east": null, "west": null }
+    },
+    {
+      "_name": "Black Throne",
+      "roomId": 156,
+      "sector": "silesia",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": 152, "south": null, "east": null, "west": null }
+    },
+
+    {
+      "_name": "Montenegro Sector",
+      "roomId": 4,
+      "sector": "montenegro",
+      "type": "sector",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": null }
+    },
+    {
+      "_name": "Factory",
+      "roomId": 157,
+      "sector": "montenegro",
+      "type": "arena",
+      "icon": null,
+      "exits": { "north": null, "south": 158, "east": 159, "west": null }
+    },
+    {
+      "_name": "Marik Tower",
+      "roomId": 158,
+      "sector": "montenegro",
+      "type": "terminal",
+      "icon": null,
+      "exits": { "north": 157, "south": null, "east": null, "west": null }
+    },
+    {
+      "_name": "Allman",
+      "roomId": 159,
+      "sector": "montenegro",
+      "type": "bar",
+      "icon": null,
+      "exits": { "north": null, "south": 160, "east": null, "west": 157 }
+    },
+    {
+      "_name": "Riverfront",
+      "roomId": 160,
+      "sector": "montenegro",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": 159, "south": null, "east": null, "west": null }
+    },
+    {
+      "_name": "Wasteland",
+      "roomId": 161,
+      "sector": "montenegro",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": null }
+    },
+
+    {
+      "_name": "Cathay Sector",
+      "roomId": 5,
+      "sector": "cathay",
+      "type": "sector",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": null }
+    },
+    {
+      "_name": "Jungle",
+      "roomId": 162,
+      "sector": "cathay",
+      "type": "arena",
+      "icon": null,
+      "exits": { "north": 165, "south": 163, "east": 166, "west": 164 }
+    },
+    {
+      "_name": "Chancellor's Quarters",
+      "roomId": 163,
+      "sector": "cathay",
+      "type": "terminal",
+      "icon": null,
+      "exits": { "north": 162, "south": null, "east": null, "west": null }
+    },
+    {
+      "_name": "Middletown",
+      "roomId": 164,
+      "sector": "cathay",
+      "type": "bar",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": 162, "west": null }
+    },
+    {
+      "_name": "Rivertown",
+      "roomId": 165,
+      "sector": "cathay",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": null, "south": 162, "east": 166, "west": null }
+    },
+    {
+      "_name": "Maze",
+      "roomId": 166,
+      "sector": "cathay",
+      "type": "street",
+      "icon": null,
+      "exits": { "north": null, "south": null, "east": null, "west": 162 }
+    }
+  ]
+}
