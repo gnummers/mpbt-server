@@ -1056,8 +1056,22 @@ function handleLocationAction(
   capture: CaptureLogger,
 ): void {
   const currentRoomId = session.worldMapRoomId ?? DEFAULT_MAP_ROOM_ID;
-  const exits = getSolarisRoomExits(currentRoomId);
-  const targetRoomId = exits[slot];
+
+  // Resolve exit by compass slot (0=N 1=S 2=E 3=W).  Must use slotted exits
+  // (nulls preserved) so slot indices match the buttons sent to the client.
+  // getSolarisRoomExits() returns a compact filtered array — do NOT use it here.
+  const mapRoom = worldMapByRoomId.get(currentRoomId);
+  let targetRoomId: number | undefined;
+  if (mapRoom) {
+    const slotted: (number | null)[] = [
+      mapRoom.exits.north, mapRoom.exits.south, mapRoom.exits.east, mapRoom.exits.west,
+    ];
+    targetRoomId = slotted[slot] ?? undefined;
+  } else {
+    // Fallback linear topology densely fills all slots, so compact is fine.
+    targetRoomId = getSolarisRoomExits(currentRoomId)[slot];
+  }
+
   if (targetRoomId === undefined) {
     connLog.warn('[world] cmd-23 location action has no exit: room=%d slot=%d cached=%s', currentRoomId, slot, targetCached);
     send(
