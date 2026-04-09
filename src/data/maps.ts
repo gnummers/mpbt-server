@@ -8,6 +8,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 export interface MapBounds {
   x1: number;
@@ -149,4 +150,82 @@ export function parseMapFile(filePath: string, source = path.basename(filePath).
     remainingOffset: offset,
     remainingBytes: buf.length - offset,
   };
+}
+
+// ── World-room abstraction ─────────────────────────────────────────────────
+
+/**
+ * A single room entry derived from a parsed MAP file, suitable for use as
+ * the server-side room model.
+ */
+export interface WorldRoom {
+  roomId: number;
+  name: string;
+  /** Raw flags word from the map record (faction / type; exact semantics TBD). */
+  flags: number;
+  /**
+   * Map X coordinate.
+   *   SOLARIS.MAP: identity (raw_x as-is).
+   *   IS.MAP:      raw_x / 3 + 380.
+   * Derived as the horizontal midpoint of the record's bounding box.
+   */
+  centreX: number;
+  /**
+   * Map Y coordinate.
+   *   SOLARIS.MAP: identity (raw_y as-is).
+   *   IS.MAP:      raw_y / −3 + 248.
+   * Derived as the vertical midpoint of the record's bounding box.
+   */
+  centreY: number;
+  /** 0-based position in the SOLARIS.MAP room list (used as scene-slot index). */
+  sceneIndex: number;
+}
+
+function projectRoot(): string {
+  // __dirname equiv: src/data/ → ../../ = project root
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  return path.resolve(dir, '../../');
+}
+
+function findMapFile(filename: string): string | undefined {
+  const root = projectRoot();
+  const dirs = [
+    process.env['MPBT_DATA_DIR'],
+    root,
+    process.cwd(),
+    path.resolve(root, '..'),
+    path.resolve(root, 'research'),
+  ].filter((d): d is string => Boolean(d));
+
+  for (const dir of dirs) {
+    const candidate = path.join(dir, filename);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Load the SOLARIS.MAP room table and return it as an ordered WorldRoom array.
+ *
+ * Returns `null` if SOLARIS.MAP cannot be found — callers should warn and fall
+ * back to a hardcoded room list so the server still starts without the
+ * proprietary assets.
+ *
+ * Throws if the file is found but fails to parse (data corruption).
+ *
+ * @param filePath  Optional explicit path; omit to search default locations.
+ */
+export function loadSolarisRooms(filePath?: string): WorldRoom[] | null {
+  const resolved = filePath ?? findMapFile('SOLARIS.MAP');
+  if (!resolved) return null;
+
+  const parsed = parseMapFile(resolved, 'SOLARIS.MAP');
+  return parsed.rooms.map((room, index): WorldRoom => ({
+    roomId:     room.roomId,
+    name:       room.name,
+    flags:      room.flags,
+    centreX:    (room.bounds.x1 + room.bounds.x2) / 2,
+    centreY:    (room.bounds.y1 + room.bounds.y2) / 2,
+    sceneIndex: index,
+  }));
 }

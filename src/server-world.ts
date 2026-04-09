@@ -59,6 +59,7 @@ import {
 import { PlayerRegistry, ClientSession } from './state/players.js';
 import { launchRegistry } from './state/launch.js';
 import { loadMechs } from './data/mechs.js';
+import { loadSolarisRooms, WorldRoom } from './data/maps.js';
 import {
   storeMessage,
   claimUndeliveredMessages,
@@ -98,42 +99,66 @@ const WORLD_MECH_BY_ID = new Map(WORLD_MECHS.map(m => [m.id, m]));
 const DEFAULT_SCENE_NAME = 'Solaris Arena';
 const WELCOME_TEXT       = 'Welcome to the game world.';
 const DEFAULT_MAP_ROOM_ID = 146; // Solaris Starport
-const SOLARIS_SCENE_ROOMS = [
-  { roomId: 146, name: 'Solaris Starport' },
-  { roomId: 147, name: 'Ishiyama Arena' },
-  { roomId: 148, name: 'Government House' },
-  { roomId: 149, name: 'White Lotus' },
-  { roomId: 150, name: 'Waterfront' },
-  { roomId: 151, name: 'Kobe Slums' },
-  { roomId: 152, name: 'Steiner Stadium' },
-  { roomId: 153, name: 'Lyran Building' },
-  { roomId: 154, name: 'Chahar Park' },
-  { roomId: 155, name: 'Riverside' },
-  { roomId: 156, name: 'Black Throne' },
-  { roomId: 157, name: 'Factory' },
-  { roomId: 158, name: 'Marik Tower' },
-  { roomId: 159, name: 'Allman' },
-  { roomId: 160, name: 'Riverfront' },
-  { roomId: 161, name: 'Wasteland' },
-  { roomId: 162, name: 'Jungle' },
-  { roomId: 163, name: "Chancellor's Quarters" },
-  { roomId: 164, name: 'Middletown' },
-  { roomId: 165, name: 'Rivertown' },
-  { roomId: 166, name: 'Maze' },
-  { roomId: 167, name: 'Davion Arena' },
-  { roomId: 168, name: 'Sortek Building' },
-  { roomId: 169, name: 'Guzman Park' },
-  { roomId: 170, name: 'Marina' },
-  { roomId: 171, name: 'Viewpoint' },
-  { roomId: 1, name: 'International Sector' },
-  { roomId: 2, name: 'Kobe Sector' },
-  { roomId: 3, name: 'Silesia Sector' },
-  { roomId: 4, name: 'Montenegro Sector' },
-  { roomId: 5, name: 'Cathay Sector' },
-  { roomId: 6, name: 'Black Hills Sector' },
-] as const;
-const SOLARIS_ROOM_BY_ID = new Map<number, { roomId: number; name: string; sceneIndex: number }>(
-  SOLARIS_SCENE_ROOMS.map((room, index) => [room.roomId, { ...room, sceneIndex: index }]),
+
+// ── Solaris room model ────────────────────────────────────────────────────────
+// Loaded at startup from SOLARIS.MAP via parseMapFile().  Falls back to a
+// hardcoded list when the proprietary map asset is absent so the server still
+// starts during development without the full game data.
+
+/** Hardcoded fallback used when SOLARIS.MAP is not present. */
+const SOLARIS_FALLBACK_ROOMS: WorldRoom[] = [
+  { roomId: 146, name: 'Solaris Starport',       flags: 0, centreX: 0, centreY: 0, sceneIndex: 0 },
+  { roomId: 147, name: 'Ishiyama Arena',          flags: 0, centreX: 0, centreY: 0, sceneIndex: 1 },
+  { roomId: 148, name: 'Government House',        flags: 0, centreX: 0, centreY: 0, sceneIndex: 2 },
+  { roomId: 149, name: 'White Lotus',             flags: 0, centreX: 0, centreY: 0, sceneIndex: 3 },
+  { roomId: 150, name: 'Waterfront',              flags: 0, centreX: 0, centreY: 0, sceneIndex: 4 },
+  { roomId: 151, name: 'Kobe Slums',              flags: 0, centreX: 0, centreY: 0, sceneIndex: 5 },
+  { roomId: 152, name: 'Steiner Stadium',         flags: 0, centreX: 0, centreY: 0, sceneIndex: 6 },
+  { roomId: 153, name: 'Lyran Building',          flags: 0, centreX: 0, centreY: 0, sceneIndex: 7 },
+  { roomId: 154, name: 'Chahar Park',             flags: 0, centreX: 0, centreY: 0, sceneIndex: 8 },
+  { roomId: 155, name: 'Riverside',               flags: 0, centreX: 0, centreY: 0, sceneIndex: 9 },
+  { roomId: 156, name: 'Black Throne',            flags: 0, centreX: 0, centreY: 0, sceneIndex: 10 },
+  { roomId: 157, name: 'Factory',                 flags: 0, centreX: 0, centreY: 0, sceneIndex: 11 },
+  { roomId: 158, name: 'Marik Tower',             flags: 0, centreX: 0, centreY: 0, sceneIndex: 12 },
+  { roomId: 159, name: 'Allman',                  flags: 0, centreX: 0, centreY: 0, sceneIndex: 13 },
+  { roomId: 160, name: 'Riverfront',              flags: 0, centreX: 0, centreY: 0, sceneIndex: 14 },
+  { roomId: 161, name: 'Wasteland',               flags: 0, centreX: 0, centreY: 0, sceneIndex: 15 },
+  { roomId: 162, name: 'Jungle',                  flags: 0, centreX: 0, centreY: 0, sceneIndex: 16 },
+  { roomId: 163, name: "Chancellor's Quarters",   flags: 0, centreX: 0, centreY: 0, sceneIndex: 17 },
+  { roomId: 164, name: 'Middletown',              flags: 0, centreX: 0, centreY: 0, sceneIndex: 18 },
+  { roomId: 165, name: 'Rivertown',               flags: 0, centreX: 0, centreY: 0, sceneIndex: 19 },
+  { roomId: 166, name: 'Maze',                    flags: 0, centreX: 0, centreY: 0, sceneIndex: 20 },
+  { roomId: 167, name: 'Davion Arena',            flags: 0, centreX: 0, centreY: 0, sceneIndex: 21 },
+  { roomId: 168, name: 'Sortek Building',         flags: 0, centreX: 0, centreY: 0, sceneIndex: 22 },
+  { roomId: 169, name: 'Guzman Park',             flags: 0, centreX: 0, centreY: 0, sceneIndex: 23 },
+  { roomId: 170, name: 'Marina',                  flags: 0, centreX: 0, centreY: 0, sceneIndex: 24 },
+  { roomId: 171, name: 'Viewpoint',               flags: 0, centreX: 0, centreY: 0, sceneIndex: 25 },
+  { roomId: 1,   name: 'International Sector',    flags: 0, centreX: 0, centreY: 0, sceneIndex: 26 },
+  { roomId: 2,   name: 'Kobe Sector',             flags: 0, centreX: 0, centreY: 0, sceneIndex: 27 },
+  { roomId: 3,   name: 'Silesia Sector',          flags: 0, centreX: 0, centreY: 0, sceneIndex: 28 },
+  { roomId: 4,   name: 'Montenegro Sector',       flags: 0, centreX: 0, centreY: 0, sceneIndex: 29 },
+  { roomId: 5,   name: 'Cathay Sector',           flags: 0, centreX: 0, centreY: 0, sceneIndex: 30 },
+  { roomId: 6,   name: 'Black Hills Sector',      flags: 0, centreX: 0, centreY: 0, sceneIndex: 31 },
+];
+
+let solarisRooms: WorldRoom[];
+try {
+  const loaded = loadSolarisRooms();
+  if (loaded) {
+    solarisRooms = loaded;
+    process.stderr.write(`[world] loaded ${loaded.length} rooms from SOLARIS.MAP\n`);
+  } else {
+    solarisRooms = SOLARIS_FALLBACK_ROOMS;
+    process.stderr.write('[world] WARNING: SOLARIS.MAP not found — using hardcoded room list\n');
+  }
+} catch (err) {
+  const msg = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  process.stderr.write(`[world] WARNING: failed to parse SOLARIS.MAP: ${msg}\n`);
+  solarisRooms = SOLARIS_FALLBACK_ROOMS;
+}
+
+const SOLARIS_ROOM_BY_ID = new Map<number, WorldRoom>(
+  solarisRooms.map(room => [room.roomId, room]),
 );
 const ALL_ROSTER_LIST_ID = 0x3F4;
 // 0x3E8 (1000) is reserved by the client for its own local "Personal inquiry on:"
@@ -181,7 +206,7 @@ function mapRoomKey(roomId: number): string {
   return `map_room_${roomId}`;
 }
 
-function getSolarisRoomInfo(roomId: number) {
+function getSolarisRoomInfo(roomId: number): WorldRoom {
   return SOLARIS_ROOM_BY_ID.get(roomId) ?? SOLARIS_ROOM_BY_ID.get(DEFAULT_MAP_ROOM_ID)!;
 }
 
@@ -197,22 +222,47 @@ function uniqueRoomIds(roomIds: number[]): number[] {
   return [...new Set(roomIds)].filter(roomId => SOLARIS_ROOM_BY_ID.has(roomId));
 }
 
+/**
+ * Return up to 4 exit room IDs for a given room.
+ *
+ * When SOLARIS.MAP was loaded (rooms have real coordinates), use spatial
+ * adjacency: sort all other rooms by Euclidean distance from this room's
+ * centroid and take the 4 nearest.
+ *
+ * When running on the hardcoded fallback (all centroids are 0,0), use the
+ * provisional linear topology: room 146 is the Solaris hub, each Solaris room
+ * connects back to the hub and to its immediate neighbours in the list, and
+ * each Solaris room also connects to its sector row.
+ */
 function getSolarisRoomExits(roomId: number): number[] {
+  const room = getSolarisRoomInfo(roomId);
+  const hasRealCoords = room.centreX !== 0 || room.centreY !== 0;
+
+  if (hasRealCoords) {
+    // Spatial adjacency: nearest rooms by centroid distance, up to 4.
+    return solarisRooms
+      .filter(r => r.roomId !== roomId)
+      .sort((a, b) => {
+        const da = Math.hypot(a.centreX - room.centreX, a.centreY - room.centreY);
+        const db = Math.hypot(b.centreX - room.centreX, b.centreY - room.centreY);
+        return da - db;
+      })
+      .slice(0, 4)
+      .map(r => r.roomId);
+  }
+
+  // Provisional topology fallback (hardcoded room list, no real coordinates).
   if (roomId === 146) return [147, 152, 157, 162];
 
-  const index = SOLARIS_SCENE_ROOMS.findIndex(room => room.roomId === roomId);
-  const room = getSolarisRoomInfo(roomId);
+  const index = solarisRooms.findIndex(r => r.roomId === roomId);
   const exits = [146];
 
-  if (index > 0) exits.push(SOLARIS_SCENE_ROOMS[index - 1].roomId);
-  if (index >= 0 && index < SOLARIS_SCENE_ROOMS.length - 1) exits.push(SOLARIS_SCENE_ROOMS[index + 1].roomId);
+  if (index > 0) exits.push(solarisRooms[index - 1].roomId);
+  if (index >= 0 && index < solarisRooms.length - 1) exits.push(solarisRooms[index + 1].roomId);
 
-  // Sector rows are the last six records in SOLARIS.MAP; each combat/social
-  // room's low flags byte points at that row. This is still a topology
-  // placeholder, but it keeps exits within valid client scene indices.
-  if (room.roomId >= 147 && room.roomId <= 171) {
-    const sectorOffset = Math.floor((room.roomId - 147) / 5);
-    exits.push(SOLARIS_SCENE_ROOMS[26 + Math.min(sectorOffset, 5)].roomId);
+  if (roomId >= 147 && roomId <= 171) {
+    const sectorOffset = Math.floor((roomId - 147) / 5);
+    exits.push(solarisRooms[26 + Math.min(sectorOffset, 5)].roomId);
   }
 
   return uniqueRoomIds(exits).filter(exit => exit !== roomId).slice(0, 4);
