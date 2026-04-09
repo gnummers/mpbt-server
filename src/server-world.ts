@@ -225,57 +225,20 @@ function uniqueRoomIds(roomIds: number[]): number[] {
 /**
  * Return up to 4 exit room IDs for a given room.
  *
- * When SOLARIS.MAP was loaded (rooms have real coordinates), assign one room
- * per cardinal slot using the closest room whose centroid lies in that
- * half-plane.  Slot→button mapping (confirmed from client UI):
- *   slot 0 = North  slot 1 = South  slot 2 = East  slot 3 = West
- * SOLARIS.MAP axes: Y is E↔W (dy>0 = East), X is N↔S (dx>0 = South).
- * Using quadrant assignment ensures the origin room always ends up in
- * the opposite slot after a directional move.
+ * SOLARIS.MAP stores pixel positions on the visual travel-map bitmap and
+ * room descriptions.  It does NOT encode room-to-room connections.
+ * IS.MAP similarly stores star-system positions on the IS overview bitmap.
+ * Neither file contains a navigation graph.
  *
- * When running on the hardcoded fallback (all centroids are 0,0), use the
- * provisional linear topology: room 146 is the Solaris hub, each Solaris room
- * connects back to the hub and to its immediate neighbours in the list, and
- * each Solaris room also connects to its sector row.
+ * The original server's room connection table has not yet been RE'd.
+ * Until it is, use a provisional linear topology: room 146 is the Solaris
+ * hub, each room connects back to the hub and to its immediate neighbours
+ * in the loaded room list, with sector-row links for Solaris district rooms.
+ *
+ * TODO(#M5): RE actual server connection table and replace this stub.
  */
 function getSolarisRoomExits(roomId: number): number[] {
-  const room = getSolarisRoomInfo(roomId);
-  const hasRealCoords = room.centreX !== 0 || room.centreY !== 0;
-
-  if (hasRealCoords) {
-    // Directional adjacency: assign the closest room per cardinal quadrant
-    // (slot 0=N, 1=E, 2=S, 3=W).  A plain distance sort would place the room
-    // you just arrived from in the same slot every time, causing oscillation.
-    // With quadrant assignment the origin room always ends up in the opposite
-    // slot, so "keep going east" never bounces you back west.
-    type SlotCandidate = { roomId: number; dist: number };
-    const bySlot: (SlotCandidate | null)[] = [null, null, null, null];
-
-    for (const r of solarisRooms) {
-      if (r.roomId === roomId) continue;
-      if (r.centreX === 0 && r.centreY === 0) continue;
-      const dx = r.centreX - room.centreX;
-      const dy = r.centreY - room.centreY;
-      const dist = Math.hypot(dx, dy);
-      // Slot → compass button mapping (confirmed from client UI):
-      //   slot 0 = North  slot 1 = South  slot 2 = East  slot 3 = West
-      // In SOLARIS.MAP coordinates the Y axis is E↔W and X axis is N↔S,
-      // i.e. dy>0 → East, dy<0 → West, dx>0 → South, dx<0 → North.
-      const slot = Math.abs(dx) >= Math.abs(dy)
-        ? (dx > 0 ? 1 : 0)   // S=1, N=0
-        : (dy > 0 ? 2 : 3);  // E=2, W=3
-      const best = bySlot[slot];
-      if (!best || dist < best.dist) {
-        bySlot[slot] = { roomId: r.roomId, dist };
-      }
-    }
-
-    return bySlot
-      .filter((c): c is SlotCandidate => c !== null)
-      .map(c => c.roomId);
-  }
-
-  // Provisional topology fallback (hardcoded room list, no real coordinates).
+  // Provisional topology (placeholder until server connection table is RE'd).
   if (roomId === 146) return [147, 152, 157, 162];
 
   const index = solarisRooms.findIndex(r => r.roomId === roomId);

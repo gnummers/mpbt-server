@@ -157,6 +157,11 @@ export function parseMapFile(filePath: string, source = path.basename(filePath).
 /**
  * A single room entry derived from a parsed MAP file, suitable for use as
  * the server-side room model.
+ *
+ * NOTE: centreX/centreY are pixel positions on the visual travel-map bitmap
+ * used by the client's Cmd43 (Solaris map) UI.  They do NOT encode room-to-room
+ * connections — those were server-side data in the original game and have not
+ * yet been RE'd.
  */
 export interface WorldRoom {
   roomId: number;
@@ -164,17 +169,13 @@ export interface WorldRoom {
   /** Raw flags word from the map record (faction / type; exact semantics TBD). */
   flags: number;
   /**
-   * Map X coordinate.
-   *   SOLARIS.MAP: identity (raw_x as-is).
-   *   IS.MAP:      raw_x / 3 + 380.
-   * Derived as the horizontal midpoint of the record's bounding box.
+   * Pixel X position on the visual travel-map bitmap (midpoint of the record's
+   * bounding box).  Visual use only — not a navigation coordinate.
    */
   centreX: number;
   /**
-   * Map Y coordinate.
-   *   SOLARIS.MAP: identity (raw_y as-is).
-   *   IS.MAP:      raw_y / −3 + 248.
-   * Derived as the vertical midpoint of the record's bounding box.
+   * Pixel Y position on the visual travel-map bitmap (midpoint of the record's
+   * bounding box).  Visual use only — not a navigation coordinate.
    */
   centreY: number;
   /** 0-based position in the SOLARIS.MAP room list (used as scene-slot index). */
