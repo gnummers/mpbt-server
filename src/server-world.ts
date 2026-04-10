@@ -44,7 +44,6 @@ import {
 } from './protocol/game.js';
 import {
   buildCmd3BroadcastPacket,
-  buildCmd4SceneInitPacket,
   buildCmd5CursorNormalPacket,
   buildCmd6CursorBusyPacket,
   buildCmd10RoomPresenceSyncPacket,
@@ -58,7 +57,6 @@ import {
 import { Logger } from './util/logger.js';
 import { CaptureLogger } from './util/capture.js';
 import { ARIES_KEEPALIVE_INTERVAL_MS, SOCKET_IDLE_TIMEOUT_MS } from './config.js';
-import { buildCmd65PositionSyncPacket } from './protocol/combat.js';
 
 import {
   worldCaptures,
@@ -70,6 +68,8 @@ import {
   PERSONNEL_MORE_ID,
   SOLARIS_TRAVEL_CONTEXT_ID,
   getSolarisRoomName,
+  setSessionRoomPosition,
+  worldMapByRoomId,
 } from './world/world-data.js';
 import {
   send,
@@ -158,7 +158,7 @@ async function handleWorldLogin(
   );
 
   session.phase          = 'world';
-  session.worldMapRoomId = DEFAULT_MAP_ROOM_ID;
+  setSessionRoomPosition(session, DEFAULT_MAP_ROOM_ID);
   session.roomId         = mapRoomKey(DEFAULT_MAP_ROOM_ID);
 
   connLog.info(
@@ -295,19 +295,6 @@ function handleWorldGameData(
     if (parsed.text.trim().toLowerCase() === '/fight') {
       if (!session.combatInitialized && session.phase === 'world') {
         sendCombatBootstrapSequence(session, connLog, capture);
-        session.botPositionTimer = setInterval(() => {
-          if (session.socket.destroyed || !session.socket.writable) return;
-          send(
-            session.socket,
-            buildCmd65PositionSyncPacket(
-              { slot: 1, x: 0, y: 0, z: 300000, facing: 0, throttle: 0, legVel: 0, speedMag: 0 },
-              nextSeq(session),
-            ),
-            capture,
-            'CMD65_BOT_POSITION',
-          );
-        }, 1000);
-        session.botPositionTimer.unref();
       } else {
         connLog.debug('[world] /fight ignored: combatInitialized=%s phase=%s',
           session.combatInitialized, session.phase);
@@ -332,7 +319,27 @@ function handleWorldGameData(
       return;
     }
     if (parsed.actionType === 5) {
-      // "Mech Bay" button — open the 3-step mech picker
+      // "Fight" button — verify the session is in an arena room server-side
+      // even though buildSceneInitForSession only shows the button for arenas,
+      // because a client can always send cmd-5 type=5 manually.
+      const currentRoomId = session.worldMapRoomId ?? DEFAULT_MAP_ROOM_ID;
+      const mapRoom = worldMapByRoomId.get(currentRoomId);
+      if (mapRoom?.type !== 'arena') {
+        connLog.warn('[world] cmd-5 Fight rejected: room %d is not an arena (type=%s)',
+          currentRoomId, mapRoom?.type ?? 'unknown');
+        return;
+      }
+      if (!session.combatInitialized && session.phase === 'world') {
+        connLog.info('[world] cmd-5 Fight button: triggering combat bootstrap room=%d', currentRoomId);
+        sendCombatBootstrapSequence(session, connLog, capture);
+      } else {
+        connLog.debug('[world] cmd-5 Fight ignored: combatInitialized=%s phase=%s',
+          session.combatInitialized, session.phase);
+      }
+      return;
+    }
+    if (parsed.actionType === 6) {
+      // "Mech Bay" button — open the 3-step mech picker.
       if (session.phase !== 'world') {
         connLog.warn('[world] cmd-5 mech bay ignored outside world phase: phase=%s', session.phase);
         return;
@@ -387,7 +394,6 @@ function handleWorldGameData(
 
     connLog.info('[world] cmd-7 menu reply: listId=%d selection=%d', parsed.listId, parsed.selection);
 
-    // 3-step mech picker routing (class → chassis → variant)
     if (handleMechPickerCmd7(players, session, parsed.listId, parsed.selection, connLog, capture)) {
       return;
     }
@@ -460,7 +466,7 @@ function handleWorldGameData(
 
     connLog.debug('[world] cmd-7 ignored: unsupported listId=%d', parsed.listId);
   } else if (session.phase === 'combat') {
-    // Combat-mode inbound frame (client sends Cmd8/Cmd9 for movement/fire).
+    // Combat-mode inbound frame (client sends Cmd8/Cmd9 for movement; weapon fire uses Cmd10).
     if (cmdIdx === 8 || cmdIdx === 9) {
       handleCombatMovementFrame(session, payload, connLog, capture);
     } else if (cmdIdx === 12) {

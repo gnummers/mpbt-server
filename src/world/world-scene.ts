@@ -22,6 +22,7 @@ import { buildMenuDialogPacket, buildMechListPacket } from '../protocol/game.js'
 import { PlayerRegistry, ClientSession } from '../state/players.js';
 import { Logger }         from '../util/logger.js';
 import { CaptureLogger }  from '../util/capture.js';
+import { MECH_STATS }     from '../data/mech-stats.js';
 
 import {
   worldCaptures,
@@ -44,7 +45,6 @@ import {
   MECH_CHASSIS_LIST_ID,
   mechKph,
 } from './world-data.js';
-import { MECH_STATS } from '../data/mech-stats.js';
 
 // ── Low-level send helpers ────────────────────────────────────────────────────
 
@@ -244,23 +244,41 @@ export function buildSceneInitForSession(session: ClientSession) {
     0,
   );
 
+  // Room-type-aware action buttons.
+  // actionType 4 → "Travel" (opens Cmd43 travel map).
+  // actionType 5 → "Fight"  (enter combat; handled by cmd-5 dispatch in server-world.ts).
+  // actionType 6 → "Mech Bay" (opens the 3-step mech picker).
+  // The client hard-codes actionType 0 (0x100 wire) as the local Help button.
+  const isArena = mapRoom?.type === 'arena';
+  const arenaOptions: Array<{ type: number; label: string }> = [
+    { type: 0, label: 'Help' },
+    { type: 4, label: 'Travel' },
+    { type: 6, label: 'Mech Bay' },
+  ];
+  if (isArena) {
+    arenaOptions.push({ type: 5, label: 'Fight' });
+  }
+
   return buildCmd4SceneInitPacket(
     {
       sessionFlags:     0x30 | exitMask,
       playerScoreSlot:  sceneIndex,
       playerMechId:     getSolarisRoomIcon(roomId),
-      opponents:        slottedExits.map(exitRoomId => {
-        if (exitRoomId === null) return null as unknown as { type: number; mechId: number };
-        return { type: getSolarisSceneIndex(exitRoomId), mechId: getSolarisRoomIcon(exitRoomId) };
-      }),
+      opponents:        (() => {
+        // Build a 4-slot sparse array: set only slots with a real exit so that
+        // buildCmd4Args treats absent indices as "no location" (icon hidden).
+        const arr: Array<{ type: number; mechId: number }> = [];
+        for (let slot = 0; slot < slottedExits.length; slot++) {
+          const exitRoomId = slottedExits[slot];
+          if (exitRoomId !== null) {
+            arr[slot] = { type: getSolarisSceneIndex(exitRoomId), mechId: getSolarisRoomIcon(exitRoomId) };
+          }
+        }
+        return arr;
+      })(),
       callsign:         getDisplayName(session),
       sceneName:        getSolarisRoomName(roomId),
-      // The client special-cases the first Cmd4 option button (0x100) as local Help.
-      // Put server actions at 0x101+ so FUN_00413790 emits cmd 5 with the type byte.
-      arenaOptions:     [
-        { type: 0, label: 'Help' },
-        { type: 4, label: 'Travel' },
-      ],
+      arenaOptions,
     },
     nextSeq(session),
   );
@@ -407,12 +425,7 @@ export { PERSONNEL_LIST_ID };
 
 // ── 3-step mech picker ────────────────────────────────────────────────────────
 
-/**
- * Step 1 — send the weight-class picker (Light / Medium / Heavy / Assault).
- * Uses MECH_CLASS_LIST_ID (0x20) which displays Select + Examine buttons and
- * closes the dialog on selection.
- * Must be followed by CMD5_NORMAL to release the cursor (or it spins).
- */
+/** Step 1 — send the weight-class picker (Light / Medium / Heavy / Assault). */
 export function sendMechClassPicker(
   session: ClientSession,
   connLog: Logger,
@@ -429,7 +442,7 @@ export function sendMechClassPicker(
     maxSpeedMag: 0,
     extraCritCount: 0,
   }));
-  connLog.info('[world] sending mech class picker (step 1)');
+  connLog.info('[world] sending mech class picker');
   send(
     session.socket,
     buildMechListPacket(entries, MECH_CLASS_LIST_ID, '', nextSeq(session)),
@@ -439,12 +452,7 @@ export function sendMechClassPicker(
   send(session.socket, buildCmd5CursorNormalPacket(nextSeq(session)), capture, 'CMD5_NORMAL');
 }
 
-/**
- * Step 2 — send the chassis picker for the chosen weight class.
- * Groups mechs by chassis prefix, deduplicates, sorts A-Z.
- * Uses MECH_CHASSIS_LIST_ID (0x3e) which displays Select + Examine buttons.
- * Must be followed by CMD5_NORMAL.
- */
+/** Step 2 — send the chassis picker for the chosen weight class. */
 export function sendMechChassisPicker(
   session: ClientSession,
   classIndex: number,
@@ -456,14 +464,11 @@ export function sendMechChassisPicker(
 
   const classKey = CLASS_KEYS[classIndex] as string | undefined;
   const seenChassis = new Set<string>();
-
-  // Collect one entry per chassis (alphabetical)
   const rawEntries: Array<{ chassis: string }> = [];
-  for (const m of WORLD_MECHS) {
-    const stat = MECH_STATS.get(m.typeString);
-    // Filter by class: if we have stats data, use it; otherwise include all
+  for (const mech of WORLD_MECHS) {
+    const stat = MECH_STATS.get(mech.typeString);
     if (classKey && stat && !stat.disabled && stat.weightClass.toUpperCase() !== classKey) continue;
-    const chassis = getMechChassis(m.typeString);
+    const chassis = getMechChassis(mech.typeString);
     if (!seenChassis.has(chassis)) {
       seenChassis.add(chassis);
       rawEntries.push({ chassis });
@@ -482,11 +487,7 @@ export function sendMechChassisPicker(
     extraCritCount: 0,
   }));
 
-  connLog.info(
-    '[world] sending mech chassis picker (step 2, class=%s, %d chassis)',
-    classKey ?? String(classIndex),
-    entries.length,
-  );
+  connLog.info('[world] sending mech chassis picker: class=%s entries=%d', classKey ?? classIndex, entries.length);
   send(
     session.socket,
     buildMechListPacket(entries, MECH_CHASSIS_LIST_ID, '', nextSeq(session)),
@@ -496,12 +497,7 @@ export function sendMechChassisPicker(
   send(session.socket, buildCmd5CursorNormalPacket(nextSeq(session)), capture, 'CMD5_NORMAL');
 }
 
-/**
- * Step 3 — send the variant picker for the chosen chassis.
- * Each entry shows the typeString (e.g. "JR7-1X") as the name and kph as variant.
- * Uses MECH_CLASS_LIST_ID (0x20); on selection the client sends back slot+1.
- * After selection we confirm with CMD3 + CMD5_NORMAL (cursor freeze fix).
- */
+/** Step 3 — send the variant picker for the chosen chassis. */
 export function sendMechVariantPicker(
   session: ClientSession,
   chassis: string,
@@ -511,26 +507,19 @@ export function sendMechVariantPicker(
   session.mechPickerStep    = 'variant';
   session.mechPickerChassis = chassis;
 
-  const variants = WORLD_MECHS.filter(
-    m => getMechChassis(m.typeString) === chassis,
-  );
-
-  const entries = variants.map(m => ({
-    id:         m.id,
-    mechType:   m.mechType,
-    slot:       m.slot,
-    typeString: m.typeString,
-    variant:    `${mechKph(m.maxSpeedMag ?? 0)} kph`,
-    name:       m.typeString, // Pink label = variant typestring
-    maxSpeedMag: m.maxSpeedMag ?? 0,
-    extraCritCount: m.extraCritCount,
+  const variants = WORLD_MECHS.filter(mech => getMechChassis(mech.typeString) === chassis);
+  const entries = variants.map(mech => ({
+    id:         mech.id,
+    mechType:   mech.mechType,
+    slot:       mech.slot,
+    typeString: mech.typeString,
+    variant:    `${mechKph(mech.maxSpeedMag)} kph`,
+    name:       mech.typeString,
+    maxSpeedMag: mech.maxSpeedMag,
+    extraCritCount: mech.extraCritCount,
   }));
 
-  connLog.info(
-    '[world] sending mech variant picker (step 3, chassis="%s", %d variants)',
-    chassis,
-    entries.length,
-  );
+  connLog.info('[world] sending mech variant picker: chassis="%s" entries=%d', chassis, entries.length);
   send(
     session.socket,
     buildMechListPacket(entries, MECH_CLASS_LIST_ID, '', nextSeq(session)),

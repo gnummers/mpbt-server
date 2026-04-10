@@ -8,8 +8,8 @@
 
 import { loadMechs }                                                   from '../data/mechs.js';
 import { loadSolarisRooms, WorldRoom, loadWorldMap, WorldMapRoom }     from '../data/maps.js';
-import { CaptureLogger }                                               from '../util/capture.js';
 import { MECH_STATS }                                                  from '../data/mech-stats.js';
+import { CaptureLogger }                                               from '../util/capture.js';
 
 // ── Shared mech catalog ───────────────────────────────────────────────────────
 // Loaded once at module import time.  Provides a fallback when a player's
@@ -137,6 +137,24 @@ try {
   process.stderr.write(`[world] WARNING: failed to parse world-map.json: ${msg}\n`);
 }
 
+// Extend SOLARIS_ROOM_BY_ID with synthetic WorldRoom entries for any generated
+// rooms in world-map.json (roomId >= 1000) that are not in SOLARIS.MAP.
+// This ensures getSolarisRoomName()/getSolarisSceneIndex() return correct data
+// for intermediate rooms rather than falling back to DEFAULT_MAP_ROOM_ID.
+let _nextSynthSceneIndex = SOLARIS_ROOM_BY_ID.size;
+for (const [id, mapRoom] of worldMapByRoomId) {
+  if (!SOLARIS_ROOM_BY_ID.has(id)) {
+    SOLARIS_ROOM_BY_ID.set(id, {
+      roomId:     id,
+      name:       mapRoom.name ?? `Room ${id}`,
+      flags:      0,
+      centreX:    0,
+      centreY:    0,
+      sceneIndex: _nextSynthSceneIndex++,
+    });
+  }
+}
+
 // ── Room helper functions ─────────────────────────────────────────────────────
 
 export function getSolarisRoomInfo(roomId: number): WorldRoom {
@@ -216,10 +234,7 @@ export const CLASS_LABELS = ['Light', 'Medium', 'Heavy', 'Assault'] as const;
 /** Uppercase keys used to filter MECH_STATS by weight class. */
 export const CLASS_KEYS   = ['LIGHT', 'MEDIUM', 'HEAVY', 'ASSAULT'] as const;
 
-/**
- * Static fallback chassis name map for mechs that may not appear in MECH_STATS.
- * Key = 3-letter prefix (e.g. "JR7"), value = chassis name (e.g. "Jenner").
- */
+/** Static fallback chassis name map for mechs that may not appear in MECH_STATS. */
 export const CHASSIS_BY_PREFIX: Record<string, string> = {
   ACM: 'Arachne', ADR: 'Adder', ANH: 'Annihilator', AS7: 'Atlas',
   BLR: 'BattleMaster', BNC: 'Banshee', BS1: 'Black Hawk',
@@ -247,37 +262,59 @@ export const CHASSIS_BY_PREFIX: Record<string, string> = {
   ZZZ: 'Test Mech',
 };
 
-/**
- * Runtime map built from MECH_STATS: prefix → chassis name.
- * Covers all non-stub entries; used as primary lookup before CHASSIS_BY_PREFIX.
- */
 export const PREFIX_TO_CHASSIS = new Map<string, string>();
-for (const [ts, stat] of MECH_STATS.entries()) {
+for (const [typeString, stat] of MECH_STATS.entries()) {
   if (stat.disabled) continue;
-  const prefix = ts.slice(0, ts.indexOf('-')); // "JR7" from "JR7-1X"
+  const prefix = typeString.slice(0, typeString.indexOf('-'));
   if (prefix && !PREFIX_TO_CHASSIS.has(prefix)) {
     PREFIX_TO_CHASSIS.set(prefix, stat.name);
   }
 }
 
-/**
- * Return the canonical chassis name for a mech typeString (e.g. "JR7-1X" → "Jenner").
- * Lookup order: MECH_STATS entry name → PREFIX_TO_CHASSIS → CHASSIS_BY_PREFIX → raw prefix.
- */
+/** Return the canonical chassis name for a mech typeString, e.g. "JR7-1X" -> "Jenner". */
 export function getMechChassis(typeString: string): string {
-  // Direct MECH_STATS lookup
   const stat = MECH_STATS.get(typeString);
   if (stat && !stat.disabled) return stat.name;
-  // Prefix lookup
   const hyphen = typeString.indexOf('-');
   const prefix = hyphen > 0 ? typeString.slice(0, hyphen) : typeString;
   return PREFIX_TO_CHASSIS.get(prefix) ?? CHASSIS_BY_PREFIX[prefix] ?? prefix;
 }
 
-/**
- * Convert a raw speedMag value to km/h, matching the client's formula.
- * mec_speed * 450 = maxSpeedMag; kph = mec_speed * 16.2 = maxSpeedMag * 16.2 / 450
- */
+/** Convert maxSpeedMag back to displayed kph, matching the client's mec_speed scale. */
 export function mechKph(maxSpeedMag: number): number {
   return Math.round(maxSpeedMag * 16.2 / 450);
+}
+
+// ── Per-session world position ────────────────────────────────────────────────
+
+/**
+ * Update the session's world position from the given room's data.
+ *
+ * Sets worldMapRoomId, worldX (centreX), worldY (centreY), and worldZ (0).
+ *
+ * Call this on every room transition:
+ *   - initial spawn (handleWorldLogin, DEFAULT_MAP_ROOM_ID)
+ *   - Cmd43 map-UI travel reply  (handleMapTravelReply)
+ *   - Cmd23 compass-exit navigation (handleLocationAction)
+ *
+ * NOTE: In RPS/world mode there is no confirmed server→client position wire
+ * packet separate from Cmd65 (which is combat-only, RESEARCH.md §19.6.1).
+ * The client receives its scene position via Cmd4 playerScoreSlot on every
+ * room entry.  worldX/Y/Z are server-side bookkeeping for roster display,
+ * future multiplayer broadcasts, and combat spawn positioning.
+ */
+export function setSessionRoomPosition(
+  session: { worldMapRoomId?: number; worldX?: number; worldY?: number; worldZ?: number },
+  roomId: number,
+): void {
+  // Always assign the caller's roomId directly so that generated rooms
+  // (IDs ≥ 1000, in world-map.json but not in SOLARIS_ROOM_BY_ID) are
+  // correctly tracked.  getSolarisRoomInfo may fall back to DEFAULT_MAP_ROOM_ID
+  // when roomId is unknown; centreX/Y from the fallback are acceptable
+  // placeholder coords, but worldMapRoomId must be the real room.
+  const room = getSolarisRoomInfo(roomId);
+  session.worldMapRoomId = roomId;
+  session.worldX         = room.centreX;
+  session.worldY         = room.centreY;
+  session.worldZ         = 0;
 }

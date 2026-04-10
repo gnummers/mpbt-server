@@ -77,11 +77,10 @@ function decryptMec(buf: Buffer, nameLower: string): void {
 }
 
 /**
- * Decrypt a .MEC file and return both the mec_speed (offset 0x16) and
- * extraCritCount (offset 0x3c) in a single pass.
+ * Decrypt a .MEC file and return combat bootstrap/runtime fields in one pass.
  *
  * mec_speed is confirmed by RE of Combat_InitActorRuntimeFromMec_v123 @
- * 0x00433910: DAT_004f209a (max forward speed register) = mec_speed * 450.
+ * 0x00433910: max forward speed register = mec_speed * 450.
  * extraCritCount is confirmed by RE of Combat_ReadLocalActorMechState_v123 @
  * 0x004456c0.
  *
@@ -96,7 +95,7 @@ function readMecFields(mecPath: string, nameLower: string): { mecSpeed: number; 
   const buf = Buffer.from(raw); // mutable copy
   decryptMec(buf, nameLower);
   return {
-    mecSpeed:       buf.readInt16LE(0x16),
+    mecSpeed:       buf.readUInt16LE(0x16),
     extraCritCount: buf.readInt16LE(0x3c),
   };
 }

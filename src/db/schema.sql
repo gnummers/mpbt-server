@@ -65,9 +65,12 @@ CREATE TABLE IF NOT EXISTS articles (
     summary      TEXT         NOT NULL,
     body         TEXT         NOT NULL,
     author_id    INTEGER               REFERENCES accounts(id) ON DELETE SET NULL,
+    published    BOOLEAN      NOT NULL DEFAULT TRUE,
     published_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT TRUE;
 
 CREATE UNIQUE INDEX IF NOT EXISTS articles_slug_uq ON articles (slug);
 CREATE INDEX         IF NOT EXISTS articles_published_at_idx ON articles (published_at DESC);

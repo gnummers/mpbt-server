@@ -77,6 +77,24 @@ export interface ClientSession {
    */
   worldMapRoomId?: number;
   /**
+   * Current world X coordinate (centreX from SOLARIS.MAP for the player's
+   * current room, or 0 for generated rooms not in SOLARIS.MAP).  Set via
+   * setSessionRoomPosition() on every room transition so server-side position
+   * is always current.
+   *
+   * In RPS/world (social) mode there is no confirmed server→client position
+   * wire packet distinct from Cmd65 (which is combat-only per RESEARCH.md
+   * §19.6.1).  The client's scene position is communicated via Cmd4
+   * playerScoreSlot (= room sceneIndex) on every room entry.  worldX/Y/Z are
+   * server-side bookkeeping used for roster location display, future
+   * multiplayer broadcasts, and combat spawn positioning.
+   */
+  worldX?: number;
+  /** Current world Y coordinate (centreY of the current room). */
+  worldY?: number;
+  /** Current world Z / altitude.  Always 0 in travel-world mode. */
+  worldZ?: number;
+  /**
    * Most recent world inquiry target, used to page follow-up record requests
    * such as Cmd7(0x95, 2) after Cmd14_PersonnelRecord.
    */
@@ -108,12 +126,14 @@ export interface ClientSession {
   combatY?: number;
   /** Last raw heading value from client Cmd8/9. */
   combatHeadingRaw?: number;
-  /** Current speedMag echoed in Cmd65 responses (signed; negative = forward). */
+  /** Last decoded throttle velocity echoed in Cmd65 responses. */
+  combatThrottle?: number;
+  /** Last decoded leg velocity echoed in Cmd65 responses. */
+  combatLegVel?: number;
+  /** Current speedMag echoed in Cmd65 responses. */
   combatSpeedMag?: number;
   /** Per-mech speedMag cap (mec_speed * 450), set at combat bootstrap. */
   combatMaxSpeedMag?: number;
-  /** Interval timer ID for Cmd65 heartbeat (cleared when mech stops). */
-  speedMagTimer?: ReturnType<typeof setInterval>;
 
   // ── 3-step mech picker state ──────────────────────────────────────────────
 

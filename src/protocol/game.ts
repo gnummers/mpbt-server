@@ -487,34 +487,23 @@ export function parseClientCmd23LocationAction(
   };
 }
 
-// ── Combat client frames (cmd8 / cmd9) ───────────────────────────────────────
-// CONFIRMED by Ghidra RE of FUN_0040d2d0 (key handler) / FUN_00403030:
-//   cmd8 (coasting): dispatched when sVar1 == 0 AND sVar2 == 0
-//   cmd9 (moving):   dispatched when sVar1 != 0 OR  sVar2 != 0
-//
-// Both share a common arg prefix:
-//   [type3 4B: xRaw]        — world_x + COORD_BIAS
-//   [type3 4B: yRaw]        — world_y + COORD_BIAS
-//   [type2 3B: headingRaw]  — physical heading (DAT_004f1d5c)
-//   [type1 2B: turnMomRaw]  — turn_momentum / MOTION_DIV + MOTION_NEUTRAL
-// Both end with:
-//   [type1 2B: rotationRaw] — rotation + MOTION_NEUTRAL
+// ── Combat client frames (cmd8 / cmd9 / cmd10 / cmd12) ───────────────────────
 
-/** Raw decoded fields from client cmd8 (coasting: sVar1==0 AND sVar2==0). */
+/** Raw decoded fields from client cmd8 (coasting: no throttle and no turning). */
 export interface ClientCmd8Coasting {
   seq: number;
-  xRaw: number;          // base-85 type3 word; world_x = xRaw − COORD_BIAS
-  yRaw: number;          // base-85 type3 word; world_y = yRaw − COORD_BIAS
-  headingRaw: number;    // raw type2 value (physical heading, DAT_004f1d5c)
-  turnMomRaw: number;    // raw type1; turn_momentum = (turnMomRaw − MOTION_NEUTRAL) × 182
-  rotationRaw: number;   // raw type1; rotation = (rotationRaw − MOTION_NEUTRAL) × 182
+  xRaw: number;
+  yRaw: number;
+  headingRaw: number;
+  turnMomRaw: number;
+  rotationRaw: number;
 }
 
-/** Raw decoded fields from client cmd9 (moving: sVar1≠0 OR sVar2≠0). */
+/** Raw decoded fields from client cmd9 (moving: throttle or turning active). */
 export interface ClientCmd9Moving extends ClientCmd8Coasting {
-  neutralRaw: number;    // always 0xe1c (constant neutral sanity check)
-  throttleRaw: number;   // raw type1; throttle = (throttleRaw − MOTION_NEUTRAL) × 182
-  legVelRaw: number;     // raw type1; legVel = (legVelRaw − MOTION_NEUTRAL) × 182
+  neutralRaw: number;
+  throttleRaw: number;
+  legVelRaw: number;
 }
 
 /** Raw decoded fields from client cmd10 weapon-fire geometry. */
@@ -536,10 +525,7 @@ export interface ClientCmd12Action {
   action: number;
 }
 
-/**
- * Parse a client-sent combat cmd8 (coasting) movement frame.
- * Payload layout: 1b + seq + cmd + 15 arg bytes + 3 CRC [+ optional 1b]
- */
+/** Parse a client-sent combat cmd8 coasting movement frame. */
 export function parseClientCmd8Coasting(payload: Buffer): ClientCmd8Coasting | null {
   if (payload.length < 21 || payload[0] !== 0x1B) return null;
   if (payload[2] - 0x21 !== 8) return null;
@@ -553,10 +539,7 @@ export function parseClientCmd8Coasting(payload: Buffer): ClientCmd8Coasting | n
   return { seq: payload[1] - 0x21, xRaw, yRaw, headingRaw, turnMomRaw, rotationRaw };
 }
 
-/**
- * Parse a client-sent combat cmd9 (moving) movement frame.
- * Payload layout: 1b + seq + cmd + 21 arg bytes + 3 CRC [+ optional 1b]
- */
+/** Parse a client-sent combat cmd9 moving frame. */
 export function parseClientCmd9Moving(payload: Buffer): ClientCmd9Moving | null {
   if (payload.length < 27 || payload[0] !== 0x1B) return null;
   if (payload[2] - 0x21 !== 9) return null;
@@ -578,12 +561,7 @@ export function parseClientCmd9Moving(payload: Buffer): ClientCmd9Moving | null 
   };
 }
 
-/**
- * Parse a client-sent combat cmd10 weapon-fire frame.
- * Payload layout: byte target + byte weaponSlot+1 + byte flag+1
- *   + type1 angleSeedA + type1 angleSeedB + type3 impactX + type3 impactY
- *   + type2 impactZ + 3 CRC [+ optional ESC].
- */
+/** Parse a client-sent combat cmd10 weapon-fire frame. */
 export function parseClientCmd10WeaponFire(payload: Buffer): ClientCmd10WeaponFire | null {
   if (payload.length < 24 || payload[0] !== 0x1B) return null;
   if (payload[2] - 0x21 !== 10) return null;
@@ -610,10 +588,7 @@ export function parseClientCmd10WeaponFire(payload: Buffer): ClientCmd10WeaponFi
   };
 }
 
-/**
- * Parse a client-sent combat cmd12 action frame. Known actions include weapon
- * request/jump-jet controls, but server feedback is still capture-driven.
- */
+/** Parse a client-sent combat cmd12 action frame. */
 export function parseClientCmd12Action(payload: Buffer): ClientCmd12Action | null {
   if (payload.length < 7 || payload[0] !== 0x1B) return null;
   if (payload[2] - 0x21 !== 12) return null;

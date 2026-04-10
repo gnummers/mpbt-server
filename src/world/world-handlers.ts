@@ -13,27 +13,27 @@ import {
   buildCmd11PlayerEventPacket,
   buildCmd13PlayerArrivalPacket,
 } from '../protocol/world.js';
-import { buildCmd36MessageViewPacket } from '../protocol/game.js';
-import { buildCombatWelcomePacket }    from '../protocol/auth.js';
 import {
-  buildCmd72LocalBootstrapPacket,
-  buildCmd62CombatStartPacket,
-  buildCmd64RemoteActorPacket,
-  buildCmd65PositionSyncPacket,
-  buildCmd66ActorDamagePacket,
-  buildCmd68ProjectileSpawnPacket,
-  buildCmd70ActorTransitionPacket,
-  buildCmd71ResetEffectStatePacket,
-  MOTION_NEUTRAL,
-  COORD_BIAS,
-  MOTION_DIV,
-} from '../protocol/combat.js';
-import {
+  buildCmd36MessageViewPacket,
   parseClientCmd10WeaponFire,
   parseClientCmd12Action,
   parseClientCmd8Coasting,
   parseClientCmd9Moving,
 } from '../protocol/game.js';
+import { buildCombatWelcomePacket }    from '../protocol/auth.js';
+import {
+  buildCmd62CombatStartPacket,
+  buildCmd64RemoteActorPacket,
+  buildCmd72LocalBootstrapPacket,
+  buildCmd65PositionSyncPacket,
+  buildCmd66ActorDamagePacket,
+  buildCmd68ProjectileSpawnPacket,
+  buildCmd70ActorTransitionPacket,
+  buildCmd71ResetEffectStatePacket,
+  COORD_BIAS,
+  MOTION_DIV,
+  MOTION_NEUTRAL,
+} from '../protocol/combat.js';
 import { PlayerRegistry, ClientSession } from '../state/players.js';
 import { storeMessage } from '../db/messages.js';
 import { Logger }        from '../util/logger.js';
@@ -46,10 +46,10 @@ import {
   DEFAULT_MAP_ROOM_ID,
   DEFAULT_SCENE_NAME,
   SOLARIS_ROOM_BY_ID,
-  SOLARIS_TRAVEL_CONTEXT_ID,
   worldMapByRoomId,
   getSolarisRoomExits,
   getSolarisRoomName,
+  setSessionRoomPosition,
   CLASS_KEYS,
   getMechChassis,
   MECH_CLASS_LIST_ID,
@@ -292,13 +292,13 @@ export function handleRoomMenuSelection(
  *      (loads scenes.dat locally — no server data required for that step).
  *   2. Cmd72   — local-bootstrap game frame using combat CRC seed (0x0A5C45).
  *      Seeds scenario title, terrain, identity strings, spawn coords, and the
- *      local mech damage state.  remainingActorCount=1 → one remote bot actor.
+ *      local mech damage state.  remainingActorCount=0 → solo arena (no bots).
  *
  * Unresolved assumptions (safe defaults used):
  *   • terrainId / terrainResourceId — 1/0 chosen; live capture needed.
  *   • identity2..4 — empty; purpose in client UI unconfirmed.
  *   • headingBias  — 0 (MOTION_NEUTRAL added by encoder); live capture needed.
- *   • globalB/C    — 0; purpose unlabelled in Ghidra.
+ *   • globalA/B/C  — 0; purpose unlabelled in Ghidra.
  */
 export function sendCombatBootstrapSequence(
   session: ClientSession,
@@ -364,7 +364,9 @@ export function sendCombatBootstrapSequence(
         // Indices 4 and 7 are also required non-zero by the IS gate (FUN_0042bb00).
         // ANH-1A mec[0x8e] values = [1,0,6,5,1,0,4,4] → indices 0,1,4,5,6 active.
         internalStateBytes:   [100, 100, 100, 100, 12, 100, 100, 9],
-        ammoStateValues:      [],
+        // ANH-1A has 4 ammo bins, all serving weapon type 8 (mec[0x202+j*2]=8).
+        // FUN_0042c200 checks actor[0x1e6+bin_index*2] > 0 before allowing fire.
+        ammoStateValues:      [],  // let client use mec defaults; avoids display showing 400/slot
         actorDisplayName:     callsign.substring(0, 31),
       },
     },
@@ -385,13 +387,13 @@ export function sendCombatBootstrapSequence(
       identity3:     '',
       identity4:     '',
       statusByte:    0,
-      mechId,
+      mechId:        mechId,  // same mech type as player
     },
     nextSeq(session),
   );
   send(socket, cmd64, capture, 'CMD64_BOT_ACTOR');
 
-  // 4. Cmd65 — initial position for the local actor at the origin.
+  // 4. Cmd65 — initial position for the local actor (slot 0) at the origin.
   //    Gives the client something to render immediately after bootstrap.
   //    facing/throttle/legVel/speedMag = 0 (stationary, no heading).
   const cmd65 = buildCmd65PositionSyncPacket(
@@ -400,7 +402,7 @@ export function sendCombatBootstrapSequence(
   );
   send(socket, cmd65, capture, 'CMD65_INITIAL_POSITION');
 
-  // 5. Cmd65 — initial position for the bot (slot 1), 300000 units north.
+  // 5. Cmd65 — initial position for the bot (slot 1), 300000 units north (open arena space).
   const cmd65Bot = buildCmd65PositionSyncPacket(
     { slot: 1, x: 0, y: 0, z: 300000, facing: 0, throttle: 0, legVel: 0, speedMag: 0 },
     nextSeq(session),
@@ -408,8 +410,24 @@ export function sendCombatBootstrapSequence(
   send(socket, cmd65Bot, capture, 'CMD65_BOT_POSITION');
 
   // 6. Cmd62 — "all actors ready" / combat-start signal.
+  //    Clears DAT_0047ef60 bit 0x20, which blocks SPACEBAR weapon fire.
+  //    MUST be sent after all Cmd64/Cmd65 packets.
   const cmd62 = buildCmd62CombatStartPacket(nextSeq(session));
   send(socket, cmd62, capture, 'CMD62_COMBAT_START');
+
+  // Keep bot stationary by re-sending its position every second.
+  session.botPositionTimer = setInterval(() => {
+    if (session.socket.destroyed || !session.socket.writable) return;
+    send(
+      session.socket,
+      buildCmd65PositionSyncPacket(
+        { slot: 1, x: 0, y: 0, z: 300000, facing: 0, throttle: 0, legVel: 0, speedMag: 0 },
+        nextSeq(session),
+      ),
+      capture, 'CMD65_BOT_POSITION',
+    );
+  }, 1000);
+  session.botPositionTimer.unref();
 
   session.combatInitialized = true;
   connLog.info('[world] combat entry complete for "%s"', callsign);
@@ -435,7 +453,6 @@ export function handleWorldTextCommand(
     return;
   }
 
-  // /mechbay or /mechs — open the 3-step mech picker (class → chassis → variant)
   if (clean.toLowerCase() === '/mechbay' || clean.toLowerCase() === '/mechs') {
     sendMechClassPicker(session, connLog, capture);
     return;
@@ -531,11 +548,6 @@ export function handleMapTravelReply(
     return;
   }
 
-  if (contextId !== SOLARIS_TRAVEL_CONTEXT_ID) {
-    connLog.warn('[world] cmd-10 map reply unexpected context=%d (expected %d)', contextId, SOLARIS_TRAVEL_CONTEXT_ID);
-    return;
-  }
-
   if (!SOLARIS_ROOM_BY_ID.has(selectedRoomId)) {
     connLog.warn('[world] cmd-10 map reply unknown selectedRoomId=%d', selectedRoomId);
     return;
@@ -562,7 +574,7 @@ export function handleMapTravelReply(
 
   notifyRoomDeparture(players, session, connLog);
   session.roomId = newRoomId;
-  session.worldMapRoomId = selectedRoomId;
+  setSessionRoomPosition(session, selectedRoomId);
   session.worldPresenceStatus = 5;
 
   sendSceneRefresh(
@@ -621,7 +633,7 @@ export function handleLocationAction(
 
   notifyRoomDeparture(players, session, connLog);
   session.roomId = mapRoomKey(targetRoomId);
-  session.worldMapRoomId = targetRoomId;
+  setSessionRoomPosition(session, targetRoomId);
   session.worldPresenceStatus = 5;
   sendSceneRefresh(
     players,
@@ -685,20 +697,8 @@ export function notifyRoomDeparture(
   connLog.info('[world] notified room of departure: rosterId=%d callsign="%s"', session.worldRosterId, callsign);
 }
 
-// ── Combat movement (Cmd8 coasting / Cmd9 moving) ─────────────────────────────
+// ── Combat movement / action frames ───────────────────────────────────────────
 
-/**
- * Handle a client-sent Cmd8 (coasting) or Cmd9 (moving) combat movement frame.
- *
- * Cmd8: both sVar1==0 AND sVar2==0 (no throttle, no turning).
- *   → Do NOT echo Cmd65: echoing zero speedMag resets legVelY → physics deadlock.
- *   → Just update stored position.
- *
- * Cmd9: sVar1≠0 OR sVar2≠0 (throttle or turning active).
- *   → Decode throttle, compute signedSpeedMag, echo Cmd65 to all session sockets.
- *   → signedSpeedMag = -throttlePct * maxSpeedMag / 45
- *     (negate: forward direction → positive speedMag in the wire protocol)
- */
 export function handleCombatMovementFrame(
   session: ClientSession,
   payload: Buffer,
@@ -708,57 +708,84 @@ export function handleCombatMovementFrame(
   const cmd = payload[2] - 0x21;
 
   if (cmd === 8) {
-    const f = parseClientCmd8Coasting(payload);
-    if (!f) return;
-    session.combatX          = f.xRaw - COORD_BIAS;
-    session.combatY          = f.yRaw - COORD_BIAS;
-    session.combatHeadingRaw = f.headingRaw;
-    // Do NOT echo Cmd65 for coasting — would reset legVelY → physics deadlock.
-    connLog.debug('[world] cmd8 coasting: x=%d y=%d heading=%d', session.combatX, session.combatY, f.headingRaw);
+    const frame = parseClientCmd8Coasting(payload);
+    if (!frame) return;
+    session.combatX          = frame.xRaw - COORD_BIAS;
+    session.combatY          = frame.yRaw - COORD_BIAS;
+    session.combatHeadingRaw = frame.headingRaw;
+    const throttle = session.combatThrottle ?? 0;
+    const legVel = session.combatLegVel ?? 0;
+    const speedMag = session.combatSpeedMag ?? 0;
+    connLog.debug(
+      '[world/combat] cmd8 coasting: x=%d y=%d heading=%d throttle=%d legVel=%d speedMag=%d',
+      session.combatX, session.combatY, frame.headingRaw, throttle, legVel, speedMag,
+    );
+
+    send(
+      session.socket,
+      buildCmd65PositionSyncPacket(
+        {
+          slot:     0,
+          x:        session.combatX,
+          y:        session.combatY,
+          z:        0,
+          facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
+          throttle,
+          legVel,
+          speedMag,
+        },
+        nextSeq(session),
+      ),
+      capture,
+      'CMD65_MOVEMENT',
+    );
     return;
   }
 
   if (cmd === 9) {
-    const f = parseClientCmd9Moving(payload);
-    if (!f) return;
-    session.combatX          = f.xRaw - COORD_BIAS;
-    session.combatY          = f.yRaw - COORD_BIAS;
-    session.combatHeadingRaw = f.headingRaw;
+    const frame = parseClientCmd9Moving(payload);
+    if (!frame) return;
+    session.combatX          = frame.xRaw - COORD_BIAS;
+    session.combatY          = frame.yRaw - COORD_BIAS;
+    session.combatHeadingRaw = frame.headingRaw;
 
     const maxSpeedMag = session.combatMaxSpeedMag ?? 0;
-    const throttlePct = f.throttleRaw - MOTION_NEUTRAL; // negative = forward
+    const throttlePct = frame.throttleRaw - MOTION_NEUTRAL; // negative = forward
     const signedSpeedMag = maxSpeedMag > 0
       ? Math.round(-throttlePct * maxSpeedMag / 45)
       : 0;
+    const throttle = (frame.throttleRaw - MOTION_NEUTRAL) * MOTION_DIV;
+    const legVel = (frame.legVelRaw - MOTION_NEUTRAL) * MOTION_DIV;
+    session.combatThrottle = throttle;
+    session.combatLegVel = legVel;
     session.combatSpeedMag = signedSpeedMag;
 
     connLog.debug(
-      '[world] cmd9 moving: throttlePct=%d maxSpeedMag=%d signedSpeedMag=%d',
-      throttlePct, maxSpeedMag, signedSpeedMag,
+      '[world/combat] cmd9 moving: throttlePct=%d throttle=%d legVel=%d maxSpeedMag=%d signedSpeedMag=%d',
+      throttlePct, throttle, legVel, maxSpeedMag, signedSpeedMag,
     );
 
-    const cmd65 = buildCmd65PositionSyncPacket(
-      {
-        slot:     0,
-        x:        session.combatX,
-        y:        session.combatY,
-        z:        0,
-        facing:   (f.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
-        throttle: 0,
-        legVel:   0,
-        speedMag: signedSpeedMag,
-      },
-      nextSeq(session),
+    send(
+      session.socket,
+      buildCmd65PositionSyncPacket(
+        {
+          slot:     0,
+          x:        session.combatX,
+          y:        session.combatY,
+          z:        0,
+          facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
+          throttle,
+          legVel,
+          speedMag: signedSpeedMag,
+        },
+        nextSeq(session),
+      ),
+      capture,
+      'CMD65_MOVEMENT',
     );
-    send(session.socket, cmd65, capture, 'CMD65_MOVEMENT');
   }
 }
 
-/**
- * Handle a client-sent Cmd10 weapon-fire frame for the scripted single-client
- * combat prototype. Every accepted fire frame is treated as a hit on the bot
- * opponent until capture work supplies authoritative hit/miss resolution.
- */
 export function handleCombatWeaponFireFrame(
   session: ClientSession,
   payload: Buffer,
@@ -788,9 +815,6 @@ export function handleCombatWeaponFireFrame(
     session.botHealth,
   );
 
-  const impactX = shot.impactXRaw - COORD_BIAS;
-  const impactY = shot.impactYRaw - COORD_BIAS;
-
   send(session.socket, buildCmd71ResetEffectStatePacket(nextSeq(session)), capture, 'CMD71_RESET');
   send(
     session.socket,
@@ -802,8 +826,8 @@ export function handleCombatWeaponFireFrame(
         targetAttach: 0,
         angleSeedA:   shot.angleSeedA,
         angleSeedB:   shot.angleSeedB,
-        impactX,
-        impactY,
+        impactX:      shot.impactXRaw - COORD_BIAS,
+        impactY:      shot.impactYRaw - COORD_BIAS,
         impactZ:      shot.impactZ,
       },
       nextSeq(session),
@@ -834,7 +858,6 @@ export function handleCombatWeaponFireFrame(
   }
 }
 
-/** Handle a client-sent Cmd12 combat action frame. */
 export function handleCombatActionFrame(
   session: ClientSession,
   payload: Buffer,
@@ -849,23 +872,8 @@ export function handleCombatActionFrame(
   connLog.debug('[world/combat] cmd-12 combat action=%d — no response', action.action);
 }
 
-// ── 3-step mech picker — Cmd7 (list-selection) routing ───────────────────────
+// ── 3-step mech picker — Cmd7 routing ─────────────────────────────────────────
 
-/**
- * Route a Cmd7 list-selection reply through the 3-step mech picker.
- *
- * Step 1 (class picker, MECH_CLASS_LIST_ID=0x20):
- *   selection 0 = cancel (do nothing); 1..4 = weight class chosen → go to step 2.
- *
- * Step 2 (chassis picker, MECH_CHASSIS_LIST_ID=0x3e):
- *   selection 0 = back to step 1; 1..N = chassis chosen → go to step 3.
- *
- * Step 3 (variant picker, MECH_CLASS_LIST_ID=0x20):
- *   selection 0 = back to step 2; 1..N = variant chosen → select that mech.
- *
- * Returns true if the cmd7 was consumed, false if it should fall through to
- * the normal cmd7 handler.
- */
 export function handleMechPickerCmd7(
   players: PlayerRegistry,
   session: ClientSession,
@@ -876,31 +884,26 @@ export function handleMechPickerCmd7(
 ): boolean {
   const step = session.mechPickerStep;
 
-  // --- Step 1 result (class chosen) ---
   if (step === 'class' && listId === MECH_CLASS_LIST_ID) {
     if (selection === 0) {
-      // cancel
       session.mechPickerStep = undefined;
       return true;
     }
-    const classIndex = selection - 1; // 0-based
+    const classIndex = selection - 1;
     if (classIndex < 0 || classIndex >= CLASS_KEYS.length) return true;
     sendMechChassisPicker(session, classIndex, connLog, capture);
     return true;
   }
 
-  // --- Step 2 result (chassis chosen) ---
   if (step === 'chassis' && listId === MECH_CHASSIS_LIST_ID) {
     if (selection === 0) {
-      // back to class picker
       sendMechClassPicker(session, connLog, capture);
       return true;
     }
-    // Reconstruct the chassis list for this class (same logic as sendMechChassisPicker)
     const seenChassis = new Set<string>();
     const chassisList: string[] = [];
-    for (const m of WORLD_MECHS) {
-      const chassis = getMechChassis(m.typeString);
+    for (const mech of WORLD_MECHS) {
+      const chassis = getMechChassis(mech.typeString);
       if (!seenChassis.has(chassis)) {
         seenChassis.add(chassis);
         chassisList.push(chassis);
@@ -916,16 +919,13 @@ export function handleMechPickerCmd7(
     return true;
   }
 
-  // --- Step 3 result (variant chosen) ---
   if (step === 'variant' && listId === MECH_CLASS_LIST_ID) {
     if (selection === 0) {
-      // back to chassis picker
-      const classIndex = session.mechPickerClass ?? 0;
-      sendMechChassisPicker(session, classIndex, connLog, capture);
+      sendMechChassisPicker(session, session.mechPickerClass ?? 0, connLog, capture);
       return true;
     }
     const chassis = session.mechPickerChassis ?? '';
-    const variants = WORLD_MECHS.filter(m => getMechChassis(m.typeString) === chassis);
+    const variants = WORLD_MECHS.filter(mech => getMechChassis(mech.typeString) === chassis);
     const chosen = variants[selection - 1];
     if (!chosen) {
       send(
@@ -938,22 +938,20 @@ export function handleMechPickerCmd7(
       return true;
     }
 
-    // Confirm selection
-    session.selectedMechSlot = chosen.slot;
-    session.selectedMechId   = chosen.id;
-    session.mechPickerStep   = undefined;
-    session.mechPickerClass  = undefined;
+    session.selectedMechSlot  = chosen.slot;
+    session.selectedMechId    = chosen.id;
+    session.mechPickerStep    = undefined;
+    session.mechPickerClass   = undefined;
     session.mechPickerChassis = undefined;
 
-    const confirmMsg = `Mech selected: ${chosen.typeString} (${chosen.name || chosen.typeString})`;
-    connLog.info('[world] %s selected mech slot=%d id=%d typeString=%s', getDisplayName(session), chosen.slot, chosen.id, chosen.typeString);
+    connLog.info('[world] mech selected: callsign="%s" slot=%d id=%d typeString=%s',
+      getDisplayName(session), chosen.slot, chosen.id, chosen.typeString);
     send(
       session.socket,
-      buildCmd3BroadcastPacket(confirmMsg, nextSeq(session)),
+      buildCmd3BroadcastPacket(`Mech selected: ${chosen.typeString}`, nextSeq(session)),
       capture,
       'CMD3_MECH_SELECTED',
     );
-    // Send CMD5_NORMAL to release cursor after dialog closes (fix cursor freeze)
     send(session.socket, buildCmd5CursorNormalPacket(nextSeq(session)), capture, 'CMD5_NORMAL');
     return true;
   }
