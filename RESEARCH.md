@@ -30,6 +30,7 @@ contributors who want to extend or audit the server emulator.
 20. [MEC File Binary Format](#20-mec-file-binary-format)
 21. [MAP File Leading Room Table](#21-map-file-leading-room-table)
 22. [Windowed Mode — DirectDraw Rendering Architecture](#22-windowed-mode--directdraw-rendering-architecture)
+23. [In-World Mech Picker (3-Step Mech Bay Flow)](#23-in-world-mech-picker-3-step-mech-bay-flow)
 
 ---
 
@@ -2947,6 +2948,70 @@ Step 6: Cmd65 timer (every 1000 ms) — keep bot position fresh
 
 ---
 
+### §19.10 — SpeedMag Server-Side Physics Formula (CONFIRMED)
+
+**Source:** `.MEC` file RE (§20) cross-validated against live in-game HUD speed gauge, 2026-04-10.
+
+#### maxSpeedMag derivation
+
+The mech's maximum combat speed magnitude is derived directly from the `walk_mp` field
+at `.MEC` offset `0x16` (no post-load transform; see §20.2):
+
+```
+maxSpeedMag = walk_mp × 450
+```
+
+The server must read this from the decrypted `.MEC` buffer as `int16LE` at offset `0x16`.
+
+**Approximate in-game kph** (informational; displayed in the Mech Bay variant picker):
+```
+mechKph = round(maxSpeedMag × 16.2 / 450)
+        = round(walk_mp × 16.2)
+```
+
+Cross-validation against `mech-stats.ts` and BT-MAN:
+
+| Mech | walk_mp | maxSpeedMag | mechKph (calc) | BT-MAN max kph |
+|------|:-------:|:-----------:|:--------------:|:--------------:|
+| Spider SDR-5V | 8 | 3600 | ~130 | 129.6 |
+| Blackjack BJ-1 | 4 | 1800 | ~65 | 64.8 |
+| Atlas AS7-D | 3 | 1350 | ~49 | 54 |
+
+#### Throttle → speedMag encoding
+
+The Cmd9 `sVar2` (throttle velocity) field sent by the client is biased by `+MOTION_NEUTRAL`
+(0x0e1c = 3612); the raw value before bias is the throttle percentage:
+
+```
+throttlePct = raw_throttle - MOTION_NEUTRAL   // range: [-45 .. +45]
+              // negative = forward (client convention)
+              // ±45 = full forward / full reverse
+```
+
+Server-side conversion (echo in Cmd65, field `speedMag`):
+```
+signedSpeedMag = round(-throttlePct × maxSpeedMag / 45)
+               // negate because client forward < 0, but Cmd65 speedMag forward > 0
+```
+
+At full forward (`throttlePct = -45`): `signedSpeedMag = +maxSpeedMag`
+At full reverse (`throttlePct = +45`): `signedSpeedMag = -maxSpeedMag`
+
+#### Cmd65 echo policy
+
+| Client command | Server action | Rationale |
+|---|---|---|
+| Cmd9 (moving: `sVar1 ≠ 0 OR sVar2 ≠ 0`) | Echo Cmd65 with `speedMag=signedSpeedMag`, `throttle=MOTION_NEUTRAL`, `legVel=MOTION_NEUTRAL` | Drives client HUD speed gauge and interpolation state |
+| Cmd8 (coasting: `sVar1 == 0 AND sVar2 == 0`) | **Do NOT echo Cmd65** | A zero Cmd65 resets `legVelY` (`DAT_004f1f7a`) to MOTION_NEUTRAL inside `FUN_0040d2d0`; without local keyboard input the accumulator never rebuilds → physics deadlock (mech cannot re-accelerate) |
+
+#### Implementation reference
+
+- `src/data/mechs.ts` → `readMecFields()` reads `walk_mp` at offset `0x16`, returns `{mecSpeed, extraCritCount}`.
+- `src/world/world-data.ts` → `mechKph(maxSpeedMag)` converts for display.
+- `src/world/world-handlers.ts` → `handleCombatMovementFrame()` applies the formula and echoes Cmd65 on Cmd9 only.
+
+---
+
 ## 22. Windowed Mode — DirectDraw Rendering Architecture
 
 This section documents the game's DirectDraw rendering pipeline as discovered through
@@ -3226,3 +3291,146 @@ rendering investigation and should be considered canonical names:
 | `Render_SurfFill` | `0x00453c28` | Fills a game pixel buffer with a constant byte value |
 | `Render_TileDraw` | `0x0040b040` | Terrain tile renderer: raw pixel copy to game pixel buffer |
 | `Render_MapDraw` | `0x00430730` | Terrain map: calls `Render_TileDraw` for each tile |
+
+---
+
+## 23. In-World Mech Picker (3-Step Mech Bay Flow)
+
+**Source:** Ghidra static analysis of Cmd26/Cmd7 handlers (§10, §11), screenshot analysis,
+and live server testing. Confirmed working against `MPBTWIN.EXE` v1.23, 2026-04-10.
+
+The mech picker is invoked from the game world (not the lobby). It replaces the static
+mech selection done before the REDIRECT and allows a player to choose their mech just
+before entering combat.
+
+### Entry Points
+
+| Trigger | Server action |
+|---------|---------------|
+| "Mech Bay" button click (world scene `actionType = 5`) | Send class picker (step 1) |
+| `/mechbay` or `/mechs` text commands | Send class picker (step 1) |
+
+### Step 1 — Weight Class Picker
+
+**`listId = 0x20` (MECH_CLASS_LIST_ID)**
+
+Server sends `Cmd26` with 4 entries, one per weight class:
+
+```
+MechEntry { name: "Light",   slot: 0 }
+MechEntry { name: "Medium",  slot: 1 }
+MechEntry { name: "Heavy",   slot: 2 }
+MechEntry { name: "Assault", slot: 3 }
+```
+
+Followed immediately by `Cmd5 CURSOR_NORMAL` (prevents cursor spin).
+
+Client reply — `Cmd7(listId=0x20, selection)`:
+- `selection = 1..4` → proceed to step 2 with `CLASS_KEYS[selection-1]`
+- `selection = 0` (ESC/cancel) → no-op; close picker
+
+### Step 2 — Chassis Picker
+
+**`listId = 0x3e` (MECH_CHASSIS_LIST_ID)**
+
+Server sends `Cmd26` listing all unique chassis names in the selected weight class.
+One entry per chassis (deduplicated across all variants):
+
+```
+MechEntry { name: chassisName, slot: chassisIndex }   // e.g. { name: "Spider", slot: 2 }
+```
+
+Followed immediately by `Cmd5 CURSOR_NORMAL`.
+
+Client reply — `Cmd7(listId=0x3e, selection)`:
+- `selection = 1..N` → `chassisName = entries[selection-1].name`; proceed to step 3
+- `selection = 0` → back to step 1
+
+### Step 3 — Variant Picker
+
+**`listId = 0x20` (MECH_CLASS_LIST_ID)**
+
+Server sends `Cmd26` listing all variants of the chosen chassis. Each entry uses
+`slot = m.slot` (the actual `.MEC` file slot index from `loadMechs()`), not an
+ordinal — this is the value the client echoes back on selection:
+
+```
+MechEntry {
+  id:         m.id,                // drives 3D model
+  slot:       m.slot,              // real slot; client returns slot+1
+  typeString: m.typeString,        // shown GREEN line 1, e.g. "SDR-5V"
+  variant:    mechKph(m.maxSpeedMag) + " kph",   // shown GREEN line 2
+  name:       "",                  // empty → client auto-generates from id
+}
+```
+
+Followed immediately by `Cmd5 CURSOR_NORMAL`.
+
+Client reply — `Cmd7(listId=0x20, selection)`:
+- `selection = 1..N` → client echoes `m.slot + 1`; server stores `selectedMechSlot = selection - 1`
+- `selection = 0` → back to step 2
+
+### Post-Selection
+
+After a variant is confirmed:
+
+1. Server sends `Cmd3 TextBroadcast` confirmation message (e.g. `"You selected: SDR-5V"`).
+2. **Server sends `Cmd5 CURSOR_NORMAL` — this is REQUIRED.** Without it the cursor
+   enters a permanent "waiting/spinning" state and the client becomes unresponsive.
+3. `session.selectedMechSlot` and `session.pendingMechSlot` are updated for use by
+   the combat bootstrap (`sendCombatBootstrapSequence`).
+
+### Safe `listId` Values
+
+The `listId` field in `Cmd26` / `Cmd7` controls client routing. Several values trigger
+special behaviour that breaks the simple dismiss-on-pick flow (see §11 for full table):
+
+| listId (decimal) | Hex | Behaviour |
+|:---:|:---:|-----------|
+| **32** | **`0x20`** | ✅ Safe — simple dismiss-on-pick (class picker, variant picker) |
+| **62** | **`0x3e`** | ✅ Safe — simple dismiss-on-pick (chassis picker) |
+| 1000 | `0x3E8` | ❌ **DO NOT USE** — client builds a local "Personal inquiry on:" submenu |
+| 8 | `0x08` | ❌ Keep-open path |
+| 12 | `0x0c` | ❌ Keep-open path |
+| 34 | `0x22` | ❌ Keep-open path; `item_id==100` triggers exit-confirmation dialog |
+| 37 | `0x25` | ❌ Keep-open path |
+| 52 | `0x34` | ❌ Keep-open path |
+
+### MechEntry Field→Display Mapping (confirmed via screenshot analysis)
+
+| `MechEntry` field | Wire field | Client display |
+|-------------------|-----------|----------------|
+| `id` | `type2` (3B) — `mech_id` | Drives 3D model; also used to auto-generate label via `FUN_00438280` when `name` is empty |
+| `slot` | `type2` (3B) — slot ID | Stored in `g_cmd26_SlotArr`; client echoes `slot + 1` in Cmd7 reply |
+| `typeString` | string | Green label line 1 (e.g. `"SDR-5V"`) |
+| `variant` | string | Green label line 2 (e.g. `"130 kph"`) |
+| `name` | string | Pink primary label; empty string → auto-generated from `id` |
+
+### Cursor Freeze Root Cause
+
+The client's cursor enters a "waiting" state whenever a `Cmd26` mech window is shown
+or a `Cmd3` text packet is sent. `Cmd5 CURSOR_NORMAL` resets the cursor to the normal
+pointer state. This packet **must** be sent:
+
+1. Immediately after each `Cmd26` mech list (step 1, 2, and 3).
+2. After the `Cmd3` confirmation at the end of step 3.
+
+Without `Cmd5 CURSOR_NORMAL` the client cursor spins indefinitely and no further
+mouse input is processed. This is a standard part of every UI sequence in the world
+server — any command that causes a modal window or text overlay must close with
+`Cmd5 CURSOR_NORMAL`.
+
+### Implementation Reference
+
+| Symbol | File | Purpose |
+|--------|------|---------|
+| `MECH_CLASS_LIST_ID = 0x20` | `src/world/world-data.ts` | listId for class picker + variant picker |
+| `MECH_CHASSIS_LIST_ID = 0x3e` | `src/world/world-data.ts` | listId for chassis picker |
+| `CLASS_LABELS`, `CLASS_KEYS` | `src/world/world-data.ts` | Display names and key strings for the 4 weight classes |
+| `CHASSIS_BY_PREFIX`, `getMechChassis()` | `src/world/world-data.ts` | Groups mechs into chassis families by designation prefix |
+| `mechKph()` | `src/world/world-data.ts` | Converts maxSpeedMag → display kph for variant picker |
+| `sendMechClassPicker()` | `src/world/world-scene.ts` | Sends step 1 |
+| `sendMechChassisPicker()` | `src/world/world-scene.ts` | Sends step 2 |
+| `sendMechVariantPicker()` | `src/world/world-scene.ts` | Sends step 3 |
+| `handleMechPickerCmd7()` | `src/world/world-handlers.ts` | Routes Cmd7 replies through all 3 steps |
+| `mechPickerStep`, `mechPickerClass`, `mechPickerChassis` | `src/state/players.ts` | Per-session picker state |
