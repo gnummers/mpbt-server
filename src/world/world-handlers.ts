@@ -718,32 +718,17 @@ export function handleCombatMovementFrame(
     const throttle = session.combatThrottle ?? 0;
     const legVel = session.combatLegVel ?? 0;
     const speedMag = session.combatSpeedMag ?? 0;
+    const clientSpeed = frame.rotationRaw - MOTION_NEUTRAL;
     connLog.debug(
-      '[world/combat] cmd8 coasting: x=%d y=%d heading=%d throttle=%d legVel=%d speedMag=%d',
-      session.combatX, session.combatY, frame.headingRaw, throttle, legVel, speedMag,
+      '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=%d latchedThrottle=%d latchedLegVel=%d latchedSpeedMag=%d; suppressing Cmd65 echo',
+      session.combatX, session.combatY, frame.headingRaw, clientSpeed, throttle, legVel, speedMag,
     );
 
-    // Preserve the last nonzero motion echo while the client is coasting.
-    // This is the b9e9ab1 throttle-latch behavior: echoing hardcoded zeros here
-    // makes KP8 release decay the mech to a stop.
-    send(
-      session.socket,
-      buildCmd65PositionSyncPacket(
-        {
-          slot:     0,
-          x:        session.combatX,
-          y:        session.combatY,
-          z:        0,
-          facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
-          throttle,
-          legVel,
-          speedMag,
-        },
-        nextSeq(session),
-      ),
-      capture,
-      'CMD65_MOVEMENT',
-    );
+    // Ghidra: the client movement builder emits Cmd8 when DAT_004f1f7a/7c
+    // are both zero, and Cmd65 writes those registers directly. Echoing Cmd65
+    // during Cmd8 can keep the client trapped in zero-throttle Cmd8 frames.
+    // Keep the server-side position state, but do not touch client motion
+    // registers until the next Cmd9 moving frame.
     return;
   }
 
@@ -756,20 +741,31 @@ export function handleCombatMovementFrame(
 
     const maxSpeedMag = session.combatMaxSpeedMag ?? 0;
     const throttlePct = frame.throttleRaw - MOTION_NEUTRAL; // negative = forward
-    const signedSpeedMag = maxSpeedMag > 0
+    const nextSpeedMag = maxSpeedMag > 0
       ? Math.round(-throttlePct * maxSpeedMag / 45)
       : 0;
     const throttle = (frame.throttleRaw - MOTION_NEUTRAL) * MOTION_DIV;
     const legVel = (frame.legVelRaw - MOTION_NEUTRAL) * MOTION_DIV;
+    const legVelPct = frame.legVelRaw - MOTION_NEUTRAL;
+    const clientSpeed = frame.rotationRaw - MOTION_NEUTRAL;
+    const previousSpeedMag = session.combatSpeedMag ?? 0;
+    const shouldLatchSpeed =
+      nextSpeedMag !== 0 ||
+      previousSpeedMag === 0 ||
+      (legVelPct === 0 && clientSpeed === 0);
+    const signedSpeedMag = shouldLatchSpeed ? nextSpeedMag : previousSpeedMag;
     session.combatThrottle = throttle;
     session.combatLegVel = legVel;
     session.combatSpeedMag = signedSpeedMag;
 
     connLog.debug(
-      '[world/combat] cmd9 moving: throttlePct=%d throttle=%d legVel=%d maxSpeedMag=%d signedSpeedMag=%d',
-      throttlePct, throttle, legVel, maxSpeedMag, signedSpeedMag,
+      '[world/combat] cmd9 moving: throttlePct=%d legVelPct=%d clientSpeed=%d throttle=%d legVel=%d maxSpeedMag=%d nextSpeedMag=%d latchedSpeedMag=%d',
+      throttlePct, legVelPct, clientSpeed, throttle, legVel, maxSpeedMag, nextSpeedMag, signedSpeedMag,
     );
 
+    // Echo only the speed target. Zero/idle Cmd9 samples can appear while the
+    // mech is still coasting, so preserve the last nonzero speed target unless
+    // the packet looks like an explicit stop.
     send(
       session.socket,
       buildCmd65PositionSyncPacket(
@@ -779,8 +775,8 @@ export function handleCombatMovementFrame(
           y:        session.combatY,
           z:        0,
           facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
-          throttle,
-          legVel,
+          throttle: 0,
+          legVel:   0,
           speedMag: signedSpeedMag,
         },
         nextSeq(session),
