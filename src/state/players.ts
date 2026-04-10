@@ -58,8 +58,16 @@ export interface ClientSession {
   combatInitialized?: boolean;
   /** Repeating setInterval that sends bot position updates during combat. */
   botPositionTimer?: ReturnType<typeof setInterval>;
+  /** Repeating setInterval that sends Cmd67 retaliatory damage to the player during combat. */
+  botFireTimer?: ReturnType<typeof setInterval>;
   /** Scripted bot hit points for the current single-client combat prototype. */
   botHealth?: number;
+  /**
+   * Server-side approximation of the player's remaining IS health.
+   * Decremented each time the bot fires Cmd67 damage. When ≤ 0 the bot stops
+   * firing — the client handles the actual death/results screen locally.
+   */
+  playerHealth?: number;
   /**
    * Stable per-connection roster identifier used by world presence packets
    * (Cmd10/Cmd11/Cmd12/Cmd13). This is distinct from accountId and only needs to be
