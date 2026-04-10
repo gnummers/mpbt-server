@@ -98,6 +98,30 @@ export interface ClientSession {
    */
   pendingMechSlot?: number;
 
+  // ── Combat positional state (updated by Cmd8/9 movement frames) ──────────
+
+  /** Last decoded world X coordinate from client Cmd8/9. */
+  combatX?: number;
+  /** Last decoded world Y coordinate from client Cmd8/9. */
+  combatY?: number;
+  /** Last raw heading value from client Cmd8/9. */
+  combatHeadingRaw?: number;
+  /** Current speedMag echoed in Cmd65 responses (signed; negative = forward). */
+  combatSpeedMag?: number;
+  /** Per-mech speedMag cap (mec_speed * 450), set at combat bootstrap. */
+  combatMaxSpeedMag?: number;
+  /** Interval timer ID for Cmd65 heartbeat (cleared when mech stops). */
+  speedMagTimer?: ReturnType<typeof setInterval>;
+
+  // ── 3-step mech picker state ──────────────────────────────────────────────
+
+  /** Which step of the mech-picker dialog the player is on. */
+  mechPickerStep?: 'class' | 'chassis' | 'variant';
+  /** Weight-class index (0=Light, 1=Medium, 2=Heavy, 3=Assault) chosen in step 1. */
+  mechPickerClass?: number;
+  /** Chassis name (e.g. "Jenner") chosen in step 2. */
+  mechPickerChassis?: string;
+
   // ── Persistence fields (set after DB lookup / character creation) ─────────
 
   /** Database account row ID; set after successful login & DB auth. */

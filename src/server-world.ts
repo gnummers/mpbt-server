@@ -85,6 +85,7 @@ import {
   sendAllRosterList,
   sendSolarisTravelMap,
   currentRoomPresenceEntries,
+  sendMechClassPicker,
 } from './world/world-scene.js';
 import {
   handleComstarTextReply,
@@ -95,6 +96,8 @@ import {
   sendCombatBootstrapSequence,
   notifyRoomArrival,
   notifyRoomDeparture,
+  handleCombatMovementFrame,
+  handleMechPickerCmd7,
 } from './world/world-handlers.js';
 
 const WELCOME_TEXT = 'Welcome to the game world.';
@@ -326,6 +329,15 @@ function handleWorldGameData(
       sendSolarisTravelMap(session, connLog, capture);
       return;
     }
+    if (parsed.actionType === 5) {
+      // "Mech Bay" button — open the 3-step mech picker
+      if (session.phase !== 'world') {
+        connLog.warn('[world] cmd-5 mech bay ignored outside world phase: phase=%s', session.phase);
+        return;
+      }
+      sendMechClassPicker(session, connLog, capture);
+      return;
+    }
     connLog.warn('[world] cmd-5 unsupported scene action type=%d', parsed.actionType);
 
   } else if (cmdIdx === 10) {
@@ -368,6 +380,12 @@ function handleWorldGameData(
     }
 
     connLog.info('[world] cmd-7 menu reply: listId=%d selection=%d', parsed.listId, parsed.selection);
+
+    // 3-step mech picker routing (class → chassis → variant)
+    if (handleMechPickerCmd7(players, session, parsed.listId, parsed.selection, connLog, capture)) {
+      return;
+    }
+
     if (parsed.listId === 3) {
       handleRoomMenuSelection(players, session, parsed.selection, connLog, capture);
       return;
@@ -437,15 +455,15 @@ function handleWorldGameData(
     connLog.debug('[world] cmd-7 ignored: unsupported listId=%d', parsed.listId);
   } else if (session.phase === 'combat') {
     // Combat-mode inbound frame (client sends Cmd8/Cmd9 for movement/fire).
-    if (cmdIdx === 20) {
+    if (cmdIdx === 8 || cmdIdx === 9) {
+      handleCombatMovementFrame(session, payload, connLog, capture);
+    } else if (cmdIdx === 20) {
       // Cmd20 — "examine self": correct combat-mode response is unconfirmed.
       // Sending the lobby-phase buildCmd20Packet here (world CRC seed) caused
       // the client to dispatch a garbage byte as "command 13 not handled".
       // Drop silently until the combat-specific response format is captured.
       connLog.debug('[world/combat] cmd-20 examine-self — no response (combat response unconfirmed)');
     } else {
-      // Exact encoding of combat client→server cmd indices is unconfirmed
-      // (live capture needed for Cmd8/9 movement); log and drop.
       connLog.debug('[world/combat] inbound combat cmd=%d len=%d — not yet handled', cmdIdx, payload.length);
     }
   } else {

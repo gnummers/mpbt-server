@@ -9,6 +9,7 @@
 import {
   buildCmd3BroadcastPacket,
   buildCmd4SceneInitPacket,
+  buildCmd5CursorNormalPacket,
   buildCmd11PlayerEventPacket,
   buildCmd13PlayerArrivalPacket,
 } from '../protocol/world.js';
@@ -20,7 +21,13 @@ import {
   buildCmd64RemoteActorPacket,
   buildCmd65PositionSyncPacket,
   MOTION_NEUTRAL,
+  COORD_BIAS,
+  MOTION_DIV,
 } from '../protocol/combat.js';
+import {
+  parseClientCmd8Coasting,
+  parseClientCmd9Moving,
+} from '../protocol/game.js';
 import { PlayerRegistry, ClientSession } from '../state/players.js';
 import { storeMessage } from '../db/messages.js';
 import { Logger }        from '../util/logger.js';
@@ -29,6 +36,7 @@ import { CaptureLogger } from '../util/capture.js';
 import {
   FALLBACK_MECH_ID,
   WORLD_MECH_BY_ID,
+  WORLD_MECHS,
   DEFAULT_MAP_ROOM_ID,
   DEFAULT_SCENE_NAME,
   SOLARIS_ROOM_BY_ID,
@@ -36,6 +44,10 @@ import {
   worldMapByRoomId,
   getSolarisRoomExits,
   getSolarisRoomName,
+  CLASS_KEYS,
+  getMechChassis,
+  MECH_CLASS_LIST_ID,
+  MECH_CHASSIS_LIST_ID,
 } from './world-data.js';
 import {
   send,
@@ -50,6 +62,9 @@ import {
   sendSceneRefresh,
   sendAllRosterList,
   sendSolarisTravelMap,
+  sendMechClassPicker,
+  sendMechChassisPicker,
+  sendMechVariantPicker,
 } from './world-scene.js';
 
 // ── ComStar messaging ─────────────────────────────────────────────────────────
@@ -291,6 +306,9 @@ export function sendCombatBootstrapSequence(
   const extraCritCount  = mechEntry?.extraCritCount ?? 0;
   const critBytes       = Math.max(0, extraCritCount + 21);
 
+  // Store per-mech speedMag cap so Cmd8/9 handlers can apply it.
+  session.combatMaxSpeedMag = mechEntry?.maxSpeedMag ?? 0;
+
   // 1. MMC SYNC — plain ARIES packet; no game-frame CRC.
   send(socket, buildCombatWelcomePacket(), capture, 'COMBAT_WELCOME_MMC');
 
@@ -402,6 +420,12 @@ export function handleWorldTextCommand(
 
   if (clean.toLowerCase() === '/map' || clean.toLowerCase() === '/travel') {
     sendSolarisTravelMap(session, connLog, capture);
+    return;
+  }
+
+  // /mechbay or /mechs — open the 3-step mech picker (class → chassis → variant)
+  if (clean.toLowerCase() === '/mechbay' || clean.toLowerCase() === '/mechs') {
+    sendMechClassPicker(session, connLog, capture);
     return;
   }
 
@@ -647,4 +671,185 @@ export function notifyRoomDeparture(
     );
   }
   connLog.info('[world] notified room of departure: rosterId=%d callsign="%s"', session.worldRosterId, callsign);
+}
+
+// ── Combat movement (Cmd8 coasting / Cmd9 moving) ─────────────────────────────
+
+/**
+ * Handle a client-sent Cmd8 (coasting) or Cmd9 (moving) combat movement frame.
+ *
+ * Cmd8: both sVar1==0 AND sVar2==0 (no throttle, no turning).
+ *   → Do NOT echo Cmd65: echoing zero speedMag resets legVelY → physics deadlock.
+ *   → Just update stored position.
+ *
+ * Cmd9: sVar1≠0 OR sVar2≠0 (throttle or turning active).
+ *   → Decode throttle, compute signedSpeedMag, echo Cmd65 to all session sockets.
+ *   → signedSpeedMag = -throttlePct * maxSpeedMag / 45
+ *     (negate: forward direction → positive speedMag in the wire protocol)
+ */
+export function handleCombatMovementFrame(
+  session: ClientSession,
+  payload: Buffer,
+  connLog: Logger,
+  capture: CaptureLogger,
+): void {
+  const cmd = payload[2] - 0x21;
+
+  if (cmd === 8) {
+    const f = parseClientCmd8Coasting(payload);
+    if (!f) return;
+    session.combatX          = f.xRaw - COORD_BIAS;
+    session.combatY          = f.yRaw - COORD_BIAS;
+    session.combatHeadingRaw = f.headingRaw;
+    // Do NOT echo Cmd65 for coasting — would reset legVelY → physics deadlock.
+    connLog.debug('[world] cmd8 coasting: x=%d y=%d heading=%d', session.combatX, session.combatY, f.headingRaw);
+    return;
+  }
+
+  if (cmd === 9) {
+    const f = parseClientCmd9Moving(payload);
+    if (!f) return;
+    session.combatX          = f.xRaw - COORD_BIAS;
+    session.combatY          = f.yRaw - COORD_BIAS;
+    session.combatHeadingRaw = f.headingRaw;
+
+    const maxSpeedMag = session.combatMaxSpeedMag ?? 0;
+    const throttlePct = f.throttleRaw - MOTION_NEUTRAL; // negative = forward
+    const signedSpeedMag = maxSpeedMag > 0
+      ? Math.round(-throttlePct * maxSpeedMag / 45)
+      : 0;
+    session.combatSpeedMag = signedSpeedMag;
+
+    connLog.debug(
+      '[world] cmd9 moving: throttlePct=%d maxSpeedMag=%d signedSpeedMag=%d',
+      throttlePct, maxSpeedMag, signedSpeedMag,
+    );
+
+    const cmd65 = buildCmd65PositionSyncPacket(
+      {
+        slot:     0,
+        x:        session.combatX,
+        y:        session.combatY,
+        z:        0,
+        facing:   (f.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
+        throttle: 0,
+        legVel:   0,
+        speedMag: signedSpeedMag,
+      },
+      nextSeq(session),
+    );
+    send(session.socket, cmd65, capture, 'CMD65_MOVEMENT');
+  }
+}
+
+// ── 3-step mech picker — Cmd7 (list-selection) routing ───────────────────────
+
+/**
+ * Route a Cmd7 list-selection reply through the 3-step mech picker.
+ *
+ * Step 1 (class picker, MECH_CLASS_LIST_ID=0x20):
+ *   selection 0 = cancel (do nothing); 1..4 = weight class chosen → go to step 2.
+ *
+ * Step 2 (chassis picker, MECH_CHASSIS_LIST_ID=0x3e):
+ *   selection 0 = back to step 1; 1..N = chassis chosen → go to step 3.
+ *
+ * Step 3 (variant picker, MECH_CLASS_LIST_ID=0x20):
+ *   selection 0 = back to step 2; 1..N = variant chosen → select that mech.
+ *
+ * Returns true if the cmd7 was consumed, false if it should fall through to
+ * the normal cmd7 handler.
+ */
+export function handleMechPickerCmd7(
+  players: PlayerRegistry,
+  session: ClientSession,
+  listId: number,
+  selection: number,
+  connLog: Logger,
+  capture: CaptureLogger,
+): boolean {
+  const step = session.mechPickerStep;
+
+  // --- Step 1 result (class chosen) ---
+  if (step === 'class' && listId === MECH_CLASS_LIST_ID) {
+    if (selection === 0) {
+      // cancel
+      session.mechPickerStep = undefined;
+      return true;
+    }
+    const classIndex = selection - 1; // 0-based
+    if (classIndex < 0 || classIndex >= CLASS_KEYS.length) return true;
+    sendMechChassisPicker(session, classIndex, connLog, capture);
+    return true;
+  }
+
+  // --- Step 2 result (chassis chosen) ---
+  if (step === 'chassis' && listId === MECH_CHASSIS_LIST_ID) {
+    if (selection === 0) {
+      // back to class picker
+      sendMechClassPicker(session, connLog, capture);
+      return true;
+    }
+    // Reconstruct the chassis list for this class (same logic as sendMechChassisPicker)
+    const seenChassis = new Set<string>();
+    const chassisList: string[] = [];
+    for (const m of WORLD_MECHS) {
+      const chassis = getMechChassis(m.typeString);
+      if (!seenChassis.has(chassis)) {
+        seenChassis.add(chassis);
+        chassisList.push(chassis);
+      }
+    }
+    chassisList.sort((a, b) => a.localeCompare(b));
+    const chassis = chassisList[selection - 1];
+    if (!chassis) {
+      sendMechClassPicker(session, connLog, capture);
+      return true;
+    }
+    sendMechVariantPicker(session, chassis, connLog, capture);
+    return true;
+  }
+
+  // --- Step 3 result (variant chosen) ---
+  if (step === 'variant' && listId === MECH_CLASS_LIST_ID) {
+    if (selection === 0) {
+      // back to chassis picker
+      const classIndex = session.mechPickerClass ?? 0;
+      sendMechChassisPicker(session, classIndex, connLog, capture);
+      return true;
+    }
+    const chassis = session.mechPickerChassis ?? '';
+    const variants = WORLD_MECHS.filter(m => getMechChassis(m.typeString) === chassis);
+    const chosen = variants[selection - 1];
+    if (!chosen) {
+      send(
+        session.socket,
+        buildCmd3BroadcastPacket('Mech selection invalid. Please try again.', nextSeq(session)),
+        capture,
+        'CMD3_MECH_SELECT_ERR',
+      );
+      sendMechClassPicker(session, connLog, capture);
+      return true;
+    }
+
+    // Confirm selection
+    session.selectedMechSlot = chosen.slot;
+    session.selectedMechId   = chosen.id;
+    session.mechPickerStep   = undefined;
+    session.mechPickerClass  = undefined;
+    session.mechPickerChassis = undefined;
+
+    const confirmMsg = `Mech selected: ${chosen.typeString} (${chosen.name || chosen.typeString})`;
+    connLog.info('[world] %s selected mech slot=%d id=%d typeString=%s', getDisplayName(session), chosen.slot, chosen.id, chosen.typeString);
+    send(
+      session.socket,
+      buildCmd3BroadcastPacket(confirmMsg, nextSeq(session)),
+      capture,
+      'CMD3_MECH_SELECTED',
+    );
+    // Send CMD5_NORMAL to release cursor after dialog closes (fix cursor freeze)
+    send(session.socket, buildCmd5CursorNormalPacket(nextSeq(session)), capture, 'CMD5_NORMAL');
+    return true;
+  }
+
+  return false;
 }

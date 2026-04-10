@@ -274,6 +274,12 @@ export interface MechEntry {
    * CONFIRMED via RE of Combat_ReadLocalActorMechState_v123 @ 0x004456c0.
    */
   extraCritCount: number;
+  /**
+   * Maximum forward speed magnitude derived from mec_speed at offset 0x16:
+   *   maxSpeedMag = mec_speed * 450
+   * CONFIRMED by RE of Combat_InitActorRuntimeFromMec_v123 @ 0x00433910.
+   */
+  maxSpeedMag: number;
 }
 
 /**
@@ -338,6 +344,29 @@ export function decodeArgType1(buf: Buffer, offset: number): [val: number, next:
   const d0 = buf[offset]     - 0x21;
   const d1 = buf[offset + 1] - 0x21;
   return [d0 * 85 + d1, offset + 2];
+}
+
+/**
+ * Decode 3-byte type-2 value from client args buffer at given offset.
+ * Encoding: FUN_00402be0(2, v) → 3 bytes, big-endian base-85.
+ */
+export function decodeArgType2(buf: Buffer, offset: number): [val: number, next: number] {
+  const d0 = buf[offset]     - 0x21;
+  const d1 = buf[offset + 1] - 0x21;
+  const d2 = buf[offset + 2] - 0x21;
+  return [d0 * 85 * 85 + d1 * 85 + d2, offset + 3];
+}
+
+/**
+ * Decode 4-byte type-3 value from client args buffer at given offset.
+ * Encoding: FUN_00402be0(3, v) → 4 bytes, big-endian base-85.
+ */
+export function decodeArgType3(buf: Buffer, offset: number): [val: number, next: number] {
+  const d0 = buf[offset]     - 0x21;
+  const d1 = buf[offset + 1] - 0x21;
+  const d2 = buf[offset + 2] - 0x21;
+  const d3 = buf[offset + 3] - 0x21;
+  return [d0 * 85 ** 3 + d1 * 85 ** 2 + d2 * 85 + d3, offset + 4];
 }
 
 /**
@@ -458,8 +487,79 @@ export function parseClientCmd23LocationAction(
   };
 }
 
+// ── Combat client frames (cmd8 / cmd9) ───────────────────────────────────────
+// CONFIRMED by Ghidra RE of FUN_0040d2d0 (key handler) / FUN_00403030:
+//   cmd8 (coasting): dispatched when sVar1 == 0 AND sVar2 == 0
+//   cmd9 (moving):   dispatched when sVar1 != 0 OR  sVar2 != 0
+//
+// Both share a common arg prefix:
+//   [type3 4B: xRaw]        — world_x + COORD_BIAS
+//   [type3 4B: yRaw]        — world_y + COORD_BIAS
+//   [type2 3B: headingRaw]  — physical heading (DAT_004f1d5c)
+//   [type1 2B: turnMomRaw]  — turn_momentum / MOTION_DIV + MOTION_NEUTRAL
+// Both end with:
+//   [type1 2B: rotationRaw] — rotation + MOTION_NEUTRAL
+
+/** Raw decoded fields from client cmd8 (coasting: sVar1==0 AND sVar2==0). */
+export interface ClientCmd8Coasting {
+  seq: number;
+  xRaw: number;          // base-85 type3 word; world_x = xRaw − COORD_BIAS
+  yRaw: number;          // base-85 type3 word; world_y = yRaw − COORD_BIAS
+  headingRaw: number;    // raw type2 value (physical heading, DAT_004f1d5c)
+  turnMomRaw: number;    // raw type1; turn_momentum = (turnMomRaw − MOTION_NEUTRAL) × 182
+  rotationRaw: number;   // raw type1; rotation = (rotationRaw − MOTION_NEUTRAL) × 182
+}
+
+/** Raw decoded fields from client cmd9 (moving: sVar1≠0 OR sVar2≠0). */
+export interface ClientCmd9Moving extends ClientCmd8Coasting {
+  neutralRaw: number;    // always 0xe1c (constant neutral sanity check)
+  throttleRaw: number;   // raw type1; throttle = (throttleRaw − MOTION_NEUTRAL) × 182
+  legVelRaw: number;     // raw type1; legVel = (legVelRaw − MOTION_NEUTRAL) × 182
+}
+
 /**
- * Parse a client-sent cmd-9 character creation reply.
+ * Parse a client-sent combat cmd8 (coasting) movement frame.
+ * Payload layout: 1b + seq + cmd + 15 arg bytes + 3 CRC [+ optional 1b]
+ */
+export function parseClientCmd8Coasting(payload: Buffer): ClientCmd8Coasting | null {
+  if (payload.length < 21 || payload[0] !== 0x1B) return null;
+  if (payload[2] - 0x21 !== 8) return null;
+  let off = 3;
+  let xRaw: number, yRaw: number, headingRaw: number, turnMomRaw: number, rotationRaw: number;
+  [xRaw,       off] = decodeArgType3(payload, off);
+  [yRaw,       off] = decodeArgType3(payload, off);
+  [headingRaw, off] = decodeArgType2(payload, off);
+  [turnMomRaw, off] = decodeArgType1(payload, off);
+  [rotationRaw,   ] = decodeArgType1(payload, off);
+  return { seq: payload[1] - 0x21, xRaw, yRaw, headingRaw, turnMomRaw, rotationRaw };
+}
+
+/**
+ * Parse a client-sent combat cmd9 (moving) movement frame.
+ * Payload layout: 1b + seq + cmd + 21 arg bytes + 3 CRC [+ optional 1b]
+ */
+export function parseClientCmd9Moving(payload: Buffer): ClientCmd9Moving | null {
+  if (payload.length < 27 || payload[0] !== 0x1B) return null;
+  if (payload[2] - 0x21 !== 9) return null;
+  let off = 3;
+  let xRaw: number, yRaw: number, headingRaw: number;
+  let turnMomRaw: number, neutralRaw: number, throttleRaw: number, legVelRaw: number, rotationRaw: number;
+  [xRaw,        off] = decodeArgType3(payload, off);
+  [yRaw,        off] = decodeArgType3(payload, off);
+  [headingRaw,  off] = decodeArgType2(payload, off);
+  [turnMomRaw,  off] = decodeArgType1(payload, off);
+  [neutralRaw,  off] = decodeArgType1(payload, off);
+  [throttleRaw, off] = decodeArgType1(payload, off);
+  [legVelRaw,   off] = decodeArgType1(payload, off);
+  [rotationRaw,    ] = decodeArgType1(payload, off);
+  return {
+    seq: payload[1] - 0x21,
+    xRaw, yRaw, headingRaw,
+    turnMomRaw, neutralRaw, throttleRaw, legVelRaw, rotationRaw,
+  };
+}
+
+/**
  *
  * CONFIRMED from MPBTWIN.EXE FUN_0042dbf0 -> FUN_0040d400:
  *   [subcmd byte == 1] [encodeString typed_name] [selected-index byte]

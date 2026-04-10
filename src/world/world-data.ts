@@ -9,11 +9,12 @@
 import { loadMechs }                                                   from '../data/mechs.js';
 import { loadSolarisRooms, WorldRoom, loadWorldMap, WorldMapRoom }     from '../data/maps.js';
 import { CaptureLogger }                                               from '../util/capture.js';
+import { MECH_STATS }                                                  from '../data/mech-stats.js';
 
 // ── Shared mech catalog ───────────────────────────────────────────────────────
 // Loaded once at module import time.  Provides a fallback when a player's
 // launch record is absent (e.g. direct connection to world port in tests).
-let WORLD_MECHS: ReturnType<typeof loadMechs>;
+export let WORLD_MECHS: ReturnType<typeof loadMechs>;
 try {
   WORLD_MECHS = loadMechs();
 } catch (err) {
@@ -201,4 +202,82 @@ export function getSolarisRoomIcon(roomId: number): number {
   const mapRoom = worldMapByRoomId.get(roomId);
   if (mapRoom?.icon !== null && mapRoom?.icon !== undefined) return mapRoom.icon;
   return getSolarisSceneIndex(roomId);
+}
+
+// ── Mech picker constants ─────────────────────────────────────────────────────
+
+/** Cmd26 listId for the weight-class picker (step 1). */
+export const MECH_CLASS_LIST_ID   = 0x20;
+/** Cmd26 listId for the chassis picker (step 2). */
+export const MECH_CHASSIS_LIST_ID = 0x3e;
+
+/** Display labels for each weight class (slot 0..3). */
+export const CLASS_LABELS = ['Light', 'Medium', 'Heavy', 'Assault'] as const;
+/** Uppercase keys used to filter MECH_STATS by weight class. */
+export const CLASS_KEYS   = ['LIGHT', 'MEDIUM', 'HEAVY', 'ASSAULT'] as const;
+
+/**
+ * Static fallback chassis name map for mechs that may not appear in MECH_STATS.
+ * Key = 3-letter prefix (e.g. "JR7"), value = chassis name (e.g. "Jenner").
+ */
+export const CHASSIS_BY_PREFIX: Record<string, string> = {
+  ACM: 'Arachne', ADR: 'Adder', ANH: 'Annihilator', AS7: 'Atlas',
+  BLR: 'BattleMaster', BNC: 'Banshee', BS1: 'Black Hawk',
+  BT:  'BattleMaster', C3I: 'C3I Upgrade', CAT: 'Catapult',
+  CBR: 'Cobra', CLN: 'Clan Nova', CLR: 'Clint', CN9: 'Centurion',
+  COM: 'Commando', CPN: 'Capellan', CTF: 'Cataphract', CTS: 'Centurion',
+  DRG: 'Dragon', DV8: 'Dervish', DW: 'Dire Wolf', EBJ: 'Ebon Jaguar',
+  ENF: 'Enforcer', EXC: 'Excalibur', FLS: 'Flashman', FRB: 'Firebee',
+  GHR: 'Grasshopper', GLG: 'Galahad', GRF: 'Griffin', HBK: 'Hunchback',
+  HCT: 'Hatchetman', HGN: 'Highlander', HM:  'Hammer', HNT: 'Huntsman',
+  HPT: 'Hellspawn', HSN: 'Hussar', HTM: 'Hatamoto', HVT: 'Heavy',
+  IIC: 'IIC', JM6: 'Jagermech', JR7: 'Jenner', JVN: 'Javelin',
+  KGC: 'King Crab', KTO: 'Kintaro', LCT: 'Locust', LGB: 'Longbow',
+  MAD: 'Marauder', MDG: 'Mad Dog', MDD: 'Mad Dog', MLX: 'Mist Lynx',
+  MNS: 'Mauler', MNT: 'Mantis', MON: 'Mongoose', MRM: 'Marauder IIC',
+  NVA: 'Nova', ONI: 'Ontos', OSR: 'Osiris', PNT: 'Panther',
+  PPC: 'PPCer', PRT: 'Praetorian', PTR: 'Penetrator', RFL: 'Rifleman',
+  RGR: 'Ranger', RJX: 'Rjin', RVN: 'Raven', SDR: 'Spider',
+  SHD: 'Shadow Hawk', SHK: 'Shrike', SMN: 'Summoner', SRM: 'Srm',
+  STK: 'Stalker', STO: 'Stormcrow', STR: 'Striker', SVN: 'Savannah Master',
+  TBT: 'Trebuchet', THG: 'Thug', TIM: 'Timber Wolf', TOR: 'Talon',
+  UM:  'Urbanmech', VLK: 'Vulkan', VMN: 'Vulcan', VND: 'Vindicator',
+  VPR: 'Viper', VP:  'Viper', WAR: 'Warhammer', WHM: 'Warhammer',
+  WLF: 'Wolf Trap', WOL: 'Wolfhound', WSP: 'Wasp', YMN: 'Yeoman',
+  ZZZ: 'Test Mech',
+};
+
+/**
+ * Runtime map built from MECH_STATS: prefix → chassis name.
+ * Covers all non-stub entries; used as primary lookup before CHASSIS_BY_PREFIX.
+ */
+export const PREFIX_TO_CHASSIS = new Map<string, string>();
+for (const [ts, stat] of MECH_STATS.entries()) {
+  if (stat.disabled) continue;
+  const prefix = ts.slice(0, ts.indexOf('-')); // "JR7" from "JR7-1X"
+  if (prefix && !PREFIX_TO_CHASSIS.has(prefix)) {
+    PREFIX_TO_CHASSIS.set(prefix, stat.name);
+  }
+}
+
+/**
+ * Return the canonical chassis name for a mech typeString (e.g. "JR7-1X" → "Jenner").
+ * Lookup order: MECH_STATS entry name → PREFIX_TO_CHASSIS → CHASSIS_BY_PREFIX → raw prefix.
+ */
+export function getMechChassis(typeString: string): string {
+  // Direct MECH_STATS lookup
+  const stat = MECH_STATS.get(typeString);
+  if (stat && !stat.disabled) return stat.name;
+  // Prefix lookup
+  const hyphen = typeString.indexOf('-');
+  const prefix = hyphen > 0 ? typeString.slice(0, hyphen) : typeString;
+  return PREFIX_TO_CHASSIS.get(prefix) ?? CHASSIS_BY_PREFIX[prefix] ?? prefix;
+}
+
+/**
+ * Convert a raw speedMag value to km/h, matching the client's formula.
+ * mec_speed * 450 = maxSpeedMag; kph = mec_speed * 16.2 = maxSpeedMag * 16.2 / 450
+ */
+export function mechKph(maxSpeedMag: number): number {
+  return Math.round(maxSpeedMag * 16.2 / 450);
 }
