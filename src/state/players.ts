@@ -134,10 +134,8 @@ export interface ClientSession {
   combatSpeedMag?: number;
   /** Per-mech run/max speedMag cap (round(mec_speed * 1.5) * 300), set at combat bootstrap. */
   combatMaxSpeedMag?: number;
-  /** Per-mech walk speedMag (mec_speed * 300), set at combat bootstrap. */
+  /** Per-mech walk speedMag (mec_speed * 300), set at combat bootstrap. Used for mech picker display. */
   combatWalkSpeedMag?: number;
-  /** Server-tracked throttle level from Cmd12 actions (−100..100; positive = forward run). */
-  combatThrottlePct?: number;
 
   // ── 3-step mech picker state ──────────────────────────────────────────────
 
