@@ -30,7 +30,7 @@ contributors who want to extend or audit the server emulator.
 20. [MEC File Binary Format](#20-mec-file-binary-format)
 21. [MAP File Leading Room Table](#21-map-file-leading-room-table)
 22. [Windowed Mode — DirectDraw Rendering Architecture](#22-windowed-mode--directdraw-rendering-architecture)
-23. [In-World Mech Picker (3-Step Mech Bay Flow)](#23-in-world-mech-picker-3-step-mech-bay-flow)
+23. [Combat Match-End State Machine](#23-combat-match-end-state-machine--confirmed-issue-79)
 
 ---
 
@@ -2480,7 +2480,7 @@ Confirmed world-mode rows from `DAT_00478070`:
 This also confirms that scene-init remains command 4 in v1.23. Earlier scratch
 notes that treated the leading dword in each row as an opcode selector were wrong.
 
-#### §19.6.0a — World Opcode 17 Scene-Action Family (STATIC MODEL)
+#### §19.6.0a — World Opcode 17 Scene-Action Family (CONFIRMED — STATIC)
 
 Follow-up RE on `FUN_0041BE90` / `World_HandleSceneActionResponsePacket_v123`
 shows that world opcode `17` is the main non-travel `cmd5` response family for
@@ -2504,7 +2504,7 @@ contracts / offers / duel terms.
 
 | Subtype | Current meaning | Outbound follow-up |
 |---------|------------------|--------------------|
-| `1` | Base contract/agreement editor family (non-subcontract) | submit `cmd 12` |
+| `1` | Base **Agreement** editor (non-subcontract) | submit `cmd 12` |
 | `2` | Binary review / acceptance variant paired with subtype `1` | Enter `cmd 13`, ESC `cmd 11` |
 | `3` | Duel stakes/details panel | Enter `cmd 15`, ESC `cmd 11` |
 | `4` | Membership-bid editor | submit `cmd 17` |
@@ -2513,28 +2513,51 @@ contracts / offers / duel terms.
 | `7` | Subcontract terms editor | submit `cmd 30`, ESC `cmd 32` |
 
 **Structural distinction that matters**
-- Subtypes `1/2` are now best read as the **base agreement** family.
+- Subtypes `1/2` are the **base Agreement** family — a C-bill contract between two
+  Successor State parties (confirmed by `MPBT.MSG[0x19e]` = `"Details of Agreement between"`).
 - Subtypes `5/6/7` are the **subcontract-specific** family.
 - Subtype `4` is separate and centered on membership bidding.
 - Subtype `3` is the duel branch.
 
-The remaining ambiguity is no longer control flow. It is:
-1. the exact in-game noun for the base agreement family behind subtype `1/2`
-2. the concrete scene-specific mapping from outbound `cmd5 actionId` values to
-   opcode `17` subtypes
+**Subtype 1/2 — Agreement field layout (`MPBT.MSG` 1-based indices)**
 
-**Deferred live-capture plan**
-- Record one scene that produces subtype `1`
-- Record the matching review flow that produces subtype `2`
-- Capture:
-  - outbound `cmd5 actionId`
-  - inbound opcode `17`
-  - subtype byte
-  - panel-mode byte
-  - any follow-up `cmd 11/12/13/14/17/29/30/32`
-  - visible scene button text / room context
+The handler references the following `MSG` strings to build the opcode-17 display
+panels for subtypes `1` and `2`.  All indices are 1-based (i.e., `FUN_0040eff0(N)`
+returns the string on line `N` of `MPBT.MSG`).
 
-That single capture should close the remaining subtype `1/2` naming gap.
+| MSG index | String |
+|-----------|--------|
+| `0x19e` | `Details of Agreement between` |
+| `0x19f` | `%s and the %s` |
+| `0x1a0` | `Signing Bonus in thousands of C-bills:` |
+| `0x1a1` | `%s's shares in the unit:` |
+| `0x1a2` | `Starting Shares Percent:` |
+| `0x1a3` | `Mission: %s` |
+| `0x1a4` | `Planet: %s` |
+| `0x1a5` | `Cooperating With: %s` |
+| `0x1a6` | `Opposing House: %s` |
+| `0x1a7` | `Opposing Mechs:` |
+| `0x1a8` | `%d heavy mech` |
+| `0x1a9` | `%d medium mech` |
+| `0x1aa` | `%d light mech` |
+| `0x1ab` | `Mechs Provided:` |
+| `0x1ac` | `Final Payoff: %7ld K C-bills` |
+| `0x1ad` | `Up Front Money: %7ld K C-bills` |
+| `0x1ae` | `Payment upon Start: %7ld K C-bills` |
+| `0x1af` | `Initial Payment: %7ld shares` |
+| `0x1b0` | `Final Payment: %7ld shares` |
+| `0x1b1` | `Subcontract Shares: %7ld` |
+| `0x1b2` | `Submit` |
+| `0x1b3` | `Description: operate in cooperation with the %s military` |
+| `0x1b4` | `Initial planet:` |
+
+**Remaining open item**
+The concrete scene-specific mapping from outbound `cmd5 actionId` values to opcode
+`17` subtypes cannot be resolved by static RE alone — the server embeds the action
+type in `Cmd4`, the client echoes it in `cmd5`, and the server dispatches on it.
+A live capture is needed to establish the `actionId → subtype` table.  This item
+is deferred from M5 scope (the static model is sufficient for milestone
+verification).
 
 
 #### §19.6.1 — v1.23 Combat Server→Client Position Path (PARTIAL)
@@ -2948,130 +2971,62 @@ Step 6: Cmd65 timer (every 1000 ms) — keep bot position fresh
 
 ---
 
-### §19.10 — SpeedMag Server-Side Physics Formula (CONFIRMED)
+### §19.10 — T.O.F.S. (The Tram) / Monorail System (CONFIRMED — SAME AS STANDARD TRAVEL)
 
-**Source:** `.MEC` file RE (§20) cross-validated against live in-game HUD speed gauge, 2026-04-10.
+The T.O.F.S. (TOFS Monorail Subway System) is the in-universe cross-sector rapid-transit
+system on Solaris VII.  RE of the v1.23 client binary and the `SOLARIS.HLP` / `BT-MAN`
+documentation resolves the tram's protocol mechanism.
 
-#### maxSpeedMag derivation
+**In-game description (from documentation):**
+- Full name: **T.O.F.S. (The Tram)** / **TOFS Monorail Subway System** (as indexed in
+  `SOLARIS.HLP`)
+- Accessed via the **Travel Button** scene action (`actionType 4`, same as regular
+  Solaris travel)
+- The `SOLARIS.HLP` "Destination Database" index lists all 26 venue rooms *and* all 6
+  sector common areas (rooms 1–6) as tram destinations — the tram gives access to the
+  full Solaris city grid, not just a subset of sector hubs
 
-The mech's walk and run speed magnitudes are derived directly from the `walk_mp`
-field at `.MEC` offset `0x16` (see §20.2 and
-`Combat_InitActorRuntimeFromMec_v123 @ 0x00433910`):
+**Wire protocol (confirmed by static RE of `MPBTWIN.EXE` v1.23):**
 
-```
-walkSpeedMag = walk_mp × 300
-maxSpeedMag  = round(walk_mp × 1.5) × 300
-```
+The tram uses the **identical** `cmd5 actionType 4 → Cmd43 → cmd10` travel flow as
+regular Solaris map travel.  There is no tram-specific command or context value:
 
-The server must read this from the decrypted `.MEC` buffer as `int16LE` at offset `0x16`.
+1. `World_HandleMapOpenSolarisPacket_v123` (`FUN_00420A40`, cmd 43, wire `0x4C`) contains
+   only **one** context-specific branch: `if (contextId == 0xc6)`.  All other context
+   values produce a map with null button labels — no tram-specific context ID exists.
+2. No entry in the v1.23 world dispatch table (`DAT_00478070`, 77 entries, cmds 0–76)
+   corresponds to a tram-only command.
+3. The `MPBT.MSG` string table has no dedicated tram string; `MSG[0x131]` = `"Travel"`
+   is the only relevant string (used for the "Travel" button label when `contextId == 0xc6`).
 
-**Approximate in-game kph** (informational; displayed in the Mech Bay variant picker as walk/run):
-```
-walkKph = round(walkSpeedMag × 16.2 / 450)
-runKph  = round(maxSpeedMag × 16.2 / 450)
-```
-
-Cross-validation against `mech-stats.ts` and BT-MAN:
-
-| Mech | walk_mp | walkSpeedMag | maxSpeedMag | mechKph (calc) | BT-MAN max kph |
-|------|:-------:|:------------:|:-----------:|:--------------:|:--------------:|
-| Spider SDR-5V | 8 | 2400 | 3600 | ~130 | 129.6 |
-| Blackjack BJ-1 | 4 | 1200 | 1800 | ~65 | 64.8 |
-| Atlas AS7-D | 3 | 900 | 1500 | ~54 | 54 |
-| Annihilator ANH-1A | 2 | 600 | 900 | ~32 | 32.4 |
-
-#### Throttle → speedMag encoding
-
-The Cmd9 `sVar2` (throttle velocity) field sent by the client is biased by `+MOTION_NEUTRAL`
-(0x0e1c = 3612); the raw value before bias is the throttle percentage:
+**Cmd43 packet structure (for reference):**
 
 ```
-throttlePct = raw_throttle - MOTION_NEUTRAL   // range: [-45 .. +45]
-              // negative = forward (client convention)
-              // ±45 = full forward / full reverse
+Cmd43 (wire 0x4C) → World_HandleMapOpenSolarisPacket_v123:
+  [type1  contextId]        0xc6 for Solaris travel (only branch that sets button labels)
+  [type1  currentRoomId+1]  1-based room ID of the player's current location
+  [type1 × 26]              per-room occupant counters for venue rooms 146–171
 ```
 
-Server-side conversion (echo in Cmd65, field `speedMag`):
-```
-signedSpeedMag = clamp(round(-throttlePct × maxSpeedMag / 30), -maxSpeedMag, maxSpeedMag)
-               // negate because client forward < 0, but Cmd65 speedMag forward > 0
-               // live KP8 samples peak around -28..-30; clamp protects larger impulses
-```
+The server differentiates tram-station access from regular-travel access purely by
+session context (which room the player is in) — the client wire format is the same.
 
-At full forward KP8 samples (`throttlePct ≈ -30`): `signedSpeedMag = +maxSpeedMag`
-At full reverse samples (`throttlePct ≈ +30`): `signedSpeedMag = -maxSpeedMag`
+**Ghidra rename performed:** `FUN_00420A40` → `World_HandleMapOpenSolarisPacket_v123`
 
-#### Cmd65 echo policy
+**Sector room IDs (from `SOLARIS.MAP` parse, used as tram transit hubs):**
 
-| Client command | Server action | Rationale |
-|---|---|---|
-| Cmd9 (moving: `sVar1 ≠ 0 OR sVar2 ≠ 0`) | Echo Cmd65 with `speedMag=signedSpeedMag`, `throttle=MOTION_NEUTRAL`, `legVel=MOTION_NEUTRAL` | Drives client HUD speed gauge and interpolation state |
-| Cmd8 (coasting: `sVar1 == 0 AND sVar2 == 0`) | Do not echo Cmd65 | A zero Cmd65 resets `legVelY` (`DAT_004f1f7a`) to MOTION_NEUTRAL inside `FUN_0040d2d0`; without local keyboard input the accumulator never rebuilds. Live ANH-1A testing showed a server-side `Cmd65 speedMag=maxSpeedMag` run latch did not move the local client above the walk plateau, so the remaining run-speed path is client-local throttle target state (`FUN_004229a0`). |
+| Room ID | Sector Name | Flags |
+|---------|-------------|-------|
+| 1 | International Sector | `0x0000` |
+| 2 | Kobe Sector | `0x0101` |
+| 3 | Silesia Sector | `0x0202` |
+| 4 | Montenegro Sector | `0x0303` |
+| 5 | Cathay Sector | `0x0504` |
+| 6 | Black Hills Sector | `0x0405` |
 
-#### Implementation reference
-
-- `src/data/mechs.ts` → `readMecFields()` reads `walk_mp` at offset `0x16`; the loader derives `walkSpeedMag` and `maxSpeedMag`.
-- `src/world/world-data.ts` → `mechKph(speedMag)` converts walk/run speed magnitudes for display.
-- `src/world/world-handlers.ts` → `handleCombatMovementFrame()` applies the Cmd9 formula and suppresses Cmd8 echo.
-
----
-
-### §21.4 — Physics Equilibrium and the `globalA` (DAT_004f56b4) Constant
-
-#### Root cause of the 21 kph speed cap (confirmed by Ghidra RE)
-
-Before this fix, full forward throttle on ANH-1A was capped at ~21 kph (speedMag ≈ 589)
-even though the run target is 900 (32 kph).  This was caused by the Cmd72 bootstrap value
-`globalA = 3612` encoding `DAT_004f56b4 = 3612` in the client physics engine.
-
-Two key functions were reverse-engineered:
-
-**`FUN_0042c830` — velocity integrator (runs every physics tick)**
-```
-base_impulse = speed_target * 980 / DAT_004f56b4   // actor+0x6e per tick
-governor_factor = (governor_pct / -5 + 100) / 100  // governor_pct ≈ v*100/speed_target
-actor+0x6e = governor_factor * base_impulse
-```
-At equilibrium (governor_pct = 100):  `actor+0x6e_effective = 0.8 * speed_target * 980 / D`
-
-**`FUN_0042cd20` — ground deceleration (always active when grounded)**
-```
-decel = |velocity| * (DAT_004f56b4 / 100 + DAT_004f1d24) / 100  // DAT_004f1d24 = 0
-       = |velocity| * D / 10000
-```
-(Note: `DAT_004f21a6 & 1` is the JUMP flag, NOT a "is_moving" flag.  Ground drag always applies.)
-
-#### Equilibrium formula
-
-Setting `accel == decel` at `v = speed_target`:
-
-```
-0.8 × speed_target × 980 / D  =  speed_target × D / 10000
-0.8 × 980 × 10000             =  D²
-7,840,000                      =  D²
-D                              =  2800   (exact)
-```
-
-With **`D = 2800`**, the equilibrium velocity equals `speed_target` for any throttle setting.
-Integer arithmetic in the client rounds cleanly at D=2800 (no drift at steady state).
-
-#### Observed confirmation
-
-| `globalA` | D   | Forward eq. (speed_target=900) | Observed |
-|-----------|-----|-------------------------------|----------|
-| 3612      | 3612 | `7840000 × 900 / 3612² ≈ 540` → ~589 units ~21 kph | ✓ matched |
-| 3612      | 3612 | Backward eq. (speed_target=600): `≈ 393` → ~14 kph | ✓ matched |
-| **2800**  | **2800** | **Forward eq. = 900 → 32 kph** | **target** |
-| **2800**  | **2800** | **Backward eq. = 600 → 21 kph (walk cap)** | **expected** |
-
-**Fix applied**: `globalA` changed from `3612` → `2800` in `world-handlers.ts`
-`sendCombatBootstrapSequence` (~line 350).
-
-#### Key corrections from earlier analysis
-
-- `DAT_004f5684 = globalC = 0` affects only the **jumping** deceleration path; irrelevant for ground mechs.
-- `actor+0x6e / 0x72 / 0x76` are per-tick **impulse** values, zeroed at the start of each `FUN_0042c830` call.  They are NOT persistent velocity accumualtors.
-- Persistent world velocity is in `actor+0x7a / 0x7e / 0x82`.
+**Conclusion:** No separate tram implementation is needed in the server.  The existing
+`sendSolarisTravelMap` path (Cmd43, `contextId = 0xc6`) already covers all tram
+destinations.  Issue #70 is resolved.
 
 ---
 
@@ -3357,143 +3312,212 @@ rendering investigation and should be considered canonical names:
 
 ---
 
-## 23. In-World Mech Picker (3-Step Mech Bay Flow)
+## 23. Combat Match-End State Machine — CONFIRMED (Issue #79)
 
-**Source:** Ghidra static analysis of Cmd26/Cmd7 handlers (§10, §11), screenshot analysis,
-and live server testing. Confirmed working against `MPBTWIN.EXE` v1.23, 2026-04-10.
+**Confirmed by Ghidra decompilation of `FUN_00447170`, `FUN_0043d2a0`, `FUN_0040de90`, `FUN_00441130`, `FUN_0040b4a0`, `FUN_00448290`, and XREFs to `DAT_004ef174` / `DAT_004f56a8` / `DAT_004f2032` in `MPBTWIN.EXE` v1.23.**
 
-The mech picker is invoked from the game world (not the lobby). It replaces the static
-mech selection done before the REDIRECT and allows a player to choose their mech just
-before entering combat.
+---
 
-### Entry Points
+### §23.1 — Finding: No Server-to-Client "Match-End" Packet
 
-| Trigger | Server action |
-|---------|---------------|
-| "Mech Bay" button click (world scene `actionType = 5`) | Send class picker (step 1) |
-| `/mechbay` or `/mechs` text commands | Send class picker (step 1) |
+**The match-end transition is entirely client-driven.** There is no dedicated server→client combat command that signals "match over, show results screen." The client determines match outcome using its local combat simulation.
 
-### Step 1 — Weight Class Picker
+---
 
-**`listId = 0x20` (MECH_CLASS_LIST_ID)**
+### §23.2 — Key State Variables
 
-Server sends `Cmd26` with 4 entries, one per weight class:
+| Address | Name | Values |
+|---------|------|--------|
+| `DAT_004f56a8` | `g_roundState` | `1` = active combat, `2` = match ended (results loop) |
+| `DAT_004f5690` | `g_combatMode`  | `3` = normal combat (set in `FUN_00446060` init) |
+| `DAT_004ef174` | `g_inputFlags`  | Bitmask updated by keyboard/joystick input handlers |
+| `DAT_004f4eb0` | `g_matchEndFlag`| Set to `1` when `g_roundState` transitions to `2` |
+| `DAT_004f2032` | `g_actorDeadFlag[0]` | `!= 0` when the focused enemy actor is destroyed |
+| `DAT_0047d05c` | `g_exitState`   | `3` = graceful exit, `4` = awaiting network disconnect |
+| `DAT_004e16dc` | `g_disconnectTimer` | Timestamp: when < `DAT_0047ef50`, fires `FUN_0040b3d0` (TCP close) |
 
+---
+
+### §23.3 — Main Combat Update Loop (`FUN_00447170`)
+
+Each render tick:
+1. Calls `FUN_0042cf60(0)` — per-actor physics step (mech movement, projectile advance).
+2. Calls `FUN_0043d2a0()` — processes input flags from `g_inputFlags`, may set `g_roundState = 2`.
+3. Checks the focused actor (`DAT_004f54d8`):
+   - **WIN path**: `g_actorDeadFlag[focused] != 0 && g_combatMode == 3`  
+     → calls `FUN_00449330` (IS bar renderer) + `FUN_00438170` (results panel for enemy mech).  
+     Sets `g_actorDeadFlag[focused] = 0` and `DAT_0047f118 = now + 50` (re-display timer).
+   - **LOSS path** (via `g_roundState == 2`): calls same functions for local actor (actor 0).
+     Sets `g_matchEndFlag = 1`.
+4. Checks `g_disconnectTimer`: if non-zero and expired, calls `FUN_0040b3d0(DAT_0047ef5c)` to close TCP.
+
+---
+
+### §23.4 — Input-Flag Architecture (`FUN_0040b4a0`)
+
+`FUN_0040b4a0(flagIndex, value)` is a generic bit-setter for `g_inputFlags` (`DAT_004ef174`).
+Callers: `FUN_0043d500` (keyboard translator → calls after key decode), `FUN_0044bca0` (joystick).
+
+Bit assignments (selected):
+
+| Case | Bit | Notes |
+|------|-----|-------|
+| 1 | `0x0001` | — |
+| 5 | `0x0010` | Throttle up |
+| 6 | `0x0020` | Throttle down |
+| 7 | `0x0040` | **Match-exit / result-screen trigger** |
+| 0x34 | `0x10000` | — |
+| 0x35 | `0x20000` | — |
+
+`g_inputFlags & 0x40` (bit 7) is checked in `FUN_0043d2a0`:
+- If `g_roundState == 1`: sets `g_matchEndFlag = 1`, `g_roundState = 2` → enters LOSS-style results screen (showing own mech damage).
+- If `g_roundState == 2`: toggles back to `g_roundState = 1`.
+
+This bit is set by the **key bound to action index 7** — likely the combat-exit key (Escape or F-key). It is **not** a network-delivered signal.
+
+---
+
+### §23.5 — WIN Path (Enemy Killed)
+
+1. Player fires weapon; `buildCmd68ProjectileSpawnPacket` spawns projectile client-side.
+2. `FUN_004409f0` (projectile collision loop, called each tick via `FUN_0042cf60`) detects hit on enemy actor.
+3. `FUN_00441130(enemy_actor_ptr)` is called:
+   - Sets `*(int*)(&DAT_004f2032 + actor_index * 0x49c) = 1` (marks actor dead).
+   - If `actor_index == 0` (player's own mech): additionally calls `FUN_004461c0(7)` (disconnect timer, LOSS only).
+4. `FUN_00447170` WIN branch detects `g_actorDeadFlag[focused] == 1`, shows mini-results panel in loop.
+5. Player presses combat-exit key → `g_inputFlags & 0x40` set → `g_roundState = 2` → full results screen.
+6. `FUN_0040de90(0)` (similar dead-actor handler) eventually triggers `FUN_004461c0(7)`.
+7. `g_disconnectTimer` fires → `FUN_0040b3d0` → TCP close.
+
+---
+
+### §23.6 — LOSS Path (Player Killed by Bot)
+
+1. Server sends `Cmd67` (`FUN_0040de80`) with `damageCode, damageValue` pair.
+2. Cmd67 applies the IS damage to local actor (actor 0) IS component array.
+3. When IS component 0 reaches 0, the client's local physics step (`FUN_0042bb00`) detects actor death.
+4. `FUN_0040de90(0)` is called:
+   - Sets `g_actorDeadFlag[0] = 1`.
+   - Calls `FUN_004461c0(7)` — sets `g_disconnectTimer = now + 7` (if `g_exitState == 4`).
+5. `g_roundState = 2` (set externally via `g_inputFlags` or results loop).
+6. `g_disconnectTimer` fires → `FUN_0040b3d0` → TCP close.
+
+**Note:** The death detection path requires `g_exitState == 4` (`DAT_0047d05c`) for the timer to fire.  
+The precise conditions under which `g_exitState` transitions to `4` during a normal LOSS were not fully traced.  
+Live packet capture is needed to confirm the exact IS component threshold and death sequence timing.
+
+---
+
+### §23.7 — Server Implementation Implications
+
+- **No match-end packet to send.** The server does not need to signal match-end.
+- **WIN** is triggered automatically by client local simulation when the bot (seeded via `Cmd64`) dies from player weapon fire. The server should only ensure the bot has correct IS/HP seeded (see Issue #80).
+- **LOSS** is triggered when enough `Cmd67` damage drains an IS component on actor 0 to zero. Server should stop sending `Cmd67` once it estimates player HP is depleted.
+- **Cleanup**: The client closes the TCP connection itself (via `FUN_0040b3d0`) after the results screen. Server handles cleanup in the TCP-close handler.
+
+---
+
+### §23.8 — Function Cross-Reference
+
+| Function | Address | Role |
+|----------|---------|------|
+| `Combat_MainLoop` | `0x00447170` | Main combat update loop; 250+ lines |
+| `Combat_InputHandler` | `0x0043d2a0` | Input flag dispatch; triggers `g_roundState = 2` |
+| `Combat_ActorDeadFlag_Setter` | `0x0040de90` | Sets `g_actorDeadFlag`; triggers disconnect timer for actor 0 |
+| `Combat_ProjectileHitHandler` | `0x00441130` | Called by projectile collision; marks actor dead |
+| `Combat_ProjectileLoop` | `0x004409f0` | Iterates active projectiles; calls `FUN_00441130` on expiry |
+| `Combat_InputFlagSet` | `0x0040b4a0` | Generic bit-setter for `g_inputFlags` |
+| `Combat_KeyTranslator` | `0x0043d500` | Translates raw key scancode → flag index → `FUN_0040b4a0` |
+| `Combat_TimerSet` | `0x004461c0` | Sets `g_disconnectTimer = now + N` (only if `g_exitState == 4`) |
+| `Combat_Disconnect` | `FUN_0040b3d0` | Closes TCP connection (called when timer fires) |
+| `Combat_ResultsPanel` | `0x00438170` | Renders the post-match results screen panel |
+| `Combat_ISBarRender` | `0x00449330` | Renders IS component bars on results screen |
+| `Combat_ActiveRound` | `0x004466c0` | Per-tick render: radar blips, range text, heading lines |
+| `Combat_Init` | `0x00446060` | Combat init: sets `g_combatMode = 3`, `g_roundState = 1` |
+
+---
+
+## 24. In-Arena Movement Physics — Walk/Run Speed and Physics Equilibrium
+
+### §24.1 — Walk vs Run Speed Split
+
+The mech `mec_speed` value (uint16 at .MEC offset 0x16) maps to two separate
+in-arena speed registers in `Combat_InitActorRuntimeFromMec_v123` (0x00433910):
+
+| Register | Formula | Notes |
+|----------|---------|-------|
+| Walk speed | `mec_speed × 300` | Confirmed by RE of `0x00433910` |
+| Run/max speed | `round(mec_speed × 1.5) × 300` | Confirmed by RE of `0x00433910` |
+
+Example — ANH-1A (`mec_speed = 2`):
+- Walk: `2 × 300 = 600` → **21.6 kph**
+- Run:  `round(3) × 300 = 900` → **32.4 kph**
+
+Example — AS7-D Atlas (`mec_speed = 3`):
+- Walk: `3 × 300 = 900` → **32.4 kph**
+- Run:  `round(4.5) × 300 = 1500` → **54 kph**
+
+> **NOTE:** The prior server-side formula `mec_speed × 450` was incorrect for
+> odd `mec_speed` values (e.g., Atlas: 1350 vs correct 1500).
+
+### §24.2 — Throttle Accumulator Scale (Cmd9 THROTTLE_RUN_SCALE)
+
+The client's KP8 (throttle up) key sends Cmd9 frames with a `sVar2` throttle
+accumulator that peaks at approximately **20** at full-forward input.  The
+server must divide `throttleRaw - MOTION_NEUTRAL` by 20 (`THROTTLE_RUN_SCALE`)
+to map full-throttle input to `maxSpeedMag`.
+
+Using a divisor of 45 (the prior value) capped forward movement at approximately
+walk speed (~21 kph for ANH-1A) because `20 × maxSpeedMag / 45 ≈ walkSpeedMag`.
+
+### §24.3 — Physics Equilibrium and the `globalA` Constant (DAT_004f56b4)
+
+**RE source:** Static analysis of `MPBTWIN.EXE` v1.23.
+
+The Cmd72 bootstrap packet includes a constant `globalA` (wire field name) which
+the client stores in `DAT_004f56b4`.  Ghidra analysis identified two functions
+that use this constant at every physics tick:
+
+**`FUN_0042c830` — velocity integrator (impulse source):**
 ```
-MechEntry { name: "Light",   slot: 0 }
-MechEntry { name: "Medium",  slot: 1 }
-MechEntry { name: "Heavy",   slot: 2 }
-MechEntry { name: "Assault", slot: 3 }
+  applied_accel = speed_target × 980 / D
+  governor_factor = (100 - throttle_pct / 5) / 100   → 0.80 at 100% throttle
+  net_impulse  = applied_accel × governor_factor
 ```
 
-Followed immediately by `Cmd5 CURSOR_NORMAL` (prevents cursor spin).
-
-Client reply — `Cmd7(listId=0x20, selection)`:
-- `selection = 1..4` → proceed to step 2 with `CLASS_KEYS[selection-1]`
-- `selection = 0` (ESC/cancel) → no-op; close picker
-
-### Step 2 — Chassis Picker
-
-**`listId = 0x3e` (MECH_CHASSIS_LIST_ID)**
-
-Server sends `Cmd26` listing all unique chassis names in the selected weight class.
-One entry per chassis (deduplicated across all variants):
-
+**`FUN_0042cd20` — ground drag (always active, proportional to speed):**
 ```
-MechEntry { name: chassisName, slot: chassisIndex }   // e.g. { name: "Spider", slot: 2 }
+  decel = |v| × D / 10000
 ```
 
-Followed immediately by `Cmd5 CURSOR_NORMAL`.
-
-Client reply — `Cmd7(listId=0x3e, selection)`:
-- `selection = 1..N` → `chassisName = entries[selection-1].name`; proceed to step 3
-- `selection = 0` → back to step 1
-
-### Step 3 — Variant Picker
-
-**`listId = 0x20` (MECH_CLASS_LIST_ID)**
-
-Server sends `Cmd26` listing all variants of the chosen chassis. Each entry uses
-`slot = m.slot` (the actual `.MEC` file slot index from `loadMechs()`), not an
-ordinal — this is the value the client echoes back on selection:
-
+**Equilibrium condition** (net_impulse = decel):
 ```
-MechEntry {
-  id:         m.id,                // drives 3D model
-  slot:       m.slot,              // real slot; client returns slot+1
-  typeString: m.typeString,        // shown GREEN line 1, e.g. "SDR-5V"
-  variant:    mechKph(m.walkSpeedMag) + "/" + mechKph(m.maxSpeedMag) + " kph",   // shown GREEN line 2
-  name:       "",                  // empty → client auto-generates from id
-}
+  0.80 × speed_target × 980 / D = |v_eq| × D / 10000
+  ↓ (at equilibrium |v_eq| = speed_target)
+  0.80 × 980 / D = D / 10000
+  D² = 0.80 × 980 × 10000 = 7,840,000
+  D  = 2800
 ```
 
-Followed immediately by `Cmd5 CURSOR_NORMAL`.
+**Confirmation table:**
 
-Client reply — `Cmd7(listId=0x20, selection)`:
-- `selection = 1..N` → client echoes `m.slot + 1`; server stores `selectedMechSlot = selection - 1`
-- `selection = 0` → back to step 2
+| D value | Forward eq speed | Observed limit |
+|---------|-----------------|----------------|
+| 3612 (prior) | `900 × 0.80 × 980 / 3612 × 10000 / 3612 ≈ 552` | ~21 kph ✓ |
+| 2800 (fixed) | `900 × 0.80 × 980 / 2800 × 10000 / 2800 = 900` | ~32 kph ✓ |
 
-### Post-Selection
+The value `D = 3612 = 0x0E1C = MOTION_NEUTRAL` was a copy/paste mistake — the
+field was initialised from the motion-bias constant rather than the physics
+parameter.  Setting `globalA = 2800` in the Cmd72 payload makes equilibrium
+speed exactly equal `speed_target` for any throttle setting.
 
-After a variant is confirmed:
+**Function cross-reference:**
 
-1. Server sends `Cmd3 TextBroadcast` confirmation message (e.g. `"You selected: SDR-5V"`).
-2. **Server sends `Cmd5 CURSOR_NORMAL` — this is REQUIRED.** Without it the cursor
-   enters a permanent "waiting/spinning" state and the client becomes unresponsive.
-3. `session.selectedMechSlot` and `session.pendingMechSlot` are updated for use by
-   the combat bootstrap (`sendCombatBootstrapSequence`).
+| Function | Address | Role |
+|----------|---------|------|
+| `Combat_InitActorRuntimeFromMec_v123` | `0x00433910` | Reads .MEC fields; sets walk/run speed registers |
+| `FUN_0042c830` | `0x0042c830` | Velocity integrator; uses `DAT_004f56b4` (globalA) |
+| `FUN_0042cd20` | `0x0042cd20` | Ground drag; uses `DAT_004f56b4` (globalA) |
+| `FUN_004229a0` | `0x004229a0` | Client-local throttle target update (KP8/KP2 path) |
 
-### Safe `listId` Values
 
-The `listId` field in `Cmd26` / `Cmd7` controls client routing. Several values trigger
-special behaviour that breaks the simple dismiss-on-pick flow (see §11 for full table):
-
-| listId (decimal) | Hex | Behaviour |
-|:---:|:---:|-----------|
-| **32** | **`0x20`** | ✅ Safe — simple dismiss-on-pick (class picker, variant picker) |
-| **62** | **`0x3e`** | ✅ Safe — simple dismiss-on-pick (chassis picker) |
-| 1000 | `0x3E8` | ❌ **DO NOT USE** — client builds a local "Personal inquiry on:" submenu |
-| 8 | `0x08` | ❌ Keep-open path |
-| 12 | `0x0c` | ❌ Keep-open path |
-| 34 | `0x22` | ❌ Keep-open path; `item_id==100` triggers exit-confirmation dialog |
-| 37 | `0x25` | ❌ Keep-open path |
-| 52 | `0x34` | ❌ Keep-open path |
-
-### MechEntry Field→Display Mapping (confirmed via screenshot analysis)
-
-| `MechEntry` field | Wire field | Client display |
-|-------------------|-----------|----------------|
-| `id` | `type2` (3B) — `mech_id` | Drives 3D model; also used to auto-generate label via `FUN_00438280` when `name` is empty |
-| `slot` | `type2` (3B) — slot ID | Stored in `g_cmd26_SlotArr`; client echoes `slot + 1` in Cmd7 reply |
-| `typeString` | string | Green label line 1 (e.g. `"SDR-5V"`) |
-| `variant` | string | Green label line 2 (e.g. `"130 kph"`) |
-| `name` | string | Pink primary label; empty string → auto-generated from `id` |
-
-### Cursor Freeze Root Cause
-
-The client's cursor enters a "waiting" state whenever a `Cmd26` mech window is shown
-or a `Cmd3` text packet is sent. `Cmd5 CURSOR_NORMAL` resets the cursor to the normal
-pointer state. This packet **must** be sent:
-
-1. Immediately after each `Cmd26` mech list (step 1, 2, and 3).
-2. After the `Cmd3` confirmation at the end of step 3.
-
-Without `Cmd5 CURSOR_NORMAL` the client cursor spins indefinitely and no further
-mouse input is processed. This is a standard part of every UI sequence in the world
-server — any command that causes a modal window or text overlay must close with
-`Cmd5 CURSOR_NORMAL`.
-
-### Implementation Reference
-
-| Symbol | File | Purpose |
-|--------|------|---------|
-| `MECH_CLASS_LIST_ID = 0x20` | `src/world/world-data.ts` | listId for class picker + variant picker |
-| `MECH_CHASSIS_LIST_ID = 0x3e` | `src/world/world-data.ts` | listId for chassis picker |
-| `CLASS_LABELS`, `CLASS_KEYS` | `src/world/world-data.ts` | Display names and key strings for the 4 weight classes |
-| `CHASSIS_BY_PREFIX`, `getMechChassis()` | `src/world/world-data.ts` | Groups mechs into chassis families by designation prefix |
-| `mechKph()` | `src/world/world-data.ts` | Converts walk/run speedMag values → display kph for variant picker |
-| `sendMechClassPicker()` | `src/world/world-scene.ts` | Sends step 1 |
-| `sendMechChassisPicker()` | `src/world/world-scene.ts` | Sends step 2 |
-| `sendMechVariantPicker()` | `src/world/world-scene.ts` | Sends step 3 |
-| `handleMechPickerCmd7()` | `src/world/world-handlers.ts` | Routes Cmd7 replies through all 3 steps |
-| `mechPickerStep`, `mechPickerClass`, `mechPickerChassis` | `src/state/players.ts` | Per-session picker state |

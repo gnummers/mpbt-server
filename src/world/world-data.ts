@@ -228,7 +228,7 @@ export function getSolarisRoomIcon(roomId: number): number {
 export const MECH_CLASS_LIST_ID   = 0x20;
 /** Cmd26 listId for the chassis picker (step 2). */
 export const MECH_CHASSIS_LIST_ID = 0x3e;
-/** Cmd26 can safely carry at most 20 rows; reserve one row for pagination. */
+/** Cmd26 can safely carry at most 20 rows; reserve one row for the "More…" pagination entry. */
 export const MECH_CHASSIS_PAGE_SIZE = 19;
 
 /** Display labels for each weight class (slot 0..3). */
@@ -282,14 +282,14 @@ export function getMechChassis(typeString: string): string {
   return PREFIX_TO_CHASSIS.get(prefix) ?? CHASSIS_BY_PREFIX[prefix] ?? prefix;
 }
 
-/** Return sorted chassis names for the chosen weight class index. */
+/** Return sorted chassis names for the chosen weight-class index. */
 export function getMechChassisListForClass(classIndex: number): string[] {
   const classKey = CLASS_KEYS[classIndex] as string | undefined;
   const seenChassis = new Set<string>();
   const chassisList: string[] = [];
   for (const mech of WORLD_MECHS) {
     const stat = MECH_STATS.get(mech.typeString);
-    if (classKey && stat?.weightClass.toUpperCase() !== classKey) continue;
+    if (classKey && stat && !stat.disabled && stat.weightClass.toUpperCase() !== classKey) continue;
     const chassis = getMechChassis(mech.typeString);
     if (!seenChassis.has(chassis)) {
       seenChassis.add(chassis);

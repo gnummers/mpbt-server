@@ -58,8 +58,16 @@ export interface ClientSession {
   combatInitialized?: boolean;
   /** Repeating setInterval that sends bot position updates during combat. */
   botPositionTimer?: ReturnType<typeof setInterval>;
+  /** Repeating setInterval that sends Cmd67 retaliatory damage to the player during combat. */
+  botFireTimer?: ReturnType<typeof setInterval>;
   /** Scripted bot hit points for the current single-client combat prototype. */
   botHealth?: number;
+  /**
+   * Server-side approximation of the player's remaining IS health.
+   * Decremented each time the bot fires Cmd67 damage. When ≤ 0 the bot stops
+   * firing — the client handles the actual death/results screen locally.
+   */
+  playerHealth?: number;
   /**
    * Stable per-connection roster identifier used by world presence packets
    * (Cmd10/Cmd11/Cmd12/Cmd13). This is distinct from accountId and only needs to be
@@ -126,15 +134,20 @@ export interface ClientSession {
   combatY?: number;
   /** Last raw heading value from client Cmd8/9. */
   combatHeadingRaw?: number;
-  /** Last decoded throttle velocity from client Cmd9. */
+  /** Last decoded throttle velocity echoed in Cmd65 responses. */
   combatThrottle?: number;
-  /** Last decoded leg velocity from client Cmd9. */
+  /** Last decoded leg velocity echoed in Cmd65 responses. */
   combatLegVel?: number;
-  /** Current max-latched speedMag echoed in Cmd65 Cmd9 responses. */
+  /** Current speedMag echoed in Cmd65 responses. */
   combatSpeedMag?: number;
+  /**
+   * Prototype jump-jet altitude echoed in Cmd65 responses.
+   * This is a server-side estimate only; real fuel/arc physics remain unknown.
+   */
+  combatJumpAltitude?: number;
   /** Per-mech run/max speedMag cap (round(mec_speed * 1.5) * 300), set at combat bootstrap. */
   combatMaxSpeedMag?: number;
-  /** Per-mech walk speedMag (mec_speed * 300), set at combat bootstrap. Used for mech picker display. */
+  /** Per-mech walk speedMag (mec_speed * 300), set at combat bootstrap. */
   combatWalkSpeedMag?: number;
 
   // ── 3-step mech picker state ──────────────────────────────────────────────
@@ -145,7 +158,7 @@ export interface ClientSession {
   mechPickerClass?: number;
   /** Chassis name (e.g. "Jenner") chosen in step 2. */
   mechPickerChassis?: string;
-  /** Page offset for the chassis picker when a weight class has more than 20 rows. */
+  /** Page offset for the chassis picker when a weight class has more than 19 rows. */
   mechPickerChassisPage?: number;
 
   // ── Persistence fields (set after DB lookup / character creation) ─────────

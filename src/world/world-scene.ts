@@ -432,9 +432,9 @@ export function sendMechClassPicker(
   connLog: Logger,
   capture: CaptureLogger,
 ): void {
-  session.mechPickerStep = 'class';
-  session.mechPickerClass = undefined;
-  session.mechPickerChassis = undefined;
+  session.mechPickerStep        = 'class';
+  session.mechPickerClass       = undefined;
+  session.mechPickerChassis     = undefined;
   session.mechPickerChassisPage = undefined;
   const entries = CLASS_LABELS.map((label, slot) => ({
     id:         0,
@@ -446,6 +446,7 @@ export function sendMechClassPicker(
     walkSpeedMag: 0,
     maxSpeedMag: 0,
     extraCritCount: 0,
+    tonnage:    0,
   }));
   connLog.info('[world] sending mech class picker');
   send(
@@ -457,7 +458,7 @@ export function sendMechClassPicker(
   send(session.socket, buildCmd5CursorNormalPacket(nextSeq(session)), capture, 'CMD5_NORMAL');
 }
 
-/** Step 2 — send the chassis picker for the chosen weight class. */
+/** Step 2 — send the chassis picker for the chosen weight class (with pagination). */
 export function sendMechChassisPicker(
   session: ClientSession,
   classIndex: number,
@@ -465,18 +466,17 @@ export function sendMechChassisPicker(
   capture: CaptureLogger,
   page = 0,
 ): void {
-  session.mechPickerStep   = 'chassis';
-  session.mechPickerClass  = classIndex;
-  session.mechPickerChassis = undefined;
+  session.mechPickerStep        = 'chassis';
+  session.mechPickerClass       = classIndex;
   session.mechPickerChassisPage = page;
 
-  const classKey = CLASS_KEYS[classIndex] as string | undefined;
+  const classKey    = CLASS_KEYS[classIndex] as string | undefined;
   const chassisList = getMechChassisListForClass(classIndex);
-  const start = page * MECH_CHASSIS_PAGE_SIZE;
-  const visibleChassis = chassisList.slice(start, start + MECH_CHASSIS_PAGE_SIZE);
-  const hasMore = start + MECH_CHASSIS_PAGE_SIZE < chassisList.length;
+  const start       = page * MECH_CHASSIS_PAGE_SIZE;
+  const visible     = chassisList.slice(start, start + MECH_CHASSIS_PAGE_SIZE);
+  const hasMore     = start + MECH_CHASSIS_PAGE_SIZE < chassisList.length;
 
-  const entries = visibleChassis.map((chassis, slot) => ({
+  const entries = visible.map((chassis, slot) => ({
     id:         0,
     mechType:   0,
     slot,
@@ -486,18 +486,21 @@ export function sendMechChassisPicker(
     walkSpeedMag: 0,
     maxSpeedMag: 0,
     extraCritCount: 0,
+    tonnage:    0,
   }));
+
   if (hasMore) {
     entries.push({
       id:         0,
       mechType:   0,
-      slot:       entries.length,
+      slot:       visible.length,
       typeString: '',
       variant:    '',
       name:       'More...',
       walkSpeedMag: 0,
       maxSpeedMag: 0,
       extraCritCount: 0,
+      tonnage:    0,
     });
   }
 
@@ -533,6 +536,7 @@ export function sendMechVariantPicker(
     walkSpeedMag: mech.walkSpeedMag,
     maxSpeedMag: mech.maxSpeedMag,
     extraCritCount: mech.extraCritCount,
+    tonnage:    mech.tonnage,
   }));
 
   connLog.info('[world] sending mech variant picker: chassis="%s" entries=%d', chassis, entries.length);

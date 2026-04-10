@@ -275,13 +275,23 @@ export interface MechEntry {
    */
   extraCritCount: number;
   /**
-   * Maximum forward speed magnitude derived from mec_speed at offset 0x16:
+   * Walk speed magnitude derived from mec_speed at offset 0x16:
    *   walkSpeedMag = mec_speed * 300
-   *   maxSpeedMag  = round(mec_speed * 1.5) * 300
    * CONFIRMED by RE of Combat_InitActorRuntimeFromMec_v123 @ 0x00433910.
    */
   walkSpeedMag: number;
+  /**
+   * Maximum forward speed magnitude derived from mec_speed at offset 0x16:
+   *   maxSpeedMag = round(mec_speed * 1.5) * 300
+   * CONFIRMED by RE of Combat_InitActorRuntimeFromMec_v123 @ 0x00433910.
+   */
   maxSpeedMag: number;
+  /**
+   * Mech mass in tons, read from .MEC offset 0x18 (uint16 LE after decryption).
+   * Used to compute per-section internal-structure maxima for Cmd72 bootstrap.
+   * CONFIRMED from RESEARCH.md §20 cross-validation table.
+   */
+  tonnage: number;
 }
 
 /**

@@ -27,6 +27,7 @@ import {
   buildCmd72LocalBootstrapPacket,
   buildCmd65PositionSyncPacket,
   buildCmd66ActorDamagePacket,
+  buildCmd67LocalDamagePacket,
   buildCmd68ProjectileSpawnPacket,
   buildCmd70ActorTransitionPacket,
   buildCmd71ResetEffectStatePacket,
@@ -38,6 +39,7 @@ import { PlayerRegistry, ClientSession } from '../state/players.js';
 import { storeMessage } from '../db/messages.js';
 import { Logger }        from '../util/logger.js';
 import { CaptureLogger } from '../util/capture.js';
+import { mechInternalStateBytes } from '../data/mechs.js';
 
 import {
   FALLBACK_MECH_ID,
@@ -75,15 +77,21 @@ import {
   sendMechVariantPicker,
 } from './world-scene.js';
 
-// KP8 full-forward produces sVar2=20 in the client's throttle accumulator.
-// Using 20 as the scale means sVar2=20 → maxSpeedMag (run speed), rather
-// than the old 30 which incorrectly capped movement at walk speed.
-const THROTTLE_RUN_SCALE = 20;
-
 /** Server-side HP counter for the scripted single-client bot opponent. */
 const BOT_INITIAL_HEALTH = 100;
 /** Prototype damage applied to the scripted bot for each cmd10 fire frame. */
 const BOT_DAMAGE_PER_HIT = 20;
+/** Prototype jump-jet altitude echoed through Cmd65 after cmd12/action 4. */
+const JUMP_JET_ALTITUDE = 1200;
+/** Interval (ms) at which the scripted bot fires back at the player. */
+const BOT_FIRE_INTERVAL_MS = 3_000;
+/** Prototype damage per bot retaliatory shot (Cmd67 damageCode=1, value=10). */
+const BOT_RETALIATION_DAMAGE = 10;
+
+// KP8 full-forward produces sVar2 ≈ 20 in the client's throttle accumulator.
+// Using 20 as the scale means sVar2=20 → maxSpeedMag (run speed), rather than
+// the upstream assumption of 45 which capped movement at walk speed.
+const THROTTLE_RUN_SCALE = 20;
 
 // ── ComStar messaging ─────────────────────────────────────────────────────────
 
@@ -305,7 +313,7 @@ export function handleRoomMenuSelection(
  *   • terrainId / terrainResourceId — 1/0 chosen; live capture needed.
  *   • identity2..4 — empty; purpose in client UI unconfirmed.
  *   • headingBias  — 0 (MOTION_NEUTRAL added by encoder); live capture needed.
- *   • globalA/B/C  — 0; purpose unlabelled in Ghidra.
+ *   • globalA/B/C  — globalA=2800 confirmed (D²=7840000 → eq. v = speed_target); B/C = 0.
  */
 export function sendCombatBootstrapSequence(
   session: ClientSession,
@@ -324,11 +332,12 @@ export function sendCombatBootstrapSequence(
   const extraCritCount  = mechEntry?.extraCritCount ?? 0;
   const critBytes       = Math.max(0, extraCritCount + 21);
 
-  // Store the per-mech speed limits so Cmd9 can compute speedMag.
+  // Store per-mech speedMag caps so Cmd8/9 handlers can apply them.
   session.combatMaxSpeedMag  = mechEntry?.maxSpeedMag  ?? 0;
   session.combatWalkSpeedMag = mechEntry?.walkSpeedMag ?? 0;
-  session.combatSpeedMag     = 0;
-  session.botHealth = BOT_INITIAL_HEALTH;
+  session.combatJumpAltitude = 0;
+  session.botHealth    = BOT_INITIAL_HEALTH;
+  session.playerHealth = BOT_INITIAL_HEALTH; // simplified IS counter (stops Cmd67 when ≤ 0)
 
   // 1. MMC SYNC — plain ARIES packet; no game-frame CRC.
   send(socket, buildCombatWelcomePacket(), capture, 'COMBAT_WELCOME_MMC');
@@ -347,11 +356,7 @@ export function sendCombatBootstrapSequence(
       terrainResourceId:  0,      // ASSUMPTION: no additional resource
       terrainPoints:      [],
       arenaPoints:        [],
-      // DAT_004f56b4 = globalA. Physics equilibrium: v_eq = speed_target when
-      // globalA = sqrt(speed_target * 980 / (globalA/100)) → globalA = sqrt(980*10000)
-      // = sqrt(9800000) ≈ 2800. At 2800: forward eq = 900 (32 kph), backward eq = 600 (21 kph).
-      // CONFIRMED by Ghidra RE of FUN_0042c830 (velocity integrator) and FUN_0042cd20 (ground drag).
-      globalA:            2800,
+      globalA:            2800,   // D=2800 → D²=7840000; equilibrium v = speed_target (RE: FUN_0042c830)
       globalB:            0,
       globalC:            0,
       headingBias:        0,      // ASSUMPTION: 0 → MOTION_NEUTRAL after encode
@@ -372,14 +377,15 @@ export function sendCombatBootstrapSequence(
         criticalStateBytes:   Array<number>(critBytes).fill(0),
         extraStateBytes:      [],
         armorLikeStateBytes:  Array<number>(11).fill(0),  // full armor
-        // internalStateBytes[i] must be non-zero for each weapon slot that uses
-        // mec[0x8e+slot*2] == i as the ammo-type/IS index (RE: FUN_0042c200).
+        // internalStateBytes[i] must be non-zero for each IS slot index i
+        // referenced by a weapon (mec[0x8e+slot*2] == i per FUN_0042c200).
         // Indices 4 and 7 are also required non-zero by the IS gate (FUN_0042bb00).
-        // ANH-1A mec[0x8e] values = [1,0,6,5,1,0,4,4] → indices 0,1,4,5,6 active.
-        internalStateBytes:   [100, 100, 100, 100, 12, 100, 100, 9],
-        // ANH-1A has 4 ammo bins, all serving weapon type 8 (mec[0x202+j*2]=8).
-        // FUN_0042c200 checks actor[0x1e6+bin_index*2] > 0 before allowing fire.
-        ammoStateValues:      [],  // let client use mec defaults; avoids display showing 400/slot
+        // Order: [arm, arm, side, side, CT, leg, leg, head] (§23.8, IS lookup RE).
+        internalStateBytes:   mechInternalStateBytes(mechEntry?.tonnage ?? 0),
+        // Empty ammoStateValues → client uses mec file defaults; avoids the
+        // "400/slot" display artefact from sending arbitrary capacity values.
+        // Per-mech ammo bin data will be wired in issue #80.
+        ammoStateValues:      [],  // let client use mec defaults
         actorDisplayName:     callsign.substring(0, 31),
       },
     },
@@ -441,6 +447,34 @@ export function sendCombatBootstrapSequence(
     );
   }, 1000);
   session.botPositionTimer.unref();
+
+  // Bot fires back at the player every BOT_FIRE_INTERVAL_MS milliseconds.
+  // Stops once server-side playerHealth estimate reaches 0 (client handles
+  // the actual death/results screen via local IS simulation — see §23.6).
+  session.botFireTimer = setInterval(() => {
+    if (session.socket.destroyed || !session.socket.writable) return;
+
+    // Server-side health gate — stop retaliating after estimated player death.
+    if ((session.playerHealth ?? 0) <= 0) {
+      clearInterval(session.botFireTimer);
+      session.botFireTimer = undefined;
+      connLog.info('[world/combat] player IS depleted (server-side estimate) — bot stopped firing');
+      return;
+    }
+
+    session.playerHealth = Math.max(0, (session.playerHealth ?? 0) - BOT_RETALIATION_DAMAGE);
+    connLog.debug(
+      '[world/combat] bot fires Cmd67: damage=%d playerHealth=%d',
+      BOT_RETALIATION_DAMAGE,
+      session.playerHealth,
+    );
+    send(
+      session.socket,
+      buildCmd67LocalDamagePacket(1, BOT_RETALIATION_DAMAGE, nextSeq(session)),
+      capture, 'CMD67_BOT_RETALIATION',
+    );
+  }, BOT_FIRE_INTERVAL_MS);
+  session.botFireTimer.unref();
 
   session.combatInitialized = true;
   connLog.info('[world] combat entry complete for "%s"', callsign);
@@ -727,40 +761,36 @@ export function handleCombatMovementFrame(
     session.combatY          = frame.yRaw - COORD_BIAS;
     session.combatHeadingRaw = frame.headingRaw;
     const throttle = session.combatThrottle ?? 0;
-    const legVel = session.combatLegVel ?? 0;
-    let speedMag = session.combatSpeedMag ?? 0;
-    const clientSpeed = frame.rotationRaw - MOTION_NEUTRAL;
-    if (clientSpeed === 0 && speedMag !== 0) {
-      session.combatSpeedMag = 0;
-      speedMag = 0;
-    }
+    const legVel   = session.combatLegVel   ?? 0;
+    let speedMag   = session.combatSpeedMag ?? 0;
+
     // Ghidra: DAT_004f1f7c=0 → is_moving=false → client sends Cmd8 forever.
     // When the mech is moving (clientSpeed!=0), echo Cmd65 with a non-zero
     // throttle to set DAT_004f1f7c != 0 → is_moving=true → next frame is Cmd9.
-    // Cmd9 handler then maintains the accumulator via sign-inverted echo.
+    const clientSpeed = frame.rotationRaw - MOTION_NEUTRAL;
     if (clientSpeed !== 0) {
-      const maxSpeedMag = session.combatMaxSpeedMag ?? 0;
-      const dir = Math.sign(clientSpeed);
-      const boostThrottle = dir * MOTION_DIV;          // minimal non-zero value in correct direction
-      const boostSpeedMag = dir * maxSpeedMag;          // drive to max speed
-      session.combatThrottle  = boostThrottle;
-      session.combatLegVel    = 0;
-      session.combatSpeedMag  = boostSpeedMag;
+      const maxSpeedMag   = session.combatMaxSpeedMag ?? 0;
+      const dir           = Math.sign(clientSpeed);
+      const boostThrottle = dir * MOTION_DIV;   // minimal non-zero value in correct direction
+      const boostSpeedMag = dir * maxSpeedMag;  // drive to run speed immediately
+      session.combatThrottle = boostThrottle;
+      session.combatLegVel   = 0;
+      session.combatSpeedMag = boostSpeedMag;
       connLog.debug(
-        '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=%d → echoing Cmd65 throttle=%d speedMag=%d to break Cmd8 trap',
+        '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=%d → boosting Cmd65 throttle=%d speedMag=%d',
         session.combatX, session.combatY, frame.headingRaw, clientSpeed, boostThrottle, boostSpeedMag,
       );
       send(
         session.socket,
         buildCmd65PositionSyncPacket(
           {
-            slot:    0,
-            x:       session.combatX,
-            y:       session.combatY,
-            z:       0,
-            facing:  (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
+            slot:     0,
+            x:        session.combatX,
+            y:        session.combatY,
+            z:        session.combatJumpAltitude ?? 0,
+            facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
             throttle: boostThrottle,
-            legVel:  0,
+            legVel:   0,
             speedMag: boostSpeedMag,
           },
           nextSeq(session),
@@ -771,9 +801,15 @@ export function handleCombatMovementFrame(
       return;
     }
 
+    // clientSpeed === 0 → mech has stopped; suppress Cmd65 echo to avoid
+    // resetting the movement accumulator while stationary.
+    if (speedMag !== 0) {
+      session.combatSpeedMag = 0;
+      speedMag = 0;
+    }
     connLog.debug(
-      '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=0 latchedThrottle=%d latchedLegVel=%d latchedSpeedMag=%d; suppressing Cmd65 echo (mech stopped)',
-      session.combatX, session.combatY, frame.headingRaw, throttle, legVel, speedMag,
+      '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=0 suppressing echo (stopped)',
+      session.combatX, session.combatY, frame.headingRaw,
     );
     return;
   }
@@ -785,8 +821,10 @@ export function handleCombatMovementFrame(
     session.combatY          = frame.yRaw - COORD_BIAS;
     session.combatHeadingRaw = frame.headingRaw;
 
-    const maxSpeedMag  = session.combatMaxSpeedMag ?? 0;
-    const throttlePct  = frame.throttleRaw - MOTION_NEUTRAL; // negative = forward
+    const maxSpeedMag    = session.combatMaxSpeedMag ?? 0;
+    const throttlePct    = frame.throttleRaw - MOTION_NEUTRAL; // negative = forward
+    const legVelPct      = frame.legVelRaw   - MOTION_NEUTRAL;
+    const previousSpeedMag = session.combatSpeedMag ?? 0;
 
     // Scale sVar2 (max=20 from KP8) directly to maxSpeedMag so full-throttle
     // input produces run speed rather than stopping at walk speed.
@@ -794,18 +832,16 @@ export function handleCombatMovementFrame(
       ? Math.max(-maxSpeedMag, Math.min(maxSpeedMag, Math.round(-throttlePct * maxSpeedMag / THROTTLE_RUN_SCALE)))
       : 0;
 
+    // Only latch new speed when the throttle or leg velocity is active; idle
+    // Cmd9 samples (legVelPct==0 and clientSpeed==0) preserve the last speed.
+    const clientSpeed  = frame.rotationRaw - MOTION_NEUTRAL;
+    const shouldLatch  = !(legVelPct === 0 && clientSpeed === 0);
+    const signedSpeedMag = shouldLatch ? nextSpeedMag : previousSpeedMag;
+
     const throttle = (frame.throttleRaw - MOTION_NEUTRAL) * MOTION_DIV;
-    const legVel = (frame.legVelRaw - MOTION_NEUTRAL) * MOTION_DIV;
-    const legVelPct = frame.legVelRaw - MOTION_NEUTRAL;
-    const clientSpeed = frame.rotationRaw - MOTION_NEUTRAL;
-    const previousSpeedMag = session.combatSpeedMag ?? 0;
-    const shouldLatchSpeed =
-      nextSpeedMag !== 0 ||
-      previousSpeedMag === 0 ||
-      (legVelPct === 0 && clientSpeed === 0);
-    const signedSpeedMag = shouldLatchSpeed ? nextSpeedMag : previousSpeedMag;
+    const legVel   = (frame.legVelRaw   - MOTION_NEUTRAL) * MOTION_DIV;
     session.combatThrottle = throttle;
-    session.combatLegVel = legVel;
+    session.combatLegVel   = legVel;
     session.combatSpeedMag = signedSpeedMag;
 
     connLog.debug(
@@ -813,9 +849,8 @@ export function handleCombatMovementFrame(
       throttlePct, legVelPct, clientSpeed, throttle, legVel, maxSpeedMag, nextSpeedMag, signedSpeedMag,
     );
 
-    // Echo only the speed target. Zero/idle Cmd9 samples can appear while the
-    // mech is still coasting, so preserve the last nonzero speed target unless
-    // the packet looks like an explicit stop.
+    // Echo only the speed target; negate throttle so the sign convention
+    // (FUN_0042c830 negation of DAT_004f1f7c) keeps the client in Cmd9 mode.
     send(
       session.socket,
       buildCmd65PositionSyncPacket(
@@ -823,13 +858,10 @@ export function handleCombatMovementFrame(
           slot:     0,
           x:        session.combatX,
           y:        session.combatY,
-          z:        0,
+          z:        session.combatJumpAltitude ?? 0,
           facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
-          // Sign-inverted pass-through: Cmd65 decoder uses (MOTION_NEUTRAL - raw)*MOTION_DIV
-          // while Cmd9 parser uses (raw - MOTION_NEUTRAL)*MOTION_DIV, so negate to preserve
-          // DAT_004f1f7c (movement accumulator) and keep the client in Cmd9-sending mode.
           throttle: -throttle,
-          legVel:   legVel,
+          legVel,
           speedMag: signedSpeedMag,
         },
         nextSeq(session),
@@ -909,6 +941,10 @@ export function handleCombatWeaponFireFrame(
       clearInterval(session.botPositionTimer);
       session.botPositionTimer = undefined;
     }
+    if (session.botFireTimer !== undefined) {
+      clearInterval(session.botFireTimer);
+      session.botFireTimer = undefined;
+    }
   }
 }
 
@@ -916,16 +952,55 @@ export function handleCombatActionFrame(
   session: ClientSession,
   payload: Buffer,
   connLog: Logger,
-  _capture: CaptureLogger,
+  capture: CaptureLogger,
 ): void {
   const action = parseClientCmd12Action(payload);
   if (!action) {
     connLog.warn('[world/combat] cmd-12 action parse failed (len=%d)', payload.length);
     return;
   }
-  // Ghidra confirmed: action 0x34 (THROTTLE UP) calls FUN_004229a0 locally
+
+  if (action.action === 4 || action.action === 6) {
+    session.combatJumpAltitude = action.action === 4 ? JUMP_JET_ALTITUDE : 0;
+
+    const x = session.combatX ?? 0;
+    const y = session.combatY ?? 0;
+    const headingRaw = session.combatHeadingRaw ?? MOTION_NEUTRAL;
+    const throttle = session.combatThrottle ?? 0;
+    const legVel = session.combatLegVel ?? 0;
+    const speedMag = session.combatSpeedMag ?? 0;
+
+    connLog.info(
+      '[world/combat] cmd-12 jump action=%d altitude=%d',
+      action.action,
+      session.combatJumpAltitude,
+    );
+
+    send(
+      session.socket,
+      buildCmd65PositionSyncPacket(
+        {
+          slot:     0,
+          x,
+          y,
+          z:        session.combatJumpAltitude,
+          facing:   (headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
+          throttle,
+          legVel,
+          speedMag,
+        },
+        nextSeq(session),
+      ),
+      capture,
+      action.action === 4 ? 'CMD65_JUMP_ASCENT' : 'CMD65_JUMP_LAND',
+    );
+    return;
+  }
+
+  // Ghidra confirmed: action 0x34 (THROTTLE_UP) calls FUN_004229a0 locally
   // but does NOT call Combat_SendCmd12Action_v123 — so these packets never
-  // arrive.  Speed is now driven entirely by the Cmd9 throttleRaw → THROTTLE_RUN_SCALE path.
+  // arrive from the client.  Speed is driven entirely by the Cmd9
+  // throttleRaw → THROTTLE_RUN_SCALE path; no server response is needed here.
   connLog.debug('[world/combat] cmd-12 combat action=%d — no response', action.action);
 }
 
@@ -957,18 +1032,19 @@ export function handleMechPickerCmd7(
       sendMechClassPicker(session, connLog, capture);
       return true;
     }
-    const classIndex = session.mechPickerClass ?? 0;
-    const page = session.mechPickerChassisPage ?? 0;
+    const classIndex  = session.mechPickerClass ?? 0;
+    const page        = session.mechPickerChassisPage ?? 0;
     const chassisList = getMechChassisListForClass(classIndex);
-    const start = page * MECH_CHASSIS_PAGE_SIZE;
-    const visibleChassis = chassisList.slice(start, start + MECH_CHASSIS_PAGE_SIZE);
-    const hasMore = start + MECH_CHASSIS_PAGE_SIZE < chassisList.length;
-    const selectionIndex = selection - 1;
-    if (hasMore && selectionIndex === visibleChassis.length) {
+    const start       = page * MECH_CHASSIS_PAGE_SIZE;
+    const visible     = chassisList.slice(start, start + MECH_CHASSIS_PAGE_SIZE);
+    const hasMore     = start + MECH_CHASSIS_PAGE_SIZE < chassisList.length;
+
+    // "More…" row is always the last entry when hasMore is true.
+    if (hasMore && selection === visible.length + 1) {
       sendMechChassisPicker(session, classIndex, connLog, capture, page + 1);
       return true;
     }
-    const chassis = visibleChassis[selectionIndex];
+    const chassis = visible[selection - 1];
     if (!chassis) {
       sendMechClassPicker(session, connLog, capture);
       return true;
@@ -979,19 +1055,12 @@ export function handleMechPickerCmd7(
 
   if (step === 'variant' && listId === MECH_CLASS_LIST_ID) {
     if (selection === 0) {
-      sendMechChassisPicker(
-        session,
-        session.mechPickerClass ?? 0,
-        connLog,
-        capture,
-        session.mechPickerChassisPage ?? 0,
-      );
+      sendMechChassisPicker(session, session.mechPickerClass ?? 0, connLog, capture, session.mechPickerChassisPage ?? 0);
       return true;
     }
     const chassis = session.mechPickerChassis ?? '';
     const variants = WORLD_MECHS.filter(mech => getMechChassis(mech.typeString) === chassis);
-    const selectedSlot = selection - 1;
-    const chosen = variants.find(mech => mech.slot === selectedSlot);
+    const chosen = variants[selection - 1];
     if (!chosen) {
       send(
         session.socket,
@@ -1003,12 +1072,12 @@ export function handleMechPickerCmd7(
       return true;
     }
 
-    session.selectedMechSlot  = chosen.slot;
-    session.selectedMechId    = chosen.id;
-    session.mechPickerStep    = undefined;
-    session.mechPickerClass   = undefined;
-    session.mechPickerChassis = undefined;
-    session.mechPickerChassisPage = undefined;
+    session.selectedMechSlot       = chosen.slot;
+    session.selectedMechId         = chosen.id;
+    session.mechPickerStep         = undefined;
+    session.mechPickerClass        = undefined;
+    session.mechPickerChassis      = undefined;
+    session.mechPickerChassisPage  = undefined;
 
     connLog.info('[world] mech selected: callsign="%s" slot=%d id=%d typeString=%s',
       getDisplayName(session), chosen.slot, chosen.id, chosen.typeString);
