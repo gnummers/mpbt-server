@@ -321,9 +321,11 @@ export function sendCombatBootstrapSequence(
   const extraCritCount  = mechEntry?.extraCritCount ?? 0;
   const critBytes       = Math.max(0, extraCritCount + 21);
 
-  // Store the per-mech run/max speedMag cap so Cmd9 can preserve held throttle speed.
-  session.combatMaxSpeedMag = mechEntry?.maxSpeedMag ?? 0;
-  session.combatSpeedMag = 0;
+  // Store the per-mech speed limits so Cmd9 / action handlers can compute speedMag.
+  session.combatMaxSpeedMag  = mechEntry?.maxSpeedMag  ?? 0;
+  session.combatWalkSpeedMag = mechEntry?.walkSpeedMag ?? 0;
+  session.combatThrottlePct  = 0;
+  session.combatSpeedMag     = 0;
   session.botHealth = BOT_INITIAL_HEALTH;
 
   // 1. MMC SYNC — plain ARIES packet; no game-frame CRC.
@@ -704,6 +706,19 @@ export function notifyRoomDeparture(
 
 // ── Combat movement / action frames ───────────────────────────────────────────
 
+/**
+ * Convert a throttle percentage (−100..100) to speedMag using the same
+ * walk-vs-run split as FUN_004229a0 (confirmed RE §19.x):
+ *   positive pct → forward, uses run/max speed  (pct=100 → maxSpeedMag)
+ *   negative pct → reverse, uses walk speed     (pct=−100 → −walkSpeedMag)
+ */
+function throttlePctToSpeedMag(pct: number, walkSpeedMag: number, maxSpeedMag: number): number {
+  if (pct > 0) return Math.round(pct * maxSpeedMag  / 100);
+  if (pct < 0) return Math.round(pct * walkSpeedMag / 100);
+  return 0;
+}
+
+
 export function handleCombatMovementFrame(
   session: ClientSession,
   payload: Buffer,
@@ -746,14 +761,25 @@ export function handleCombatMovementFrame(
     session.combatY          = frame.yRaw - COORD_BIAS;
     session.combatHeadingRaw = frame.headingRaw;
 
-    const maxSpeedMag = session.combatMaxSpeedMag ?? 0;
-    const throttlePct = frame.throttleRaw - MOTION_NEUTRAL; // negative = forward
-    const nextSpeedMag = maxSpeedMag > 0
+    const maxSpeedMag      = session.combatMaxSpeedMag  ?? 0;
+    const walkSpeedMag     = session.combatWalkSpeedMag ?? 0;
+    const storedThrottlePct = session.combatThrottlePct ?? 0;
+    const throttlePct      = frame.throttleRaw - MOTION_NEUTRAL; // negative = forward
+
+    // If the player has used THROTTLE UP/DOWN (Cmd12 actions), let the stored
+    // throttle level override the walk-only speed that KP8 alone produces.
+    const nextSpeedMag = (storedThrottlePct !== 0 && maxSpeedMag > 0)
       ? Math.max(
           -maxSpeedMag,
-          Math.min(maxSpeedMag, Math.round(-throttlePct * maxSpeedMag / THROTTLE_RUN_SCALE)),
+          Math.min(maxSpeedMag, throttlePctToSpeedMag(storedThrottlePct, walkSpeedMag, maxSpeedMag)),
         )
-      : 0;
+      : maxSpeedMag > 0
+        ? Math.max(
+            -maxSpeedMag,
+            Math.min(maxSpeedMag, Math.round(-throttlePct * maxSpeedMag / THROTTLE_RUN_SCALE)),
+          )
+        : 0;
+
     const throttle = (frame.throttleRaw - MOTION_NEUTRAL) * MOTION_DIV;
     const legVel = (frame.legVelRaw - MOTION_NEUTRAL) * MOTION_DIV;
     const legVelPct = frame.legVelRaw - MOTION_NEUTRAL;
@@ -769,8 +795,8 @@ export function handleCombatMovementFrame(
     session.combatSpeedMag = signedSpeedMag;
 
     connLog.debug(
-      '[world/combat] cmd9 moving: throttlePct=%d legVelPct=%d clientSpeed=%d throttle=%d legVel=%d maxSpeedMag=%d nextSpeedMag=%d latchedSpeedMag=%d',
-      throttlePct, legVelPct, clientSpeed, throttle, legVel, maxSpeedMag, nextSpeedMag, signedSpeedMag,
+      '[world/combat] cmd9 moving: throttlePct=%d storedPct=%d legVelPct=%d clientSpeed=%d throttle=%d legVel=%d maxSpeedMag=%d nextSpeedMag=%d latchedSpeedMag=%d',
+      throttlePct, storedThrottlePct, legVelPct, clientSpeed, throttle, legVel, maxSpeedMag, nextSpeedMag, signedSpeedMag,
     );
 
     // Echo only the speed target. Zero/idle Cmd9 samples can appear while the
@@ -873,13 +899,64 @@ export function handleCombatActionFrame(
   session: ClientSession,
   payload: Buffer,
   connLog: Logger,
-  _capture: CaptureLogger,
+  capture: CaptureLogger,
 ): void {
   const action = parseClientCmd12Action(payload);
   if (!action) {
     connLog.warn('[world/combat] cmd-12 action parse failed (len=%d)', payload.length);
     return;
   }
+
+  // Handle throttle control actions (confirmed RE: FUN_004229a0 called by
+  // Combat_InputActionDispatch_v123 — action 0x33=STOP, 0x34=THROTTLE_UP, 0x35=THROTTLE_DOWN).
+  // The client's local FUN_004229a0 increments throttle_pct by ±10 per press
+  // and writes the new speedMag to actor+0x372.  Since every Cmd65 echo also
+  // overwrites that same field, the server must track the throttle level and
+  // echo the correct speedMag so the two writes stay in sync.
+  const ACTION_THROTTLE_UP   = 0x34;
+  const ACTION_THROTTLE_DOWN = 0x35;
+  const ACTION_STOP          = 0x33;
+
+  if (action.action === ACTION_THROTTLE_UP || action.action === ACTION_THROTTLE_DOWN || action.action === ACTION_STOP) {
+    const prev = session.combatThrottlePct ?? 0;
+    let next: number;
+    if      (action.action === ACTION_STOP)          next = 0;
+    else if (action.action === ACTION_THROTTLE_UP)   next = Math.min(100, prev + 10);
+    else                                              next = Math.max(-100, prev - 10);
+
+    session.combatThrottlePct = next;
+
+    const maxSpeedMag  = session.combatMaxSpeedMag  ?? 0;
+    const walkSpeedMag = session.combatWalkSpeedMag ?? 0;
+    const newSpeedMag  = throttlePctToSpeedMag(next, walkSpeedMag, maxSpeedMag);
+    session.combatSpeedMag = newSpeedMag;
+
+    connLog.debug(
+      '[world/combat] cmd-12 throttle action=0x%s throttlePct=%d→%d speedMag=%d',
+      action.action.toString(16), prev, next, newSpeedMag,
+    );
+
+    send(
+      session.socket,
+      buildCmd65PositionSyncPacket(
+        {
+          slot:     0,
+          x:        session.combatX ?? 0,
+          y:        session.combatY ?? 0,
+          z:        0,
+          facing:   ((session.combatHeadingRaw ?? MOTION_NEUTRAL) - MOTION_NEUTRAL) * MOTION_DIV,
+          throttle: 0,
+          legVel:   0,
+          speedMag: newSpeedMag,
+        },
+        nextSeq(session),
+      ),
+      capture,
+      'CMD65_THROTTLE_ACTION',
+    );
+    return;
+  }
+
   connLog.debug('[world/combat] cmd-12 combat action=%d — no response', action.action);
 }
 
