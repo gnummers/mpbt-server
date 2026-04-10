@@ -20,11 +20,17 @@ import {
   buildCmd62CombatStartPacket,
   buildCmd64RemoteActorPacket,
   buildCmd65PositionSyncPacket,
+  buildCmd66ActorDamagePacket,
+  buildCmd68ProjectileSpawnPacket,
+  buildCmd70ActorTransitionPacket,
+  buildCmd71ResetEffectStatePacket,
   MOTION_NEUTRAL,
   COORD_BIAS,
   MOTION_DIV,
 } from '../protocol/combat.js';
 import {
+  parseClientCmd10WeaponFire,
+  parseClientCmd12Action,
   parseClientCmd8Coasting,
   parseClientCmd9Moving,
 } from '../protocol/game.js';
@@ -66,6 +72,11 @@ import {
   sendMechChassisPicker,
   sendMechVariantPicker,
 } from './world-scene.js';
+
+/** Server-side HP counter for the scripted single-client bot opponent. */
+const BOT_INITIAL_HEALTH = 100;
+/** Prototype damage applied to the scripted bot for each cmd10 fire frame. */
+const BOT_DAMAGE_PER_HIT = 20;
 
 // ── ComStar messaging ─────────────────────────────────────────────────────────
 
@@ -308,6 +319,7 @@ export function sendCombatBootstrapSequence(
 
   // Store per-mech speedMag cap so Cmd8/9 handlers can apply it.
   session.combatMaxSpeedMag = mechEntry?.maxSpeedMag ?? 0;
+  session.botHealth = BOT_INITIAL_HEALTH;
 
   // 1. MMC SYNC — plain ARIES packet; no game-frame CRC.
   send(socket, buildCombatWelcomePacket(), capture, 'COMBAT_WELCOME_MMC');
@@ -740,6 +752,101 @@ export function handleCombatMovementFrame(
     );
     send(session.socket, cmd65, capture, 'CMD65_MOVEMENT');
   }
+}
+
+/**
+ * Handle a client-sent Cmd10 weapon-fire frame for the scripted single-client
+ * combat prototype. Every accepted fire frame is treated as a hit on the bot
+ * opponent until capture work supplies authoritative hit/miss resolution.
+ */
+export function handleCombatWeaponFireFrame(
+  session: ClientSession,
+  payload: Buffer,
+  connLog: Logger,
+  capture: CaptureLogger,
+): void {
+  const shot = parseClientCmd10WeaponFire(payload);
+  if (!shot) {
+    connLog.warn('[world/combat] cmd-10 weapon fire parse failed (len=%d)', payload.length);
+    return;
+  }
+
+  if (session.botHealth === undefined) {
+    session.botHealth = BOT_INITIAL_HEALTH;
+  }
+  if (session.botHealth <= 0) {
+    connLog.debug('[world/combat] cmd-10 shot ignored — bot already destroyed');
+    return;
+  }
+
+  session.botHealth = Math.max(0, session.botHealth - BOT_DAMAGE_PER_HIT);
+  connLog.info(
+    '[world/combat] cmd-10 weapon fire: targetRaw=%d weaponSlot=%d flag=%d botHealth=%d',
+    shot.targetRaw,
+    shot.weaponSlot,
+    shot.flag,
+    session.botHealth,
+  );
+
+  const impactX = shot.impactXRaw - COORD_BIAS;
+  const impactY = shot.impactYRaw - COORD_BIAS;
+
+  send(session.socket, buildCmd71ResetEffectStatePacket(nextSeq(session)), capture, 'CMD71_RESET');
+  send(
+    session.socket,
+    buildCmd68ProjectileSpawnPacket(
+      {
+        sourceSlot:   0,
+        weaponSlot:   shot.weaponSlot,
+        targetRaw:    2, // bot actor slot 1 encoded as slot + 1
+        targetAttach: 0,
+        angleSeedA:   shot.angleSeedA,
+        angleSeedB:   shot.angleSeedB,
+        impactX,
+        impactY,
+        impactZ:      shot.impactZ,
+      },
+      nextSeq(session),
+    ),
+    capture,
+    'CMD68_PROJECTILE',
+  );
+  send(
+    session.socket,
+    buildCmd66ActorDamagePacket(1, 1, BOT_DAMAGE_PER_HIT, nextSeq(session)),
+    capture,
+    'CMD66_BOT_DAMAGE',
+  );
+  send(session.socket, buildCmd71ResetEffectStatePacket(nextSeq(session)), capture, 'CMD71_CLOSE');
+
+  if (session.botHealth <= 0) {
+    connLog.info('[world/combat] bot destroyed — sending Cmd70 death animation');
+    send(
+      session.socket,
+      buildCmd70ActorTransitionPacket(1, 4, nextSeq(session)),
+      capture,
+      'CMD70_BOT_DEATH',
+    );
+    if (session.botPositionTimer !== undefined) {
+      clearInterval(session.botPositionTimer);
+      session.botPositionTimer = undefined;
+    }
+  }
+}
+
+/** Handle a client-sent Cmd12 combat action frame. */
+export function handleCombatActionFrame(
+  session: ClientSession,
+  payload: Buffer,
+  connLog: Logger,
+  _capture: CaptureLogger,
+): void {
+  const action = parseClientCmd12Action(payload);
+  if (!action) {
+    connLog.warn('[world/combat] cmd-12 action parse failed (len=%d)', payload.length);
+    return;
+  }
+  connLog.debug('[world/combat] cmd-12 combat action=%d — no response', action.action);
 }
 
 // ── 3-step mech picker — Cmd7 (list-selection) routing ───────────────────────

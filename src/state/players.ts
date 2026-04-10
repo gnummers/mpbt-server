@@ -58,6 +58,8 @@ export interface ClientSession {
   combatInitialized?: boolean;
   /** Repeating setInterval that sends bot position updates during combat. */
   botPositionTimer?: ReturnType<typeof setInterval>;
+  /** Scripted bot hit points for the current single-client combat prototype. */
+  botHealth?: number;
   /**
    * Stable per-connection roster identifier used by world presence packets
    * (Cmd10/Cmd11/Cmd12/Cmd13). This is distinct from accountId and only needs to be

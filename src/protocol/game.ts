@@ -517,6 +517,25 @@ export interface ClientCmd9Moving extends ClientCmd8Coasting {
   legVelRaw: number;     // raw type1; legVel = (legVelRaw − MOTION_NEUTRAL) × 182
 }
 
+/** Raw decoded fields from client cmd10 weapon-fire geometry. */
+export interface ClientCmd10WeaponFire {
+  seq: number;
+  targetRaw: number;
+  weaponSlot: number;
+  flag: number;
+  angleSeedA: number;
+  angleSeedB: number;
+  impactXRaw: number;
+  impactYRaw: number;
+  impactZ: number;
+}
+
+/** Raw decoded fields from client cmd12 combat action. */
+export interface ClientCmd12Action {
+  seq: number;
+  action: number;
+}
+
 /**
  * Parse a client-sent combat cmd8 (coasting) movement frame.
  * Payload layout: 1b + seq + cmd + 15 arg bytes + 3 CRC [+ optional 1b]
@@ -556,6 +575,51 @@ export function parseClientCmd9Moving(payload: Buffer): ClientCmd9Moving | null 
     seq: payload[1] - 0x21,
     xRaw, yRaw, headingRaw,
     turnMomRaw, neutralRaw, throttleRaw, legVelRaw, rotationRaw,
+  };
+}
+
+/**
+ * Parse a client-sent combat cmd10 weapon-fire frame.
+ * Payload layout: byte target + byte weaponSlot+1 + byte flag+1
+ *   + type1 angleSeedA + type1 angleSeedB + type3 impactX + type3 impactY
+ *   + type2 impactZ + 3 CRC [+ optional ESC].
+ */
+export function parseClientCmd10WeaponFire(payload: Buffer): ClientCmd10WeaponFire | null {
+  if (payload.length < 24 || payload[0] !== 0x1B) return null;
+  if (payload[2] - 0x21 !== 10) return null;
+  let off = 3;
+  const targetRaw = payload[off] - 0x21; off += 1;
+  const weaponSlot = Math.max(0, payload[off] - 0x22); off += 1;
+  const flag = payload[off] - 0x22; off += 1;
+  let angleSeedA: number, angleSeedB: number, impactXRaw: number, impactYRaw: number, impactZ: number;
+  [angleSeedA, off] = decodeArgType1(payload, off);
+  [angleSeedB, off] = decodeArgType1(payload, off);
+  [impactXRaw, off] = decodeArgType3(payload, off);
+  [impactYRaw, off] = decodeArgType3(payload, off);
+  [impactZ,       ] = decodeArgType2(payload, off);
+  return {
+    seq: payload[1] - 0x21,
+    targetRaw,
+    weaponSlot,
+    flag,
+    angleSeedA,
+    angleSeedB,
+    impactXRaw,
+    impactYRaw,
+    impactZ,
+  };
+}
+
+/**
+ * Parse a client-sent combat cmd12 action frame. Known actions include weapon
+ * request/jump-jet controls, but server feedback is still capture-driven.
+ */
+export function parseClientCmd12Action(payload: Buffer): ClientCmd12Action | null {
+  if (payload.length < 7 || payload[0] !== 0x1B) return null;
+  if (payload[2] - 0x21 !== 12) return null;
+  return {
+    seq: payload[1] - 0x21,
+    action: payload[3] - 0x21,
   };
 }
 

@@ -97,6 +97,8 @@ import {
   notifyRoomArrival,
   notifyRoomDeparture,
   handleCombatMovementFrame,
+  handleCombatWeaponFireFrame,
+  handleCombatActionFrame,
   handleMechPickerCmd7,
 } from './world/world-handlers.js';
 
@@ -341,6 +343,10 @@ function handleWorldGameData(
     connLog.warn('[world] cmd-5 unsupported scene action type=%d', parsed.actionType);
 
   } else if (cmdIdx === 10) {
+    if (session.phase === 'combat') {
+      handleCombatWeaponFireFrame(session, payload, connLog, capture);
+      return;
+    }
     if (session.phase !== 'world') {
       connLog.debug('[world] cmd-10 ignored outside world phase: phase=%s', session.phase);
       return;
@@ -457,6 +463,8 @@ function handleWorldGameData(
     // Combat-mode inbound frame (client sends Cmd8/Cmd9 for movement/fire).
     if (cmdIdx === 8 || cmdIdx === 9) {
       handleCombatMovementFrame(session, payload, connLog, capture);
+    } else if (cmdIdx === 12) {
+      handleCombatActionFrame(session, payload, connLog, capture);
     } else if (cmdIdx === 20) {
       // Cmd20 — "examine self": correct combat-mode response is unconfirmed.
       // Sending the lobby-phase buildCmd20Packet here (world CRC seed) caused
