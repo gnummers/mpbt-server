@@ -719,28 +719,15 @@ export function handleCombatMovementFrame(
     const legVel = session.combatLegVel ?? 0;
     const speedMag = session.combatSpeedMag ?? 0;
     connLog.debug(
-      '[world/combat] cmd8 coasting: x=%d y=%d heading=%d throttle=%d legVel=%d speedMag=%d',
+      '[world/combat] cmd8 coasting: x=%d y=%d heading=%d latchedThrottle=%d latchedLegVel=%d latchedSpeedMag=%d; suppressing Cmd65 echo',
       session.combatX, session.combatY, frame.headingRaw, throttle, legVel, speedMag,
     );
 
-    send(
-      session.socket,
-      buildCmd65PositionSyncPacket(
-        {
-          slot:     0,
-          x:        session.combatX,
-          y:        session.combatY,
-          z:        0,
-          facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
-          throttle,
-          legVel,
-          speedMag,
-        },
-        nextSeq(session),
-      ),
-      capture,
-      'CMD65_MOVEMENT',
-    );
+    // Cmd8 is the client's coasting frame after its local acceleration inputs
+    // decay to zero. Echoing Cmd65 here can overwrite the physics target that
+    // was latched by the last Cmd9 echo, which makes key-release decelerate the
+    // mech to a stop. Keep the decoded position for server bookkeeping, but let
+    // the client continue on its current speedMag until the next Cmd9 update.
     return;
   }
 
@@ -763,10 +750,14 @@ export function handleCombatMovementFrame(
     session.combatSpeedMag = signedSpeedMag;
 
     connLog.debug(
-      '[world/combat] cmd9 moving: throttlePct=%d throttle=%d legVel=%d maxSpeedMag=%d signedSpeedMag=%d',
+      '[world/combat] cmd9 moving: throttlePct=%d throttle=%d legVel=%d maxSpeedMag=%d signedSpeedMag=%d; echoing speedMag latch',
       throttlePct, throttle, legVel, maxSpeedMag, signedSpeedMag,
     );
 
+    // Cmd65 writes directly into the client's combat motion registers. Echo
+    // only speedMag here: throttle/leg velocity are rebuilt locally while the
+    // key is held, and Cmd8 suppression preserves the latched speed after key
+    // release.
     send(
       session.socket,
       buildCmd65PositionSyncPacket(
@@ -776,8 +767,8 @@ export function handleCombatMovementFrame(
           y:        session.combatY,
           z:        0,
           facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
-          throttle,
-          legVel,
+          throttle: 0,
+          legVel:   0,
           speedMag: signedSpeedMag,
         },
         nextSeq(session),

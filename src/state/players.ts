@@ -126,11 +126,11 @@ export interface ClientSession {
   combatY?: number;
   /** Last raw heading value from client Cmd8/9. */
   combatHeadingRaw?: number;
-  /** Last decoded throttle velocity echoed in Cmd65 responses. */
+  /** Last decoded throttle velocity from client Cmd9. */
   combatThrottle?: number;
-  /** Last decoded leg velocity echoed in Cmd65 responses. */
+  /** Last decoded leg velocity from client Cmd9. */
   combatLegVel?: number;
-  /** Current speedMag echoed in Cmd65 responses. */
+  /** Current speedMag latched by Cmd65 responses. */
   combatSpeedMag?: number;
   /** Per-mech speedMag cap (mec_speed * 450), set at combat bootstrap. */
   combatMaxSpeedMag?: number;
