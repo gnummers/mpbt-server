@@ -35,6 +35,7 @@ import {
   getSolarisRoomExits,
   getSolarisSceneIndex,
   getSolarisRoomName,
+  getSolarisRoomDescription,
   getSolarisRoomIcon,
   WORLD_MECHS,
   getMechChassis,
@@ -315,6 +316,17 @@ export function sendSceneRefresh(
     capture,
     'CMD3_TRAVEL_COMPLETE',
   );
+
+  const desc = getSolarisRoomDescription(session.worldMapRoomId ?? 0);
+  if (desc) {
+    send(
+      session.socket,
+      buildCmd3BroadcastPacket(desc, nextSeq(session)),
+      capture,
+      'CMD3_ROOM_DESCRIPTION',
+    );
+  }
+
   send(session.socket, buildCmd5CursorNormalPacket(nextSeq(session)), capture, 'CMD5_NORMAL');
 }
 
