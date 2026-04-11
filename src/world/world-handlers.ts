@@ -14,6 +14,7 @@ import {
   buildCmd13PlayerArrivalPacket,
 } from '../protocol/world.js';
 import {
+  buildCmd20Packet,
   buildCmd36MessageViewPacket,
   parseClientCmd10WeaponFire,
   parseClientCmd12Action,
@@ -37,8 +38,10 @@ import {
 } from '../protocol/combat.js';
 import { PlayerRegistry, ClientSession } from '../state/players.js';
 import { storeMessage } from '../db/messages.js';
+import { updateCharacterMech } from '../db/characters.js';
 import { Logger }        from '../util/logger.js';
 import { CaptureLogger } from '../util/capture.js';
+import { buildMechExamineText } from '../data/mech-stats.js';
 import { mechInternalStateBytes } from '../data/mechs.js';
 
 import {
@@ -57,7 +60,7 @@ import {
   getMechChassisListForClass,
   MECH_CLASS_LIST_ID,
   MECH_CHASSIS_LIST_ID,
-  MECH_CHASSIS_PAGE_SIZE,
+  MECH_VARIANT_LIST_ID,
 } from './world-data.js';
 import {
   send,
@@ -948,53 +951,20 @@ export function handleCombatMovementFrame(
     session.combatX          = frame.xRaw - COORD_BIAS;
     session.combatY          = frame.yRaw - COORD_BIAS;
     session.combatHeadingRaw = frame.headingRaw;
-    const throttle = session.combatThrottle ?? 0;
-    const legVel   = session.combatLegVel   ?? 0;
-    let speedMag   = session.combatSpeedMag ?? 0;
 
-    // Ghidra: DAT_004f1f7c=0 → is_moving=false → client sends Cmd8 forever.
-    // When the mech is moving (clientSpeed!=0), echo Cmd65 with a non-zero
-    // throttle to set DAT_004f1f7c != 0 → is_moving=true → next frame is Cmd9.
-    const clientSpeed = frame.rotationRaw - MOTION_NEUTRAL;
+    const clientSpeed       = frame.rotationRaw - MOTION_NEUTRAL;
+
     if (clientSpeed !== 0) {
-      const maxSpeedMag   = session.combatMaxSpeedMag ?? 0;
-      const dir           = Math.sign(clientSpeed);
-      const boostThrottle = dir * MOTION_DIV;   // minimal non-zero value in correct direction
-      const boostSpeedMag = dir * maxSpeedMag;  // drive to run speed immediately
-      session.combatThrottle = boostThrottle;
-      session.combatLegVel   = 0;
-      session.combatSpeedMag = boostSpeedMag;
       connLog.debug(
-        '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=%d → boosting Cmd65 throttle=%d speedMag=%d',
-        session.combatX, session.combatY, frame.headingRaw, clientSpeed, boostThrottle, boostSpeedMag,
-      );
-      send(
-        session.socket,
-        buildCmd65PositionSyncPacket(
-          {
-            slot:     0,
-            x:        session.combatX,
-            y:        session.combatY,
-            z:        session.combatJumpAltitude ?? 0,
-            facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
-            throttle: boostThrottle,
-            legVel:   0,
-            speedMag: boostSpeedMag,
-          },
-          nextSeq(session),
-        ),
-        capture,
-        'CMD65_MOVEMENT',
+        '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=%d -> no echo (trust local key events)',
+        session.combatX, session.combatY, frame.headingRaw, clientSpeed,
       );
       return;
     }
 
-    // clientSpeed === 0 → mech has stopped; suppress Cmd65 echo to avoid
-    // resetting the movement accumulator while stationary.
-    if (speedMag !== 0) {
-      session.combatSpeedMag = 0;
-      speedMag = 0;
-    }
+    // clientSpeed === 0 → mech has fully stopped; reset so the next KP8 press
+    // is treated as a fresh startup (breaks the trap correctly).
+    session.combatSpeedMag  = 0;
     connLog.debug(
       '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=0 suppressing echo (stopped)',
       session.combatX, session.combatY, frame.headingRaw,
@@ -1013,33 +983,30 @@ export function handleCombatMovementFrame(
     const maxSpeedMag    = session.combatMaxSpeedMag ?? 0;
     const throttlePct    = frame.throttleRaw - MOTION_NEUTRAL; // negative = forward
     const legVelPct      = frame.legVelRaw   - MOTION_NEUTRAL;
-    const previousSpeedMag = session.combatSpeedMag ?? 0;
 
-    // Scale sVar2 (max=20 from KP8) directly to maxSpeedMag so full-throttle
-    // input produces run speed rather than stopping at walk speed.
+    // Scale sVar2 (max=45 from KP8, Ghidra-confirmed) to maxSpeedMag so full-throttle
+    // input produces run speed rather than capping at walk speed.
     const nextSpeedMag = maxSpeedMag > 0
       ? Math.max(-maxSpeedMag, Math.min(maxSpeedMag, Math.round(-throttlePct * maxSpeedMag / THROTTLE_RUN_SCALE)))
       : 0;
 
-    // Only latch new speed when the throttle or leg velocity is active; idle
-    // Cmd9 samples (legVelPct==0 and clientSpeed==0) preserve the last speed.
-    const clientSpeed  = frame.rotationRaw - MOTION_NEUTRAL;
-    const shouldLatch  = !(legVelPct === 0 && clientSpeed === 0);
-    const signedSpeedMag = shouldLatch ? nextSpeedMag : previousSpeedMag;
+    // iVar5 from FUN_0042c7a0: actual physics speed (+ve=forward, -ve=reverse).
+    const clientSpeed = frame.rotationRaw - MOTION_NEUTRAL;
 
-    const throttle = (frame.throttleRaw - MOTION_NEUTRAL) * MOTION_DIV;
-    const legVel   = (frame.legVelRaw   - MOTION_NEUTRAL) * MOTION_DIV;
+    // throttle: preserve DAT_004f1f7c as-is (no sign flip).
+    // Ghidra: encodeThrottle(V) → client reads back V; -throttle was wrong and
+    // caused DAT_004f1f7c oscillation limiting top speed to walk (~21 kph).
+    const throttle = throttlePct * MOTION_DIV;
+    const legVel   = legVelPct   * MOTION_DIV;
     session.combatThrottle = throttle;
     session.combatLegVel   = legVel;
-    session.combatSpeedMag = signedSpeedMag;
+    session.combatSpeedMag = clientSpeed;
 
     connLog.debug(
-      '[world/combat] cmd9 moving: throttlePct=%d legVelPct=%d clientSpeed=%d throttle=%d legVel=%d maxSpeedMag=%d nextSpeedMag=%d latchedSpeedMag=%d',
-      throttlePct, legVelPct, clientSpeed, throttle, legVel, maxSpeedMag, nextSpeedMag, signedSpeedMag,
+      '[world/combat] cmd9 moving: throttlePct=%d legVelPct=%d clientSpeed=%d throttle=%d legVel=%d maxSpeedMag=%d nextSpeedMag=%d',
+      throttlePct, legVelPct, clientSpeed, throttle, legVel, maxSpeedMag, nextSpeedMag,
     );
 
-    // Echo only the speed target; negate throttle so the sign convention
-    // (FUN_0042c830 negation of DAT_004f1f7c) keeps the client in Cmd9 mode.
     send(
       session.socket,
       buildCmd65PositionSyncPacket(
@@ -1049,9 +1016,9 @@ export function handleCombatMovementFrame(
           y:        session.combatY,
           z:        session.combatJumpAltitude ?? 0,
           facing:   (frame.headingRaw - MOTION_NEUTRAL) * MOTION_DIV,
-          throttle: -throttle,
+          throttle,
           legVel,
-          speedMag: signedSpeedMag,
+          speedMag: clientSpeed,
         },
         nextSeq(session),
       ),
@@ -1337,17 +1304,8 @@ export function handleMechPickerCmd7(
       return true;
     }
     const classIndex  = session.mechPickerClass ?? 0;
-    const page        = session.mechPickerChassisPage ?? 0;
     const chassisList = getMechChassisListForClass(classIndex);
-    const start       = page * MECH_CHASSIS_PAGE_SIZE;
-    const visible     = chassisList.slice(start, start + MECH_CHASSIS_PAGE_SIZE);
-    const hasMore     = start + MECH_CHASSIS_PAGE_SIZE < chassisList.length;
-
-    // "More…" row is always the last entry when hasMore is true.
-    if (hasMore && selection === visible.length + 1) {
-      sendMechChassisPicker(session, classIndex, connLog, capture, page + 1);
-      return true;
-    }
+    const visible     = chassisList.slice(0, 20);
     const chassis = visible[selection - 1];
     if (!chassis) {
       sendMechClassPicker(session, connLog, capture);
@@ -1357,7 +1315,7 @@ export function handleMechPickerCmd7(
     return true;
   }
 
-  if (step === 'variant' && listId === MECH_CLASS_LIST_ID) {
+  if (step === 'variant' && listId === MECH_VARIANT_LIST_ID) {
     if (selection === 0) {
       sendMechChassisPicker(session, session.mechPickerClass ?? 0, connLog, capture, session.mechPickerChassisPage ?? 0);
       return true;
@@ -1385,6 +1343,24 @@ export function handleMechPickerCmd7(
 
     connLog.info('[world] mech selected: callsign="%s" slot=%d id=%d typeString=%s',
       getDisplayName(session), chosen.slot, chosen.id, chosen.typeString);
+    if (session.accountId !== undefined) {
+      void updateCharacterMech(session.accountId, chosen.id, chosen.slot)
+        .then(() => {
+          connLog.info(
+            '[world] persisted mech selection: accountId=%d slot=%d id=%d typeString=%s',
+            session.accountId, chosen.slot, chosen.id, chosen.typeString,
+          );
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          connLog.error(
+            '[world] failed to persist mech selection: accountId=%d slot=%d id=%d err=%s',
+            session.accountId, chosen.slot, chosen.id, msg,
+          );
+        });
+    } else {
+      connLog.warn('[world] mech selection not persisted: no accountId on session');
+    }
     send(
       session.socket,
       buildCmd3BroadcastPacket(`Mech selected: ${chosen.typeString}`, nextSeq(session)),
@@ -1396,4 +1372,53 @@ export function handleMechPickerCmd7(
   }
 
   return false;
+}
+
+export function handleMechPickerCmd20(
+  session: ClientSession,
+  selection: number,
+  connLog: Logger,
+  capture: CaptureLogger,
+): boolean {
+  const step = session.mechPickerStep;
+  const dialogId = 5;
+
+  if (!step) return false;
+
+  if (step !== 'variant') {
+    connLog.info('[world] cmd-20 examine ignored during mech picker step=%s selection=%d', step, selection);
+    send(
+      session.socket,
+      buildCmd20Packet(dialogId, 2, 'Select a mech variant to examine its loadout.', nextSeq(session)),
+      capture,
+      'CMD20_MECH_PICKER_HINT',
+    );
+    return true;
+  }
+
+  const chassis = session.mechPickerChassis ?? '';
+  const variants = WORLD_MECHS.filter(mech => getMechChassis(mech.typeString) === chassis);
+  const slot = Math.min(variants.length - 1, Math.max(0, selection));
+  const chosen = variants[slot];
+  if (!chosen) {
+    connLog.warn('[world] cmd-20 examine invalid variant selection=%d chassis=%s', selection, chassis);
+    send(
+      session.socket,
+      buildCmd20Packet(dialogId, 2, 'Select a mech variant to examine its loadout.', nextSeq(session)),
+      capture,
+      'CMD20_MECH_PICKER_HINT',
+    );
+    return true;
+  }
+
+  const examineText = buildMechExamineText(chosen.typeString);
+  connLog.info('[world] cmd-20 mech picker examine: slot=%d mech_id=%d (%s) → %j',
+    slot, chosen.id, chosen.typeString, examineText);
+  send(
+    session.socket,
+    buildCmd20Packet(dialogId, 2, examineText, nextSeq(session)),
+    capture,
+    'CMD20_STATS',
+  );
+  return true;
 }

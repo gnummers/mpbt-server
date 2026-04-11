@@ -34,6 +34,7 @@ import {
 import {
   buildCmd36MessageViewPacket,
   buildCmd37OpenComposePacket,
+  decodeArgType4,
   parseClientCmd4,
   parseClientCmd5SceneAction,
   parseClientCmd10MapReply,
@@ -101,6 +102,7 @@ import {
   handleCombatWeaponFireFrame,
   handleCombatActionFrame,
   handleMechPickerCmd7,
+  handleMechPickerCmd20,
 } from './world/world-handlers.js';
 
 const WELCOME_TEXT = 'Welcome to the game world.';
@@ -414,6 +416,18 @@ function handleWorldGameData(
       return;
     }
     handleMapTravelReply(players, session, parsed.contextId, parsed.selection, parsed.selectedRoomId, connLog, capture);
+
+  } else if (cmdIdx === 20) {
+    let selection = 0;
+    if (payload.length >= 8) {
+      const [slotPlusOne] = decodeArgType4(payload, 3);
+      const requestedSlot = Number.isFinite(slotPlusOne) ? slotPlusOne - 1 : 0;
+      selection = Math.max(0, requestedSlot);
+    }
+    if (handleMechPickerCmd20(session, selection, connLog, capture)) {
+      return;
+    }
+    connLog.debug('[world] cmd-20 ignored outside mech picker: selection=%d', selection);
 
   } else if (cmdIdx === 21) {
     const parsed = parseClientCmd21TextReply(payload);
@@ -772,4 +786,3 @@ export function startWorldServer(log: Logger, players: PlayerRegistry): net.Serv
 
   return worldServer;
 }
-

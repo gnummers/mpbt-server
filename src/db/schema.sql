@@ -30,8 +30,13 @@ CREATE TABLE IF NOT EXISTS characters (
     display_name VARCHAR(64)  NOT NULL,
     allegiance   VARCHAR(16)  NOT NULL
         CHECK (allegiance IN ('Davion','Steiner','Liao','Marik','Kurita')),
+    mech_id      INTEGER,
+    mech_slot    INTEGER,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS mech_id   INTEGER;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS mech_slot INTEGER;
 
 -- Fast lookup by account (one character per account enforced by UNIQUE above).
 CREATE INDEX IF NOT EXISTS characters_account_id_idx ON characters (account_id);

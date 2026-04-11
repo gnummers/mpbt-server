@@ -224,62 +224,148 @@ export function getSolarisRoomIcon(roomId: number): number {
 
 // ── Mech picker constants ─────────────────────────────────────────────────────
 
-/** Cmd26 listId for the weight-class picker (step 1). */
-export const MECH_CLASS_LIST_ID   = 0x20;
-/** Cmd26 listId for the chassis picker (step 2). */
-export const MECH_CHASSIS_LIST_ID = 0x3e;
+/** Cmd26 listId/typeFlag for the weight-class picker (step 1). */
+export const MECH_CLASS_LIST_ID   = 0x00;
+/** Cmd26 listId/typeFlag for the chassis picker (step 2). */
+export const MECH_CHASSIS_LIST_ID = 0x00;
+/** Cmd26 listId/typeFlag for the variant picker (step 3). */
+export const MECH_VARIANT_LIST_ID = 0x00;
 /** Cmd26 can safely carry at most 20 rows; reserve one row for the "More…" pagination entry. */
 export const MECH_CHASSIS_PAGE_SIZE = 19;
+export const MECH_CLASS_FOOTER = 'Choose a mech class:';
+export const MECH_CHASSIS_FOOTER = 'Choose a mech:';
+export const MECH_VARIANT_FOOTER = 'Select or examine a mech:';
 
 /** Display labels for each weight class (slot 0..3). */
 export const CLASS_LABELS = ['Light', 'Medium', 'Heavy', 'Assault'] as const;
 /** Uppercase keys used to filter MECH_STATS by weight class. */
 export const CLASS_KEYS   = ['LIGHT', 'MEDIUM', 'HEAVY', 'ASSAULT'] as const;
+type MechWeightClass = typeof CLASS_KEYS[number];
 
-/** Static fallback chassis name map for mechs that may not appear in MECH_STATS. */
-export const CHASSIS_BY_PREFIX: Record<string, string> = {
-  ACM: 'Arachne', ADR: 'Adder', ANH: 'Annihilator', AS7: 'Atlas',
-  BLR: 'BattleMaster', BNC: 'Banshee', BS1: 'Black Hawk',
-  BT:  'BattleMaster', C3I: 'C3I Upgrade', CAT: 'Catapult',
-  CBR: 'Cobra', CLN: 'Clan Nova', CLR: 'Clint', CN9: 'Centurion',
-  COM: 'Commando', CPN: 'Capellan', CTF: 'Cataphract', CTS: 'Centurion',
-  DRG: 'Dragon', DV8: 'Dervish', DW: 'Dire Wolf', EBJ: 'Ebon Jaguar',
-  ENF: 'Enforcer', EXC: 'Excalibur', FLS: 'Flashman', FRB: 'Firebee',
-  GHR: 'Grasshopper', GLG: 'Galahad', GRF: 'Griffin', HBK: 'Hunchback',
-  HCT: 'Hatchetman', HGN: 'Highlander', HM:  'Hammer', HNT: 'Huntsman',
-  HPT: 'Hellspawn', HSN: 'Hussar', HTM: 'Hatamoto', HVT: 'Heavy',
-  IIC: 'IIC', JM6: 'Jagermech', JR7: 'Jenner', JVN: 'Javelin',
-  KGC: 'King Crab', KTO: 'Kintaro', LCT: 'Locust', LGB: 'Longbow',
-  MAD: 'Marauder', MDG: 'Mad Dog', MDD: 'Mad Dog', MLX: 'Mist Lynx',
-  MNS: 'Mauler', MNT: 'Mantis', MON: 'Mongoose', MRM: 'Marauder IIC',
-  NVA: 'Nova', ONI: 'Ontos', OSR: 'Osiris', PNT: 'Panther',
-  PPC: 'PPCer', PRT: 'Praetorian', PTR: 'Penetrator', RFL: 'Rifleman',
-  RGR: 'Ranger', RJX: 'Rjin', RVN: 'Raven', SDR: 'Spider',
-  SHD: 'Shadow Hawk', SHK: 'Shrike', SMN: 'Summoner', SRM: 'Srm',
-  STK: 'Stalker', STO: 'Stormcrow', STR: 'Striker', SVN: 'Savannah Master',
-  TBT: 'Trebuchet', THG: 'Thug', TIM: 'Timber Wolf', TOR: 'Talon',
-  UM:  'Urbanmech', VLK: 'Vulkan', VMN: 'Vulcan', VND: 'Vindicator',
-  VPR: 'Viper', VP:  'Viper', WAR: 'Warhammer', WHM: 'Warhammer',
-  WLF: 'Wolf Trap', WOL: 'Wolfhound', WSP: 'Wasp', YMN: 'Yeoman',
-  ZZZ: 'Test Mech',
+type CanonicalMechCatalogEntry = {
+  chassis: string;
+  weightClass: MechWeightClass;
 };
 
-export const PREFIX_TO_CHASSIS = new Map<string, string>();
-for (const [typeString, stat] of MECH_STATS.entries()) {
-  if (stat.disabled) continue;
-  const prefix = typeString.slice(0, typeString.indexOf('-'));
-  if (prefix && !PREFIX_TO_CHASSIS.has(prefix)) {
-    PREFIX_TO_CHASSIS.set(prefix, stat.name);
-  }
+/**
+ * Canonical chassis/class catalog derived from BT-MAN.PDF Appendix III and the
+ * MPBT.MSG mech string table. Keys may be either a full variant designation
+ * (for exact overrides like MAD-4A) or a chassis prefix (e.g. "JR7").
+ *
+ * A few variants shipped in MPBT.MSG are omitted from the manual's Appendix
+ * III. Those still use the game's own chassis strings when present in MSG; the
+ * HNT-151 variant is the one remaining local-source gap, so it is normalized by
+ * designation as Hornet.
+ */
+export const CANONICAL_MECH_CATALOG: Record<string, CanonicalMechCatalogEntry> = {
+  LCT:     { chassis: 'Locust',       weightClass: 'LIGHT'   },
+  STG:     { chassis: 'Stinger',      weightClass: 'LIGHT'   },
+  WSP:     { chassis: 'Wasp',         weightClass: 'LIGHT'   },
+  COM:     { chassis: 'Commando',     weightClass: 'LIGHT'   },
+  JVN:     { chassis: 'Javelin',      weightClass: 'LIGHT'   },
+  SDR:     { chassis: 'Spider',       weightClass: 'LIGHT'   },
+  UM:      { chassis: 'UrbanMech',    weightClass: 'LIGHT'   },
+  VLK:     { chassis: 'Valkyrie',     weightClass: 'LIGHT'   },
+  JR7:     { chassis: 'Jenner',       weightClass: 'LIGHT'   },
+  PNT:     { chassis: 'Panther',      weightClass: 'LIGHT'   },
+  FLE:     { chassis: 'Flea',         weightClass: 'LIGHT'   },
+  FLC:     { chassis: 'Falcon',       weightClass: 'LIGHT'   },
+  FFL:     { chassis: 'Firefly',      weightClass: 'LIGHT'   },
+  FS9:     { chassis: 'Firestarter',  weightClass: 'LIGHT'   },
+  HNT:     { chassis: 'Hornet',       weightClass: 'LIGHT'   },
+  OTT:     { chassis: 'Ostscout',     weightClass: 'LIGHT'   },
+  RVN:     { chassis: 'Raven',        weightClass: 'LIGHT'   },
+  WLF:     { chassis: 'Wolfhound',    weightClass: 'LIGHT'   },
+
+  ASN:     { chassis: 'Assassin',     weightClass: 'MEDIUM'  },
+  CDA:     { chassis: 'Cicada',       weightClass: 'MEDIUM'  },
+  WTH:     { chassis: 'Whitworth',    weightClass: 'MEDIUM'  },
+  BJ:      { chassis: 'Blackjack',    weightClass: 'MEDIUM'  },
+  PXH:     { chassis: 'Phoenix Hawk', weightClass: 'MEDIUM'  },
+  VND:     { chassis: 'Vindicator',   weightClass: 'MEDIUM'  },
+  CLNT:    { chassis: 'Clint',        weightClass: 'MEDIUM'  },
+  CN9:     { chassis: 'Centurion',    weightClass: 'MEDIUM'  },
+  ENF:     { chassis: 'Enforcer',     weightClass: 'MEDIUM'  },
+  HBK:     { chassis: 'Hunchback',    weightClass: 'MEDIUM'  },
+  TBT:     { chassis: 'Trebuchet',    weightClass: 'MEDIUM'  },
+  DV:      { chassis: 'Dervish',      weightClass: 'MEDIUM'  },
+  GRF:     { chassis: 'Griffin',      weightClass: 'MEDIUM'  },
+  HCT:     { chassis: 'Hatchetman',   weightClass: 'MEDIUM'  },
+  HER:     { chassis: 'Hermes II',    weightClass: 'MEDIUM'  },
+  HOP:     { chassis: 'Hoplite',      weightClass: 'MEDIUM'  },
+  SCP:     { chassis: 'Scorpion',     weightClass: 'MEDIUM'  },
+  SHD:     { chassis: 'Shadow Hawk',  weightClass: 'MEDIUM'  },
+  VL:      { chassis: 'Vulcan',       weightClass: 'MEDIUM'  },
+
+  WVR:     { chassis: 'Wolverine',    weightClass: 'HEAVY'   },
+  DRG:     { chassis: 'Dragon',       weightClass: 'HEAVY'   },
+  OSR:     { chassis: 'Ostroc',       weightClass: 'HEAVY'   },
+  OTL:     { chassis: 'Ostsol',       weightClass: 'HEAVY'   },
+  QKD:     { chassis: 'Quickdraw',    weightClass: 'HEAVY'   },
+  RFL:     { chassis: 'Rifleman',     weightClass: 'HEAVY'   },
+  CPLT:    { chassis: 'Catapult',     weightClass: 'HEAVY'   },
+  CRD:     { chassis: 'Crusader',     weightClass: 'HEAVY'   },
+  JM6:     { chassis: 'JagerMech',    weightClass: 'HEAVY'   },
+  TDR:     { chassis: 'Thunderbolt',  weightClass: 'HEAVY'   },
+  ARC:     { chassis: 'Archer',       weightClass: 'HEAVY'   },
+  GHR:     { chassis: 'Grasshopper',  weightClass: 'HEAVY'   },
+  WHM:     { chassis: 'Warhammer',    weightClass: 'HEAVY'   },
+  MAD:     { chassis: 'Marauder',     weightClass: 'HEAVY'   },
+  ON1:     { chassis: 'Orion',        weightClass: 'HEAVY'   },
+
+  AWS:     { chassis: 'Awesome',      weightClass: 'ASSAULT' },
+  CGR:     { chassis: 'Charger',      weightClass: 'ASSAULT' },
+  GOL:     { chassis: 'Goliath',      weightClass: 'ASSAULT' },
+  VTR:     { chassis: 'Victor',       weightClass: 'ASSAULT' },
+  ZEU:     { chassis: 'Zeus',         weightClass: 'ASSAULT' },
+  BLR:     { chassis: 'BattleMaster', weightClass: 'ASSAULT' },
+  SHG:     { chassis: 'Shogun',       weightClass: 'ASSAULT' },
+  STK:     { chassis: 'Stalker',      weightClass: 'ASSAULT' },
+  CP10:    { chassis: 'Cyclops',      weightClass: 'ASSAULT' },
+  BNC:     { chassis: 'Banshee',      weightClass: 'ASSAULT' },
+  ANH:     { chassis: 'Annihilator',  weightClass: 'ASSAULT' },
+  AS7:     { chassis: 'Atlas',        weightClass: 'ASSAULT' },
+  IMP:     { chassis: 'Imp',          weightClass: 'ASSAULT' },
+  'MAD-4A': { chassis: 'Marauder II', weightClass: 'ASSAULT' },
+};
+
+function getMechPrefix(typeString: string): string {
+  const hyphen = typeString.indexOf('-');
+  return (hyphen > 0 ? typeString.slice(0, hyphen) : typeString).toUpperCase();
+}
+
+function getCanonicalMechCatalogEntry(typeString: string): CanonicalMechCatalogEntry | undefined {
+  const key = typeString.toUpperCase();
+  return CANONICAL_MECH_CATALOG[key] ?? CANONICAL_MECH_CATALOG[getMechPrefix(key)];
 }
 
 /** Return the canonical chassis name for a mech typeString, e.g. "JR7-1X" -> "Jenner". */
 export function getMechChassis(typeString: string): string {
+  const canonical = getCanonicalMechCatalogEntry(typeString);
+  if (canonical) return canonical.chassis;
+
   const stat = MECH_STATS.get(typeString);
   if (stat && !stat.disabled) return stat.name;
-  const hyphen = typeString.indexOf('-');
-  const prefix = hyphen > 0 ? typeString.slice(0, hyphen) : typeString;
-  return PREFIX_TO_CHASSIS.get(prefix) ?? CHASSIS_BY_PREFIX[prefix] ?? prefix;
+
+  return getMechPrefix(typeString);
+}
+
+/** Classify a mech entry into one of the four weight classes. */
+export function getMechWeightClass(mech: { typeString: string; tonnage?: number }): MechWeightClass | undefined {
+  const canonical = getCanonicalMechCatalogEntry(mech.typeString);
+  if (canonical) return canonical.weightClass;
+
+  const stat = MECH_STATS.get(mech.typeString);
+  if (stat) {
+    return stat.weightClass.toUpperCase() as MechWeightClass;
+  }
+
+  const tons = mech.tonnage ?? 0;
+  if (tons > 0 && tons <= 35) return 'LIGHT';
+  if (tons >= 40 && tons <= 55) return 'MEDIUM';
+  if (tons >= 60 && tons <= 75) return 'HEAVY';
+  if (tons >= 80) return 'ASSAULT';
+  return undefined;
 }
 
 /** Return sorted chassis names for the chosen weight-class index. */
@@ -288,8 +374,7 @@ export function getMechChassisListForClass(classIndex: number): string[] {
   const seenChassis = new Set<string>();
   const chassisList: string[] = [];
   for (const mech of WORLD_MECHS) {
-    const stat = MECH_STATS.get(mech.typeString);
-    if (classKey && stat && !stat.disabled && stat.weightClass.toUpperCase() !== classKey) continue;
+    if (classKey && getMechWeightClass(mech) !== classKey) continue;
     const chassis = getMechChassis(mech.typeString);
     if (!seenChassis.has(chassis)) {
       seenChassis.add(chassis);
@@ -298,6 +383,32 @@ export function getMechChassisListForClass(classIndex: number): string[] {
   }
   chassisList.sort((a, b) => a.localeCompare(b));
   return chassisList;
+}
+
+const CLASS_REPRESENTATIVE_TYPES = [
+  'LCT-1V',
+  'HBK-4G',
+  'MAD-3R',
+  'AS7-D',
+] as const;
+
+/** Return one representative mech entry for the given weight class index. */
+export function getRepresentativeMechForClass(classIndex: number) {
+  const classKey = CLASS_KEYS[classIndex] as string | undefined;
+  if (!classKey) return undefined;
+
+  const preferredType = CLASS_REPRESENTATIVE_TYPES[classIndex];
+  const preferred = preferredType
+    ? WORLD_MECHS.find(mech => mech.typeString === preferredType)
+    : undefined;
+  if (preferred) return preferred;
+
+  return WORLD_MECHS.find(mech => getMechWeightClass(mech) === classKey);
+}
+
+/** Return one representative mech entry for the given chassis name. */
+export function getRepresentativeMechForChassis(chassis: string) {
+  return WORLD_MECHS.find(mech => getMechChassis(mech.typeString) === chassis);
 }
 
 /** Convert maxSpeedMag back to displayed kph, matching the client's mec_speed scale. */

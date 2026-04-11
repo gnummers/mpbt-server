@@ -333,6 +333,22 @@ const MECHS: MechEntry[] = (() => {
 })();
 log.info('Loaded %d mechs from mechdata/', MECHS.length);
 
+function getDefaultMech(): MechEntry | undefined {
+  return MECHS[0];
+}
+
+function resolveSelectedMech(session: ClientSession): MechEntry | undefined {
+  if (session.selectedMechId !== undefined) {
+    const byId = MECHS.find(mech => mech.id === session.selectedMechId);
+    if (byId) return byId;
+  }
+  if (session.selectedMechSlot !== undefined) {
+    const bySlot = MECHS.find(mech => mech.slot === session.selectedMechSlot);
+    if (bySlot) return bySlot;
+  }
+  return getDefaultMech();
+}
+
 /**
  * Advance and return the server's outgoing sequence number.
  * Sequence values 0–42 are valid data frames (val ≤ 42 → proceed in client pre-handler).
@@ -405,12 +421,13 @@ function handleGameData(
         // Returning player: character on file → straight to world.
         session.displayName = character.display_name;
         session.allegiance  = character.allegiance;
+        session.selectedMechId = character.mech_id ?? undefined;
+        session.selectedMechSlot = character.mech_slot ?? undefined;
         connLog.info(
-          '[game] character found: displayName="%s" allegiance=%s → REDIRECT to world',
+          '[game] character found: displayName="%s" allegiance=%s mech_id=%s mech_slot=%s → REDIRECT to world',
           character.display_name, character.allegiance,
+          character.mech_id ?? 'default', character.mech_slot ?? 'default',
         );
-        // Do not pre-set selectedMechId here — ensureDefaultWorldLaunch() inside
-        // issueWorldRedirect() will choose the default mech and call launchRegistry.record().
         issueWorldRedirect(session, connLog, capture);
       } else {
         // First login: no character → prompt for callsign + House allegiance.
@@ -449,7 +466,11 @@ function handleGameData(
       // M6 pre-combat launch-confirm dialog.
       if (selection === 1) {
         const pendingSlot = session.pendingMechSlot ?? 0;
-        const selectedMech = MECHS.find(m => m.slot === pendingSlot) ?? MECHS[0];
+        const selectedMech = MECHS.find(m => m.slot === pendingSlot) ?? getDefaultMech();
+        if (!selectedMech) {
+          connLog.warn('[game] no mechs loaded; cannot confirm launch mech');
+          return;
+        }
         recordWorldLaunch(session, selectedMech, connLog);
         connLog.info(
           '[game] confirmed (Launch!) → recording launch mech=%s (id=%d) and REDIRECT to %s:%d',
@@ -492,13 +513,22 @@ function handleGameData(
       return;
     }
 
-    createCharacter(session.accountId!, displayName, allegiance).then((character) => {
+    const defaultMech = getDefaultMech();
+    if (!defaultMech) {
+      connLog.error('[game] char-creation cannot continue: no mechs loaded');
+      session.socket.destroy();
+      return;
+    }
+
+    createCharacter(session.accountId!, displayName, allegiance, defaultMech.id, defaultMech.slot).then((character) => {
       session.displayName = character.display_name;
       session.allegiance = character.allegiance;
+      session.selectedMechId = character.mech_id ?? defaultMech.id;
+      session.selectedMechSlot = character.mech_slot ?? defaultMech.slot;
 
       connLog.info(
-        '[game] char-creation Cmd9 accepted: displayName="%s" allegiance=%s → REDIRECT',
-        displayName, allegiance,
+        '[game] char-creation Cmd9 accepted: displayName="%s" allegiance=%s mech=%s (id=%d) → REDIRECT',
+        displayName, allegiance, defaultMech.typeString, defaultMech.id,
       );
       issueWorldRedirect(session, connLog, capture);
     }).catch((err: unknown) => {
@@ -588,15 +618,13 @@ function recordWorldLaunch(
   );
 }
 
-function ensureDefaultWorldLaunch(session: ClientSession, connLog: Logger): void {
-  // Skip if recordWorldLaunch() was already called at this call site (selectedMechId is set).
-  if (session.selectedMechId !== undefined) return;
-  const defaultMech = MECHS[0];
-  if (!defaultMech) {
-    connLog.warn('[game] cannot record default world launch: no mechs loaded');
+function ensureWorldLaunch(session: ClientSession, connLog: Logger): void {
+  const mech = resolveSelectedMech(session);
+  if (!mech) {
+    connLog.warn('[game] cannot record world launch: no mechs loaded');
     return;
   }
-  recordWorldLaunch(session, defaultMech, connLog);
+  recordWorldLaunch(session, mech, connLog);
 }
 
 /**
@@ -619,7 +647,7 @@ function issueWorldRedirect(
     throw new Error(`Invalid REDIRECT addr "${redirectAddr}"`);
   }
   const redir = buildRedirectPacket(redirectAddr);
-  ensureDefaultWorldLaunch(session, connLog);
+  ensureWorldLaunch(session, connLog);
   connLog.info('[game] sending REDIRECT → %s', redirectAddr);
   send(session.socket, redir, capture, 'REDIRECT');
   session.phase = 'closing';

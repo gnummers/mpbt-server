@@ -39,10 +39,16 @@ import {
   WORLD_MECHS,
   getMechChassis,
   getMechChassisListForClass,
+  getRepresentativeMechForClass,
+  getRepresentativeMechForChassis,
   CLASS_LABELS,
   CLASS_KEYS,
+  MECH_CLASS_FOOTER,
+  MECH_CHASSIS_FOOTER,
   MECH_CLASS_LIST_ID,
   MECH_CHASSIS_LIST_ID,
+  MECH_VARIANT_FOOTER,
+  MECH_VARIANT_LIST_ID,
   MECH_CHASSIS_PAGE_SIZE,
   mechKph,
 } from './world-data.js';
@@ -436,22 +442,25 @@ export function sendMechClassPicker(
   session.mechPickerClass       = undefined;
   session.mechPickerChassis     = undefined;
   session.mechPickerChassisPage = undefined;
-  const entries = CLASS_LABELS.map((label, slot) => ({
-    id:         0,
-    mechType:   0,
-    slot,
-    typeString: '',
-    variant:    '',
-    name:       label,
-    walkSpeedMag: 0,
-    maxSpeedMag: 0,
-    extraCritCount: 0,
-    tonnage:    0,
-  }));
+  const entries = CLASS_LABELS.map((label, slot) => {
+    const preview = getRepresentativeMechForClass(slot);
+    return {
+      id:             preview?.id ?? 0,
+      mechType:       preview?.mechType ?? 0,
+      slot,
+      typeString:     '',
+      variant:        '',
+      name:           label,
+      walkSpeedMag:   0,
+      maxSpeedMag:    0,
+      extraCritCount: 0,
+      tonnage:        0,
+    };
+  });
   connLog.info('[world] sending mech class picker');
   send(
     session.socket,
-    buildMechListPacket(entries, MECH_CLASS_LIST_ID, '', nextSeq(session)),
+    buildMechListPacket(entries, MECH_CLASS_LIST_ID, MECH_CLASS_FOOTER, nextSeq(session)),
     capture,
     'CMD26_MECH_CLASS_PICKER',
   );
@@ -468,47 +477,34 @@ export function sendMechChassisPicker(
 ): void {
   session.mechPickerStep        = 'chassis';
   session.mechPickerClass       = classIndex;
-  session.mechPickerChassisPage = page;
+  session.mechPickerChassisPage = 0;
 
   const classKey    = CLASS_KEYS[classIndex] as string | undefined;
   const chassisList = getMechChassisListForClass(classIndex);
-  const start       = page * MECH_CHASSIS_PAGE_SIZE;
-  const visible     = chassisList.slice(start, start + MECH_CHASSIS_PAGE_SIZE);
-  const hasMore     = start + MECH_CHASSIS_PAGE_SIZE < chassisList.length;
+  const start       = 0;
+  const visible     = chassisList.slice(start, start + 20);
 
-  const entries = visible.map((chassis, slot) => ({
-    id:         0,
-    mechType:   0,
-    slot,
-    typeString: '',
-    variant:    '',
-    name:       chassis,
-    walkSpeedMag: 0,
-    maxSpeedMag: 0,
-    extraCritCount: 0,
-    tonnage:    0,
-  }));
-
-  if (hasMore) {
-    entries.push({
-      id:         0,
-      mechType:   0,
-      slot:       visible.length,
+  const entries = visible.map((chassis, slot) => {
+    const preview = getRepresentativeMechForChassis(chassis);
+    return {
+      id:         preview?.id ?? 0,
+      mechType:   preview?.mechType ?? 0,
+      slot,
       typeString: '',
       variant:    '',
-      name:       'More...',
+      name:       chassis,
       walkSpeedMag: 0,
       maxSpeedMag: 0,
       extraCritCount: 0,
       tonnage:    0,
-    });
-  }
+    };
+  });
 
   connLog.info('[world] sending mech chassis picker: class=%s page=%d entries=%d total=%d',
-    classKey ?? classIndex, page, entries.length, chassisList.length);
+    classKey ?? classIndex, 0, entries.length, chassisList.length);
   send(
     session.socket,
-    buildMechListPacket(entries, MECH_CHASSIS_LIST_ID, '', nextSeq(session)),
+    buildMechListPacket(entries, MECH_CHASSIS_LIST_ID, MECH_CHASSIS_FOOTER, nextSeq(session)),
     capture,
     'CMD26_MECH_CHASSIS_PICKER',
   );
@@ -526,10 +522,14 @@ export function sendMechVariantPicker(
   session.mechPickerChassis = chassis;
 
   const variants = WORLD_MECHS.filter(mech => getMechChassis(mech.typeString) === chassis);
-  const entries = variants.map(mech => ({
+  // slot must be the 0-based positional index so the client echoes back (slot+1)
+  // as the selection, which the handler converts back to variants[selection-1].
+  // Using mech.slot (the raw DB slot) causes out-of-range lookups for any mech
+  // whose DB slot is not equal to its position in this filtered list.
+  const entries = variants.map((mech, i) => ({
     id:         mech.id,
     mechType:   mech.mechType,
-    slot:       mech.slot,
+    slot:       i,
     typeString: mech.typeString,
     variant:    `${mechKph(mech.walkSpeedMag)}/${mechKph(mech.maxSpeedMag)} kph`,
     name:       mech.typeString,
@@ -542,7 +542,7 @@ export function sendMechVariantPicker(
   connLog.info('[world] sending mech variant picker: chassis="%s" entries=%d', chassis, entries.length);
   send(
     session.socket,
-    buildMechListPacket(entries, MECH_CLASS_LIST_ID, '', nextSeq(session)),
+    buildMechListPacket(entries, MECH_VARIANT_LIST_ID, MECH_VARIANT_FOOTER, nextSeq(session)),
     capture,
     'CMD26_MECH_VARIANT_PICKER',
   );
