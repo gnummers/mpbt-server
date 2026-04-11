@@ -15,13 +15,15 @@ export interface CharacterRow {
   account_id: number;
   display_name: string;
   allegiance: Allegiance;
+  mech_id: number | null;
+  mech_slot: number | null;
   created_at: Date;
 }
 
 /** Find the character for a given account, or null if none exists. */
 export async function findCharacter(accountId: number): Promise<CharacterRow | null> {
   const res = await pool.query<CharacterRow>(
-    `SELECT id, account_id, display_name, allegiance, created_at
+    `SELECT id, account_id, display_name, allegiance, mech_id, mech_slot, created_at
      FROM characters
      WHERE account_id = $1
      LIMIT 1`,
@@ -41,12 +43,14 @@ export async function createCharacter(
   accountId: number,
   displayName: string,
   allegiance: Allegiance,
+  mechId: number,
+  mechSlot: number,
 ): Promise<CharacterRow> {
   const res = await pool.query<CharacterRow>(
-    `INSERT INTO characters (account_id, display_name, allegiance)
-     VALUES ($1, $2, $3)
-     RETURNING id, account_id, display_name, allegiance, created_at`,
-    [accountId, displayName, allegiance],
+    `INSERT INTO characters (account_id, display_name, allegiance, mech_id, mech_slot)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, account_id, display_name, allegiance, mech_id, mech_slot, created_at`,
+    [accountId, displayName, allegiance, mechId, mechSlot],
   );
   return res.rows[0]!;
 }
@@ -61,6 +65,20 @@ export async function updateCharacterAllegiance(
   await pool.query(
     `UPDATE characters SET allegiance = $1 WHERE account_id = $2`,
     [allegiance, accountId],
+  );
+}
+
+/** Persist the player's selected mech for future lobby/world launches. */
+export async function updateCharacterMech(
+  accountId: number,
+  mechId: number,
+  mechSlot: number,
+): Promise<void> {
+  await pool.query(
+    `UPDATE characters
+     SET mech_id = $1, mech_slot = $2
+     WHERE account_id = $3`,
+    [mechId, mechSlot, accountId],
   );
 }
 

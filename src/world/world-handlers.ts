@@ -14,6 +14,7 @@ import {
   buildCmd13PlayerArrivalPacket,
 } from '../protocol/world.js';
 import {
+  buildCmd20Packet,
   buildCmd36MessageViewPacket,
   parseClientCmd10WeaponFire,
   parseClientCmd12Action,
@@ -37,8 +38,10 @@ import {
 } from '../protocol/combat.js';
 import { PlayerRegistry, ClientSession } from '../state/players.js';
 import { storeMessage } from '../db/messages.js';
+import { updateCharacterMech } from '../db/characters.js';
 import { Logger }        from '../util/logger.js';
 import { CaptureLogger } from '../util/capture.js';
+import { buildMechExamineText } from '../data/mech-stats.js';
 import { mechInternalStateBytes } from '../data/mechs.js';
 
 import {
@@ -57,7 +60,7 @@ import {
   getMechChassisListForClass,
   MECH_CLASS_LIST_ID,
   MECH_CHASSIS_LIST_ID,
-  MECH_CHASSIS_PAGE_SIZE,
+  MECH_VARIANT_LIST_ID,
 } from './world-data.js';
 import {
   send,
@@ -1301,17 +1304,8 @@ export function handleMechPickerCmd7(
       return true;
     }
     const classIndex  = session.mechPickerClass ?? 0;
-    const page        = session.mechPickerChassisPage ?? 0;
     const chassisList = getMechChassisListForClass(classIndex);
-    const start       = page * MECH_CHASSIS_PAGE_SIZE;
-    const visible     = chassisList.slice(start, start + MECH_CHASSIS_PAGE_SIZE);
-    const hasMore     = start + MECH_CHASSIS_PAGE_SIZE < chassisList.length;
-
-    // "More…" row is always the last entry when hasMore is true.
-    if (hasMore && selection === visible.length + 1) {
-      sendMechChassisPicker(session, classIndex, connLog, capture, page + 1);
-      return true;
-    }
+    const visible     = chassisList.slice(0, 20);
     const chassis = visible[selection - 1];
     if (!chassis) {
       sendMechClassPicker(session, connLog, capture);
@@ -1321,7 +1315,7 @@ export function handleMechPickerCmd7(
     return true;
   }
 
-  if (step === 'variant' && listId === MECH_CLASS_LIST_ID) {
+  if (step === 'variant' && listId === MECH_VARIANT_LIST_ID) {
     if (selection === 0) {
       sendMechChassisPicker(session, session.mechPickerClass ?? 0, connLog, capture, session.mechPickerChassisPage ?? 0);
       return true;
@@ -1349,6 +1343,24 @@ export function handleMechPickerCmd7(
 
     connLog.info('[world] mech selected: callsign="%s" slot=%d id=%d typeString=%s',
       getDisplayName(session), chosen.slot, chosen.id, chosen.typeString);
+    if (session.accountId !== undefined) {
+      void updateCharacterMech(session.accountId, chosen.id, chosen.slot)
+        .then(() => {
+          connLog.info(
+            '[world] persisted mech selection: accountId=%d slot=%d id=%d typeString=%s',
+            session.accountId, chosen.slot, chosen.id, chosen.typeString,
+          );
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          connLog.error(
+            '[world] failed to persist mech selection: accountId=%d slot=%d id=%d err=%s',
+            session.accountId, chosen.slot, chosen.id, msg,
+          );
+        });
+    } else {
+      connLog.warn('[world] mech selection not persisted: no accountId on session');
+    }
     send(
       session.socket,
       buildCmd3BroadcastPacket(`Mech selected: ${chosen.typeString}`, nextSeq(session)),
@@ -1360,4 +1372,53 @@ export function handleMechPickerCmd7(
   }
 
   return false;
+}
+
+export function handleMechPickerCmd20(
+  session: ClientSession,
+  selection: number,
+  connLog: Logger,
+  capture: CaptureLogger,
+): boolean {
+  const step = session.mechPickerStep;
+  const dialogId = 5;
+
+  if (!step) return false;
+
+  if (step !== 'variant') {
+    connLog.info('[world] cmd-20 examine ignored during mech picker step=%s selection=%d', step, selection);
+    send(
+      session.socket,
+      buildCmd20Packet(dialogId, 2, 'Select a mech variant to examine its loadout.', nextSeq(session)),
+      capture,
+      'CMD20_MECH_PICKER_HINT',
+    );
+    return true;
+  }
+
+  const chassis = session.mechPickerChassis ?? '';
+  const variants = WORLD_MECHS.filter(mech => getMechChassis(mech.typeString) === chassis);
+  const slot = Math.min(variants.length - 1, Math.max(0, selection));
+  const chosen = variants[slot];
+  if (!chosen) {
+    connLog.warn('[world] cmd-20 examine invalid variant selection=%d chassis=%s', selection, chassis);
+    send(
+      session.socket,
+      buildCmd20Packet(dialogId, 2, 'Select a mech variant to examine its loadout.', nextSeq(session)),
+      capture,
+      'CMD20_MECH_PICKER_HINT',
+    );
+    return true;
+  }
+
+  const examineText = buildMechExamineText(chosen.typeString);
+  connLog.info('[world] cmd-20 mech picker examine: slot=%d mech_id=%d (%s) → %j',
+    slot, chosen.id, chosen.typeString, examineText);
+  send(
+    session.socket,
+    buildCmd20Packet(dialogId, 2, examineText, nextSeq(session)),
+    capture,
+    'CMD20_STATS',
+  );
+  return true;
 }
