@@ -139,9 +139,20 @@ function shouldSpillUpperBodyHitToCenter(hitSection: CombatAttachmentHitSection)
     || hitSection.armorIndex === 6;
 }
 
+const INTERNAL_HEAD_INDEX = 0;
+const INTERNAL_CENTER_TORSO_INDEX = 1;
+const INTERNAL_LEFT_TORSO_INDEX = 2;
+const INTERNAL_RIGHT_TORSO_INDEX = 3;
+const INTERNAL_LEFT_ARM_INDEX = 4;
+const INTERNAL_RIGHT_ARM_INDEX = 5;
+const INTERNAL_LEFT_LEG_INDEX = 6;
+const INTERNAL_RIGHT_LEG_INDEX = 7;
+
 function isBotDestroyed(internalValues: readonly number[]): boolean {
-  const centerTorsoGone = (internalValues[4] ?? 0) <= 0;
-  const bothLegsGone = (internalValues[2] ?? 0) <= 0 && (internalValues[3] ?? 0) <= 0;
+  const centerTorsoGone = (internalValues[INTERNAL_CENTER_TORSO_INDEX] ?? 0) <= 0;
+  const bothLegsGone =
+    (internalValues[INTERNAL_LEFT_LEG_INDEX] ?? 0) <= 0
+    && (internalValues[INTERNAL_RIGHT_LEG_INDEX] ?? 0) <= 0;
   return centerTorsoGone || bothLegsGone;
 }
 
