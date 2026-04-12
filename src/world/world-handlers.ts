@@ -177,7 +177,6 @@ function applyHeadCriticalStateUpdates(
   }
   return updates;
 }
-
 function resolveBotHitSection(
   mechId: number | undefined,
   attach: number,
@@ -1408,22 +1407,22 @@ export function handleCombatWeaponFireFrame(
       botArmorValues,
       botInternalValues,
     );
-      const damageResult = applyDamageToSection(
-        botArmorValues,
-        botInternalValues,
-        hitSection,
-        shotDamage,
-        botHeadArmor,
-      );
-      const criticalUpdates =
-        hitSection.internalIndex === 7 && damageResult.updates.some(update => update.damageCode === 0x27)
-          ? applyHeadCriticalStateUpdates(botCriticalStateBytes, botInternalValues[7] ?? 0)
-          : [];
-      botHeadArmor = damageResult.headArmor;
-      const allUpdates = [...damageResult.updates, ...criticalUpdates];
+    const damageResult = applyDamageToSection(
+      botArmorValues,
+      botInternalValues,
+      hitSection,
+      shotDamage,
+      botHeadArmor,
+    );
+    const criticalUpdates =
+      hitSection.internalIndex === 7 && damageResult.updates.some(update => update.damageCode === 0x27)
+        ? applyHeadCriticalStateUpdates(botCriticalStateBytes, botInternalValues[7] ?? 0)
+        : [];
+    botHeadArmor = damageResult.headArmor;
+    const allUpdates = [...damageResult.updates, ...criticalUpdates];
 
-      send(
-        session.socket,
+    send(
+      session.socket,
       buildCmd68ProjectileSpawnPacket(
         {
           sourceSlot:   0,
@@ -1441,19 +1440,19 @@ export function handleCombatWeaponFireFrame(
       capture,
       'CMD68_PROJECTILE',
     );
-      for (const update of allUpdates) {
-        send(
-          session.socket,
-          buildCmd66ActorDamagePacket(1, update.damageCode, update.damageValue, nextSeq(session)),
+    for (const update of allUpdates) {
+      send(
+        session.socket,
+        buildCmd66ActorDamagePacket(1, update.damageCode, update.damageValue, nextSeq(session)),
         capture,
         'CMD66_BOT_DAMAGE',
       );
     }
 
-      totalDamageUpdates += allUpdates.length;
-      shotSummaries.push(
+    totalDamageUpdates += allUpdates.length;
+    shotSummaries.push(
       `${shot.weaponSlot}:${weaponName ?? 'unknown'}:${shotDamage}:${hitSection.label}:${shot.targetSlot}/${shot.targetAttach}:headArmor=${botHeadArmor}:updates=${allUpdates.map(update => `0x${update.damageCode.toString(16)}=${update.damageValue}`).join('/') || 'none'}`,
-      );
+    );
   }
 
   session.combatBotArmorValues = botArmorValues;

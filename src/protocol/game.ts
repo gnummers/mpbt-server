@@ -219,13 +219,22 @@ export function splitInboundGameFrames(payload: Buffer): Buffer[] {
   let start = 0;
 
   while (start < payload.length && payload[start] === 0x1B) {
-    const nextEsc = payload.indexOf(0x1B, start + 1);
-    if (nextEsc === -1) break;
-    const frame = payload.subarray(start, nextEsc + 1);
-    if (frame.length >= 5) {
-      frames.push(frame);
+    let frameEnd = -1;
+
+    for (let i = start + 1; i < payload.length; i++) {
+      if (payload[i] !== 0x1B) continue;
+
+      const candidate = payload.subarray(start, i + 1);
+      if (candidate.length >= 5 && verifyInboundGameCRC(candidate)) {
+        frameEnd = i;
+        break;
+      }
     }
-    start = nextEsc + 1;
+
+    if (frameEnd === -1) break;
+
+    frames.push(payload.subarray(start, frameEnd + 1));
+    start = frameEnd + 1;
   }
 
   if (frames.length === 0) {

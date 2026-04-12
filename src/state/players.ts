@@ -186,10 +186,10 @@ export interface ClientSession {
    */
   combatBotInternalValues?: number[];
   /**
-   * Server-side tracked remote critical/system states for the scripted bot.
-   * Indexes match Cmd66 class-0 damage codes (0x00..), with at least the base
-   * 0x15 critical slots retained so head systems can be updated consistently.
-   */
+    * Server-side tracked remote critical/system states for the scripted bot.
+    * Indexes match Cmd66 class-0 damage codes (0x00..), with at least the base
+    * 0x15 critical slots retained so head systems can be updated consistently.
+    */
   combatBotCriticalStateBytes?: number[];
   /** Server-side remaining head armor for the scripted bot (RE-backed hardcoded value 9). */
   combatBotHeadArmor?: number;
@@ -207,7 +207,7 @@ export interface ClientSession {
    * Server-side tracked local critical/system states for the player.
    * Indexes match Cmd67 class-0 damage codes (0x00..), with the head-related
    * sensor/life-support slots mirrored from client evidence.
-   */
+    */
   combatPlayerCriticalStateBytes?: number[];
   /** Server-side remaining head armor for the player (RE-backed hardcoded value 9). */
   combatPlayerHeadArmor?: number;

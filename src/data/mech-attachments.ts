@@ -146,14 +146,17 @@ function parseRecordPrefix(buf: Buffer, pos: number): ParsedRecordPrefix | null 
 
   let off = pos + 10;
   const vertices: number[][] = [];
+  const vertexRecordSize = 0x18;
   for (let i = 0; i < vertexCount; i += 1) {
-    if (off + 12 > buf.length) return null;
+    // Each vertex record occupies 0x18 bytes; only the first 12 bytes are
+    // currently interpreted here as x/y/z coordinates.
+    if (off + vertexRecordSize > buf.length) return null;
     vertices.push([
       buf.readInt32LE(off),
       buf.readInt32LE(off + 4),
       buf.readInt32LE(off + 8),
     ]);
-    off += 0x18;
+    off += vertexRecordSize;
   }
 
   for (let i = 0; i < polyCount; i += 1) {
