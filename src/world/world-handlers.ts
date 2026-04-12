@@ -115,13 +115,67 @@ function regenJumpFuelIfGrounded(session: ClientSession): void {
 
 const DEFAULT_BOT_ARMOR_VALUES = Array<number>(10).fill(10);
 const DEFAULT_BOT_INTERNAL_VALUES = Array<number>(8).fill(9);
+const HEAD_ARMOR_VALUE = 9;
+const NO_ARMOR_INDEX = -1;
+const BASE_CRITICAL_STATE_COUNT = 0x15;
+const SENSOR_CRITICAL_CODE = 0x11;
+const LIFE_SUPPORT_CRITICAL_CODE = 0x12;
+const CRITICAL_STATE_DAMAGED = 1;
+const CRITICAL_STATE_DESTROYED = 2;
+const LOCAL_RETALIATION_SECTIONS: readonly CombatAttachmentHitSection[] = [
+  { armorIndex: 0, internalIndex: 0, label: 'left-arm' },
+  { armorIndex: 5, internalIndex: 5, label: 'left-torso-front' },
+  { armorIndex: 8, internalIndex: 5, label: 'left-torso-rear' },
+  { armorIndex: 4, internalIndex: 4, label: 'center-torso-front' },
+  { armorIndex: 7, internalIndex: 4, label: 'center-torso-rear' },
+  { armorIndex: 6, internalIndex: 6, label: 'right-torso-front' },
+  { armorIndex: 9, internalIndex: 6, label: 'right-torso-rear' },
+  { armorIndex: 1, internalIndex: 1, label: 'right-arm' },
+  { armorIndex: 2, internalIndex: 2, label: 'left-leg' },
+  { armorIndex: 3, internalIndex: 3, label: 'right-leg' },
+  { armorIndex: NO_ARMOR_INDEX, internalIndex: 7, label: 'head' },
+] as const;
+
+type DamageCodeUpdate = { damageCode: number; damageValue: number };
 
 function sumValues(values: readonly number[]): number {
   return values.reduce((sum, value) => sum + value, 0);
 }
 
-function getBotDurability(armorValues: readonly number[], internalValues: readonly number[]): number {
+function getCombatDurability(armorValues: readonly number[], internalValues: readonly number[]): number {
   return sumValues(armorValues) + sumValues(internalValues);
+}
+
+function getTrackedCriticalStateCount(extraCritCount: number | undefined): number {
+  if (extraCritCount === undefined) return BASE_CRITICAL_STATE_COUNT;
+  if (extraCritCount < -20 || extraCritCount === -21) return BASE_CRITICAL_STATE_COUNT;
+  return Math.max(BASE_CRITICAL_STATE_COUNT, BASE_CRITICAL_STATE_COUNT + extraCritCount);
+}
+
+function createCriticalStateBytes(extraCritCount: number | undefined): number[] {
+  return Array<number>(getTrackedCriticalStateCount(extraCritCount)).fill(0);
+}
+
+function getHeadCriticalState(headInternalValue: number): number {
+  if (headInternalValue <= 0) return CRITICAL_STATE_DESTROYED;
+  if (headInternalValue < HEAD_ARMOR_VALUE) return CRITICAL_STATE_DAMAGED;
+  return 0;
+}
+
+function applyHeadCriticalStateUpdates(
+  criticalStateBytes: number[],
+  headInternalValue: number,
+): DamageCodeUpdate[] {
+  const targetState = getHeadCriticalState(headInternalValue);
+  if (targetState === 0) return [];
+
+  const updates: DamageCodeUpdate[] = [];
+  for (const damageCode of [SENSOR_CRITICAL_CODE, LIFE_SUPPORT_CRITICAL_CODE]) {
+    if ((criticalStateBytes[damageCode] ?? 0) >= targetState) continue;
+    criticalStateBytes[damageCode] = targetState;
+    updates.push({ damageCode, damageValue: targetState });
+  }
+  return updates;
 }
 
 function resolveBotHitSection(
@@ -139,10 +193,10 @@ function shouldSpillUpperBodyHitToCenter(hitSection: CombatAttachmentHitSection)
     || hitSection.armorIndex === 6;
 }
 
-function isBotDestroyed(internalValues: readonly number[]): boolean {
+function isActorDestroyed(internalValues: readonly number[]): boolean {
   const centerTorsoGone = (internalValues[4] ?? 0) <= 0;
-  const bothLegsGone = (internalValues[2] ?? 0) <= 0 && (internalValues[3] ?? 0) <= 0;
-  return centerTorsoGone || bothLegsGone;
+  const headGone = (internalValues[7] ?? 0) <= 0;
+  return centerTorsoGone || headGone;
 }
 
 function getWeaponDamageByName(weaponName: string | undefined): number | undefined {
@@ -179,26 +233,34 @@ function getShotDamage(session: ClientSession, weaponSlot: number): { damage: nu
   };
 }
 
-function applyDamageToBotSection(
+function applyDamageToSection(
   armorValues: number[],
   internalValues: number[],
   hitSection: CombatAttachmentHitSection,
   damage: number,
-): Array<{ damageCode: number; damageValue: number }> {
-  const updates: Array<{ damageCode: number; damageValue: number }> = [];
+  headArmor = 0,
+): { updates: DamageCodeUpdate[]; headArmor: number } {
+  const updates: DamageCodeUpdate[] = [];
   let remaining = Math.max(0, damage);
+  let nextHeadArmor = Math.max(0, headArmor);
 
-  if (remaining <= 0) return updates;
+  if (remaining <= 0) return { updates, headArmor: nextHeadArmor };
 
   const armorIndex = hitSection.armorIndex;
   const internalIndex = hitSection.internalIndex;
-  const armorCurrent = armorValues[armorIndex] ?? 0;
+  const armorCurrent = armorIndex >= 0
+    ? (armorValues[armorIndex] ?? 0)
+    : internalIndex === 7 ? nextHeadArmor : 0;
 
-  if (armorCurrent > 0) {
+  if (armorIndex >= 0 && armorCurrent > 0) {
     const absorbedByArmor = Math.min(armorCurrent, remaining);
     const armorValue = armorCurrent - absorbedByArmor;
     armorValues[armorIndex] = armorValue;
     updates.push({ damageCode: 0x15 + armorIndex, damageValue: armorValue });
+    remaining -= absorbedByArmor;
+  } else if (armorIndex < 0 && internalIndex === 7 && armorCurrent > 0) {
+    const absorbedByArmor = Math.min(armorCurrent, remaining);
+    nextHeadArmor = armorCurrent - absorbedByArmor;
     remaining -= absorbedByArmor;
   }
 
@@ -210,7 +272,34 @@ function applyDamageToBotSection(
     updates.push({ damageCode: 0x20 + internalIndex, damageValue: internalValue });
   }
 
-  return updates;
+  return { updates, headArmor: nextHeadArmor };
+}
+
+function chooseRetaliationHitSection(
+  session: ClientSession,
+  armorValues: readonly number[],
+  internalValues: readonly number[],
+  headArmor: number,
+): CombatAttachmentHitSection {
+  const start = session.combatRetaliationCursor ?? 0;
+  for (let offset = 0; offset < LOCAL_RETALIATION_SECTIONS.length; offset++) {
+    const idx = (start + offset) % LOCAL_RETALIATION_SECTIONS.length;
+    const section = LOCAL_RETALIATION_SECTIONS[idx];
+    if (
+      (section.armorIndex >= 0
+        ? (armorValues[section.armorIndex] ?? 0)
+        : section.internalIndex === 7 ? headArmor : 0) > 0
+      || (internalValues[section.internalIndex] ?? 0) > 0
+    ) {
+      session.combatRetaliationCursor = (idx + 1) % LOCAL_RETALIATION_SECTIONS.length;
+      return section;
+    }
+  }
+  const fallback = LOCAL_RETALIATION_SECTIONS[start % LOCAL_RETALIATION_SECTIONS.length]
+    ?? LOCAL_RETALIATION_SECTIONS[0];
+  session.combatRetaliationCursor = ((start % LOCAL_RETALIATION_SECTIONS.length) + 1)
+    % LOCAL_RETALIATION_SECTIONS.length;
+  return fallback;
 }
 
 function resolveEffectiveHitSection(
@@ -542,6 +631,7 @@ export function sendCombatBootstrapSequence(
   const mechEntry       = WORLD_MECH_BY_ID.get(mechId);
   const extraCritCount  = mechEntry?.extraCritCount ?? 0;
   const critBytes       = Math.max(0, extraCritCount + 21);
+  const playerCriticalStateBytes = createCriticalStateBytes(extraCritCount);
 
   // Store per-mech speedMag caps so Cmd8/9 handlers can apply them.
   session.combatMaxSpeedMag  = mechEntry?.maxSpeedMag  ?? 0;
@@ -557,7 +647,6 @@ export function sendCombatBootstrapSequence(
   session.combatJumpAltitude = 0;
   session.combatJumpFuel = JUMP_JET_FUEL_MAX;
   session.botHealth    = BOT_INITIAL_HEALTH;
-  session.playerHealth = BOT_INITIAL_HEALTH; // simplified IS counter (stops Cmd67 when ≤ 0)
 
   // 1. MMC SYNC — plain ARIES packet; no game-frame CRC.
   send(socket, buildCombatWelcomePacket(), capture, 'COMBAT_WELCOME_MMC');
@@ -594,7 +683,7 @@ export function sendCombatBootstrapSequence(
       mech: {
         mechId,
         critStateExtraCount:  extraCritCount,
-        criticalStateBytes:   Array<number>(critBytes).fill(0),
+        criticalStateBytes:   playerCriticalStateBytes.slice(0, critBytes),
         extraStateBytes:      [],
         armorLikeStateBytes:  Array<number>(11).fill(0),  // full armor
         // internalStateBytes[i] must be non-zero for each IS slot index i
@@ -620,14 +709,28 @@ export function sendCombatBootstrapSequence(
   // 3. Cmd64 — add remote bot actor at slot 1.
   const botMechId   = session.combatBotMechId ?? mechId;
   const botMechEntry = WORLD_MECH_BY_ID.get(botMechId);
+  const botCriticalStateBytes = createCriticalStateBytes(botMechEntry?.extraCritCount);
   session.combatBotArmorValues = [...(botMechEntry?.armorLikeMaxValues ?? DEFAULT_BOT_ARMOR_VALUES)];
   session.combatBotInternalValues = botMechEntry !== undefined
     ? mechInternalStateBytes(botMechEntry.tonnage)
     : [...DEFAULT_BOT_INTERNAL_VALUES];
-  session.botHealth = getBotDurability(
+  session.combatBotCriticalStateBytes = botCriticalStateBytes;
+  session.combatBotHeadArmor = HEAD_ARMOR_VALUE;
+  session.botHealth = getCombatDurability(
     session.combatBotArmorValues,
     session.combatBotInternalValues,
-  );
+  ) + (session.combatBotHeadArmor ?? 0);
+  session.combatPlayerArmorValues = [...(mechEntry?.armorLikeMaxValues ?? DEFAULT_BOT_ARMOR_VALUES)];
+  session.combatPlayerInternalValues = mechEntry !== undefined
+    ? mechInternalStateBytes(mechEntry.tonnage)
+    : [...DEFAULT_BOT_INTERNAL_VALUES];
+  session.combatPlayerCriticalStateBytes = playerCriticalStateBytes;
+  session.combatPlayerHeadArmor = HEAD_ARMOR_VALUE;
+  session.playerHealth = getCombatDurability(
+    session.combatPlayerArmorValues,
+    session.combatPlayerInternalValues,
+  ) + (session.combatPlayerHeadArmor ?? 0);
+  session.combatRetaliationCursor = 0;
   const cmd64 = buildCmd64RemoteActorPacket(
     {
       slot:          1,
@@ -698,30 +801,73 @@ export function sendCombatBootstrapSequence(
   session.combatJumpFuelRegenTimer.unref();
 
   // Bot fires back at the player every BOT_FIRE_INTERVAL_MS milliseconds.
-  // Stops once server-side playerHealth estimate reaches 0 (client handles
-  // the actual death/results screen via local IS simulation — see §23.6).
+  // Stops once the server-side per-location local durability state shows the
+  // player has been structurally destroyed.
   session.botFireTimer = setInterval(() => {
     if (session.socket.destroyed || !session.socket.writable) return;
 
-    // Server-side health gate — stop retaliating after estimated player death.
-    if ((session.playerHealth ?? 0) <= 0) {
+    const playerArmorValues = [...(session.combatPlayerArmorValues ?? DEFAULT_BOT_ARMOR_VALUES)];
+    const playerInternalValues = [...(session.combatPlayerInternalValues ?? DEFAULT_BOT_INTERNAL_VALUES)];
+    const playerCriticalStateBytes = [...(session.combatPlayerCriticalStateBytes ?? createCriticalStateBytes(mechEntry?.extraCritCount))];
+    const playerHeadArmor = session.combatPlayerHeadArmor ?? HEAD_ARMOR_VALUE;
+    if (isActorDestroyed(playerInternalValues)) {
       clearInterval(session.botFireTimer);
       session.botFireTimer = undefined;
       connLog.info('[world/combat] player IS depleted (server-side estimate) — bot stopped firing');
       return;
     }
 
-    session.playerHealth = Math.max(0, (session.playerHealth ?? 0) - BOT_RETALIATION_DAMAGE);
-    connLog.debug(
-      '[world/combat] bot fires Cmd67: damage=%d playerHealth=%d',
+    const hitSection = chooseRetaliationHitSection(session, playerArmorValues, playerInternalValues, playerHeadArmor);
+    const damageResult = applyDamageToSection(
+      playerArmorValues,
+      playerInternalValues,
+      hitSection,
       BOT_RETALIATION_DAMAGE,
+      playerHeadArmor,
+    );
+    session.combatPlayerArmorValues = playerArmorValues;
+    session.combatPlayerInternalValues = playerInternalValues;
+    const headCriticalUpdates =
+      hitSection.internalIndex === 7 && damageResult.updates.some(update => update.damageCode === 0x27)
+        ? applyHeadCriticalStateUpdates(playerCriticalStateBytes, playerInternalValues[7] ?? 0)
+        : [];
+    session.combatPlayerCriticalStateBytes = playerCriticalStateBytes;
+    session.combatPlayerHeadArmor = damageResult.headArmor;
+    session.playerHealth = getCombatDurability(playerArmorValues, playerInternalValues);
+    session.playerHealth += damageResult.headArmor;
+    const allUpdates = [...damageResult.updates, ...headCriticalUpdates];
+    const armorRemaining = hitSection.armorIndex >= 0
+      ? `${playerArmorValues[hitSection.armorIndex] ?? 0}`
+      : `${damageResult.headArmor}`;
+    connLog.debug(
+      '[world/combat] bot fires Cmd67: damage=%d hit=%s playerHealth=%d armor=%s internal=%d updates=%s',
+      BOT_RETALIATION_DAMAGE,
+      hitSection.label,
       session.playerHealth,
+      armorRemaining,
+      playerInternalValues[hitSection.internalIndex] ?? 0,
+      allUpdates.map(update => `0x${update.damageCode.toString(16)}=${update.damageValue}`).join(',') || 'none',
     );
-    send(
-      session.socket,
-      buildCmd67LocalDamagePacket(1, BOT_RETALIATION_DAMAGE, nextSeq(session)),
-      capture, 'CMD67_BOT_RETALIATION',
-    );
+    for (const update of allUpdates) {
+      send(
+        session.socket,
+        buildCmd67LocalDamagePacket(update.damageCode, update.damageValue, nextSeq(session)),
+        capture,
+        `CMD67_BOT_RETALIATION_${update.damageCode.toString(16)}`,
+      );
+    }
+    if (isActorDestroyed(playerInternalValues)) {
+      clearInterval(session.botFireTimer);
+      session.botFireTimer = undefined;
+      const fatalReason = (playerInternalValues[7] ?? 0) <= 0
+        ? 'head destroyed'
+        : 'center torso destroyed';
+      connLog.info(
+        '[world/combat] player IS depleted by hit=%s (%s, server-side section tracking) — bot stopped firing',
+        hitSection.label,
+        fatalReason,
+      );
+    }
   }, BOT_FIRE_INTERVAL_MS);
   session.botFireTimer.unref();
 
@@ -749,6 +895,9 @@ export function sendCombatBootstrapSequence(
       if (session.socket.destroyed || !session.socket.writable) return;
       connLog.info('[world/combat] scripted verification: autolose');
       session.playerHealth = 0;
+      session.combatPlayerHeadArmor = 0;
+      session.combatPlayerArmorValues = Array<number>(10).fill(0);
+      session.combatPlayerInternalValues = Array<number>(8).fill(0);
       send(
         session.socket,
         buildCmd67LocalDamagePacket(1, 999, nextSeq(session)),
@@ -1230,10 +1379,10 @@ export function handleCombatWeaponFireFrame(
   }
 
   if (session.botHealth === undefined) {
-    session.botHealth = getBotDurability(
+    session.botHealth = getCombatDurability(
       session.combatBotArmorValues ?? DEFAULT_BOT_ARMOR_VALUES,
       session.combatBotInternalValues ?? DEFAULT_BOT_INTERNAL_VALUES,
-    );
+    ) + (session.combatBotHeadArmor ?? HEAD_ARMOR_VALUE);
   }
   if (session.botHealth <= 0) {
     connLog.debug('[world/combat] cmd-10 shot ignored — bot already destroyed');
@@ -1242,6 +1391,8 @@ export function handleCombatWeaponFireFrame(
 
   const botArmorValues = [...(session.combatBotArmorValues ?? DEFAULT_BOT_ARMOR_VALUES)];
   const botInternalValues = [...(session.combatBotInternalValues ?? DEFAULT_BOT_INTERNAL_VALUES)];
+  const botCriticalStateBytes = [...(session.combatBotCriticalStateBytes ?? createCriticalStateBytes(WORLD_MECH_BY_ID.get(session.combatBotMechId ?? session.selectedMechId ?? FALLBACK_MECH_ID)?.extraCritCount))];
+  let botHeadArmor = session.combatBotHeadArmor ?? HEAD_ARMOR_VALUE;
   const botMechId = session.combatBotMechId ?? session.selectedMechId;
   const botModelId = getCombatModelIdForMechId(botMechId);
   send(session.socket, buildCmd71ResetEffectStatePacket(nextSeq(session)), capture, 'CMD71_RESET');
@@ -1257,15 +1408,22 @@ export function handleCombatWeaponFireFrame(
       botArmorValues,
       botInternalValues,
     );
-    const damageUpdates = applyDamageToBotSection(
-      botArmorValues,
-      botInternalValues,
-      hitSection,
-      shotDamage,
-    );
+      const damageResult = applyDamageToSection(
+        botArmorValues,
+        botInternalValues,
+        hitSection,
+        shotDamage,
+        botHeadArmor,
+      );
+      const criticalUpdates =
+        hitSection.internalIndex === 7 && damageResult.updates.some(update => update.damageCode === 0x27)
+          ? applyHeadCriticalStateUpdates(botCriticalStateBytes, botInternalValues[7] ?? 0)
+          : [];
+      botHeadArmor = damageResult.headArmor;
+      const allUpdates = [...damageResult.updates, ...criticalUpdates];
 
-    send(
-      session.socket,
+      send(
+        session.socket,
       buildCmd68ProjectileSpawnPacket(
         {
           sourceSlot:   0,
@@ -1283,24 +1441,27 @@ export function handleCombatWeaponFireFrame(
       capture,
       'CMD68_PROJECTILE',
     );
-    for (const update of damageUpdates) {
-      send(
-        session.socket,
-        buildCmd66ActorDamagePacket(1, update.damageCode, update.damageValue, nextSeq(session)),
+      for (const update of allUpdates) {
+        send(
+          session.socket,
+          buildCmd66ActorDamagePacket(1, update.damageCode, update.damageValue, nextSeq(session)),
         capture,
         'CMD66_BOT_DAMAGE',
       );
     }
 
-    totalDamageUpdates += damageUpdates.length;
-    shotSummaries.push(
-      `${shot.weaponSlot}:${weaponName ?? 'unknown'}:${shotDamage}:${hitSection.label}:${shot.targetSlot}/${shot.targetAttach}`,
-    );
+      totalDamageUpdates += allUpdates.length;
+      shotSummaries.push(
+      `${shot.weaponSlot}:${weaponName ?? 'unknown'}:${shotDamage}:${hitSection.label}:${shot.targetSlot}/${shot.targetAttach}:headArmor=${botHeadArmor}:updates=${allUpdates.map(update => `0x${update.damageCode.toString(16)}=${update.damageValue}`).join('/') || 'none'}`,
+      );
   }
 
   session.combatBotArmorValues = botArmorValues;
   session.combatBotInternalValues = botInternalValues;
-  session.botHealth = getBotDurability(botArmorValues, botInternalValues);
+  session.combatBotCriticalStateBytes = botCriticalStateBytes;
+  session.combatBotHeadArmor = botHeadArmor;
+  session.botHealth = getCombatDurability(botArmorValues, botInternalValues);
+  session.botHealth += botHeadArmor;
   connLog.info(
     '[world/combat] cmd10 weapon fire accepted: firePath=%s records=%d weaponSlots=%s botMechId=%s botModelId=%s botHealth=%d updates=%d shots=[%s]',
     firePath,
@@ -1314,7 +1475,7 @@ export function handleCombatWeaponFireFrame(
   );
   send(session.socket, buildCmd71ResetEffectStatePacket(nextSeq(session)), capture, 'CMD71_CLOSE');
 
-  if (isBotDestroyed(botInternalValues)) {
+  if (isActorDestroyed(botInternalValues)) {
     session.botHealth = 0;
     stopBotCombatActions(session);
     sendBotDeathTransition(session, connLog, capture, 'fatal-damage');

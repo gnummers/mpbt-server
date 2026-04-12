@@ -295,12 +295,12 @@ function handleWorldGameData(
     connLog.debug('[world] cmd-2 (ping-request) — client handles reply via COMMEG32');
 
   } else if (cmdIdx === 4) {
-    if (session.phase === 'combat') {
-      connLog.debug('[world] cmd-4 in combat phase — different encoding, ignoring');
-      return;
-    }
-    const parsed = parseClientCmd4(payload);
+    const parsed = parseClientCmd4(payload, session.phase === 'combat');
     if (!parsed) {
+      if (session.phase === 'combat') {
+        connLog.debug('[world] cmd-4 in combat phase parse failed — ignoring');
+        return;
+      }
       connLog.warn('[world] cmd-4 parse failed');
       return;
     }
@@ -319,6 +319,13 @@ function handleWorldGameData(
       session.phase = 'world';
       session.botHealth    = undefined;
       session.playerHealth = undefined;
+      session.combatBotHeadArmor = undefined;
+      session.combatPlayerHeadArmor = undefined;
+      session.combatBotCriticalStateBytes = undefined;
+      session.combatPlayerArmorValues = undefined;
+      session.combatPlayerInternalValues = undefined;
+      session.combatPlayerCriticalStateBytes = undefined;
+      session.combatRetaliationCursor = undefined;
       session.combatJumpAltitude = undefined;
       session.combatJumpFuel = undefined;
       session.lastCombatFireActionAt = undefined;
@@ -326,6 +333,14 @@ function handleWorldGameData(
       session.combatShotsAction0Correlated = undefined;
       session.combatShotsDirectCmd10 = undefined;
       sendCombatBootstrapSequence(session, connLog, capture);
+      return;
+    }
+    if (session.phase === 'combat') {
+      if (textCmd.length > 0) {
+        connLog.debug('[world] cmd-4 text ignored during combat: %j', parsed.text);
+      } else {
+        connLog.debug('[world] empty cmd-4 text ignored during combat');
+      }
       return;
     }
     // "/fight" family: trigger combat bootstrap if not already in combat.
@@ -738,6 +753,13 @@ function handleWorldConnection(socket: net.Socket, players: PlayerRegistry, log:
     }
     session.botHealth            = undefined;
     session.playerHealth         = undefined;
+    session.combatBotHeadArmor = undefined;
+    session.combatPlayerHeadArmor = undefined;
+    session.combatBotCriticalStateBytes = undefined;
+    session.combatPlayerArmorValues = undefined;
+    session.combatPlayerInternalValues = undefined;
+    session.combatPlayerCriticalStateBytes = undefined;
+    session.combatRetaliationCursor = undefined;
     session.combatVerificationMode = undefined;
     session.combatJumpFuel       = undefined;
     session.lastCombatFireActionAt = undefined;
