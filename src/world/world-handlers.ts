@@ -1223,6 +1223,9 @@ export function handleBotMechTextCommand(
   text: string,
   connLog: Logger,
   capture: CaptureLogger,
+  options: {
+    suppressBroadcast?: boolean;
+  } = {},
 ): boolean {
   const clean = text.replace(/\x1b/g, '?').trim();
   const botmechMatch = clean.match(/^\/botmech\s+(\d+)$/i);
@@ -1234,29 +1237,33 @@ export function handleBotMechTextCommand(
   const mechEntry   = WORLD_MECH_BY_ID.get(requestedId);
   if (!mechEntry) {
     connLog.warn('[world] /botmech: unknown mech_id=%d', requestedId);
-    send(
-      session.socket,
-      buildCmd3BroadcastPacket(
-        `Unknown mech_id ${requestedId}. Use /mechs to browse available mechs.`,
-        nextSeq(session),
-      ),
-      capture,
-      'CMD3_BOTMECH_UNKNOWN',
-    );
+    if (!options.suppressBroadcast) {
+      send(
+        session.socket,
+        buildCmd3BroadcastPacket(
+          `Unknown mech_id ${requestedId}. Use /mechs to browse available mechs.`,
+          nextSeq(session),
+        ),
+        capture,
+        'CMD3_BOTMECH_UNKNOWN',
+      );
+    }
     return true;
   }
 
   session.combatBotMechId = requestedId;
   connLog.info('[world] /botmech: bot mech set to %s (id=%d)', mechEntry.typeString, requestedId);
-  send(
-    session.socket,
-    buildCmd3BroadcastPacket(
-      `Bot mech set to ${mechEntry.typeString} (id=${requestedId}). Use /fight or /fightrestart.`,
-      nextSeq(session),
-    ),
-    capture,
-    'CMD3_BOTMECH_ACK',
-  );
+  if (!options.suppressBroadcast) {
+    send(
+      session.socket,
+      buildCmd3BroadcastPacket(
+        `Bot mech set to ${mechEntry.typeString} (id=${requestedId}). Use /fight or /fightrestart.`,
+        nextSeq(session),
+      ),
+      capture,
+      'CMD3_BOTMECH_ACK',
+    );
+  }
   return true;
 }
 
@@ -1545,7 +1552,7 @@ export function handleCombatWeaponFireFrame(
   const firePath = hasRecentFireAction ? 'selected-weapon' : 'direct-cmd10';
   if (session.combatRequireAction0 && !hasRecentFireAction) {
     session.combatShotsRejected = (session.combatShotsRejected ?? 0) + shots.length;
-    connLog.info(
+    connLog.debug(
       '[world/combat] cmd10 shot REJECTED: strict action0 gate (no recent cmd12/action0, age=%s records=%d)',
       actionAgeMs === undefined ? 'n/a' : `${actionAgeMs}ms`,
       shots.length,

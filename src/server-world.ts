@@ -321,7 +321,7 @@ function handleWorldGameData(
       return;
     }
     if (session.phase === 'combat') {
-      if (handleBotMechTextCommand(session, parsed.text, connLog, capture)) {
+      if (handleBotMechTextCommand(session, parsed.text, connLog, capture, { suppressBroadcast: true })) {
         return;
       }
       if (textCmd === '/fight') {
