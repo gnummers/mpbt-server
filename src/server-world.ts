@@ -96,6 +96,7 @@ import {
   handleLocationAction,
   handleWorldTextCommand,
   sendCombatBootstrapSequence,
+  resetCombatState,
   stopCombatTimers,
   notifyRoomArrival,
   notifyRoomDeparture,
@@ -314,25 +315,8 @@ function handleWorldGameData(
         return;
       }
       connLog.info('[world] /fightrestart: stopping timers and resetting combat state');
-      stopCombatTimers(session);
-      session.combatInitialized = false;
-      session.phase = 'world';
-      session.botHealth    = undefined;
-      session.playerHealth = undefined;
-      session.combatBotHeadArmor = undefined;
-      session.combatPlayerHeadArmor = undefined;
-      session.combatBotCriticalStateBytes = undefined;
-      session.combatPlayerArmorValues = undefined;
-      session.combatPlayerInternalValues = undefined;
-      session.combatPlayerCriticalStateBytes = undefined;
-      session.combatRetaliationCursor = undefined;
-      session.combatJumpAltitude = undefined;
-      session.combatJumpFuel = undefined;
-      session.lastCombatFireActionAt = undefined;
-      session.combatShotsAccepted = undefined;
-      session.combatShotsAction0Correlated = undefined;
-      session.combatShotsDirectCmd10 = undefined;
-      sendCombatBootstrapSequence(session, connLog, capture);
+      resetCombatState(session);
+      sendCombatBootstrapSequence(players, session, connLog, capture);
       return;
     }
     if (session.phase === 'combat') {
@@ -350,7 +334,8 @@ function handleWorldGameData(
       textCmd === '/fightlose' ||
       textCmd === '/fightdmglocal' ||
       textCmd === '/fightdmgbot' ||
-      textCmd === '/fightstrictfire'
+      textCmd === '/fightstrictfire' ||
+      textCmd === '/fighthead'
     ) {
       const currentRoomId = session.worldMapRoomId ?? DEFAULT_MAP_ROOM_ID;
       const mapRoom = worldMapByRoomId.get(currentRoomId);
@@ -374,11 +359,13 @@ function handleWorldGameData(
         session.combatVerificationMode = 'dmgbot';
       } else if (textCmd === '/fightstrictfire') {
         session.combatVerificationMode = 'strictfire';
+      } else if (textCmd === '/fighthead') {
+        session.combatVerificationMode = 'headtest';
       } else {
         session.combatVerificationMode = undefined;
       }
       if (!session.combatInitialized && session.phase === 'world') {
-        sendCombatBootstrapSequence(session, connLog, capture);
+        sendCombatBootstrapSequence(players, session, connLog, capture);
       } else {
         connLog.debug('[world] /fight ignored: combatInitialized=%s phase=%s',
           session.combatInitialized, session.phase);
@@ -415,7 +402,7 @@ function handleWorldGameData(
       }
       if (!session.combatInitialized && session.phase === 'world') {
         connLog.info('[world] cmd-5 Fight button: triggering combat bootstrap room=%d', currentRoomId);
-        sendCombatBootstrapSequence(session, connLog, capture);
+        sendCombatBootstrapSequence(players, session, connLog, capture);
       } else {
         connLog.debug('[world] cmd-5 Fight ignored: combatInitialized=%s phase=%s',
           session.combatInitialized, session.phase);
@@ -435,7 +422,7 @@ function handleWorldGameData(
 
   } else if (cmdIdx === 10) {
     if (session.phase === 'combat') {
-      handleCombatWeaponFireFrame(session, payload, connLog, capture);
+      handleCombatWeaponFireFrame(players, session, payload, connLog, capture);
       return;
     }
     if (session.phase !== 'world') {
@@ -562,6 +549,10 @@ function handleWorldGameData(
 
     connLog.debug('[world] cmd-7 ignored: unsupported listId=%d', parsed.listId);
   } else if (session.phase === 'combat') {
+    if (!session.combatInitialized) {
+      connLog.debug('[world/combat] inbound combat cmd=%d ignored during DROP delay', cmdIdx);
+      return;
+    }
     // Combat-mode inbound frame (client sends Cmd8/Cmd9 for movement; weapon fire uses Cmd10).
     if (cmdIdx === 8 || cmdIdx === 9) {
       handleCombatMovementFrame(session, payload, connLog, capture);

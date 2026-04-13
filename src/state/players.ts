@@ -62,6 +62,12 @@ export interface ClientSession {
   botFireTimer?: ReturnType<typeof setInterval>;
   /** One-shot timeout that advances a dead bot from fall animation into wreck state. */
   botDeathTimer?: ReturnType<typeof setTimeout>;
+  /** One-shot timeout that sends the combat match result / result-scene transition. */
+  combatResultTimer?: ReturnType<typeof setTimeout>;
+  /** One-shot timeout that returns the client from the result scene back to world mode. */
+  combatWorldRestoreTimer?: ReturnType<typeof setTimeout>;
+  /** One-shot timeout that delays Cmd72+ combat bootstrap so DROP can display first. */
+  combatBootstrapTimer?: ReturnType<typeof setTimeout>;
   /** Repeating setInterval that drives prototype jump-jet ascent/descent updates. */
   combatJumpTimer?: ReturnType<typeof setInterval>;
   /** Repeating setInterval that regenerates jump-jet fuel while grounded. */
@@ -127,7 +133,7 @@ export interface ClientSession {
   selectedMechSlot?: number;
 
   /** Optional scripted combat verification mode consumed on the next /fight bootstrap. */
-  combatVerificationMode?: 'autowin' | 'autolose' | 'dmglocal' | 'dmgbot' | 'strictfire';
+  combatVerificationMode?: 'autowin' | 'autolose' | 'dmglocal' | 'dmgbot' | 'strictfire' | 'headtest';
 
   /**
    * Pending mech slot chosen in the mech-select dialog, held until the
@@ -211,6 +217,8 @@ export interface ClientSession {
   combatPlayerCriticalStateBytes?: number[];
   /** Server-side remaining head armor for the player (RE-backed hardcoded value 9). */
   combatPlayerHeadArmor?: number;
+  /** Last queued/sent combat result code (0 = victory, 1 = loss). */
+  combatResultCode?: 0 | 1;
   /**
    * Round-robin cursor for choosing the next retaliation hit section while the
    * local actor still has multiple intact sections.
