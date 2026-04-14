@@ -126,6 +126,7 @@ const DEFAULT_BOT_ARMOR_VALUES = Array<number>(10).fill(10);
 const DEFAULT_BOT_INTERNAL_VALUES = Array<number>(8).fill(9);
 const HEAD_ARMOR_VALUE = 9;
 const NO_ARMOR_INDEX = -1;
+const DUEL_STAKE_MAX = 9_999_999;
 const BASE_CRITICAL_STATE_COUNT = 0x15;
 const SENSOR_CRITICAL_CODE = 0x11;
 const LIFE_SUPPORT_CRITICAL_CODE = 0x12;
@@ -554,6 +555,13 @@ function refreshWorldSceneIfPossible(
   return true;
 }
 
+function normalizeDuelStakeValue(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(DUEL_STAKE_MAX, Math.trunc(value)));
+}
+
 export function sendStagedDuelTermsPanel(
   players: PlayerRegistry,
   session: ClientSession,
@@ -625,21 +633,34 @@ export function handleDuelTermsSubmit(
     return;
   }
 
-  combatSession.duelStakeValues = [stakeA, stakeB];
+  const normalizedStakeA = normalizeDuelStakeValue(stakeA);
+  const normalizedStakeB = normalizeDuelStakeValue(stakeB);
+  if (normalizedStakeA !== stakeA || normalizedStakeB !== stakeB) {
+    connLog.warn(
+      '[world/duel] normalized out-of-range duel stakes for "%s": %d/%d -> %d/%d',
+      getDisplayName(session),
+      stakeA,
+      stakeB,
+      normalizedStakeA,
+      normalizedStakeB,
+    );
+  }
+
+  combatSession.duelStakeValues = [normalizedStakeA, normalizedStakeB];
   combatSession.duelTermsUpdatedBySessionId = session.id;
   combatSession.duelTermsUpdatedAt = Date.now();
 
   const [participantAId, participantBId] = combatSession.participantSessionIds;
   const participantA = players.get(participantAId);
   const participantB = players.get(participantBId);
-  const summary = `Duel terms updated: ${participantA ? getDisplayName(participantA) : 'Pilot A'}=${stakeA} cb, ${participantB ? getDisplayName(participantB) : 'Pilot B'}=${stakeB} cb. Use Duel Terms to review or /fight to start.`;
+  const summary = `Duel terms updated: ${participantA ? getDisplayName(participantA) : 'Pilot A'}=${normalizedStakeA} cb, ${participantB ? getDisplayName(participantB) : 'Pilot B'}=${normalizedStakeB} cb. Use Duel Terms to review or /fight to start.`;
 
   connLog.info(
     '[world/duel] cmd15 duel terms submit session=%s by="%s" stakes=%d/%d',
     combatSession.id,
     getDisplayName(session),
-    stakeA,
-    stakeB,
+    normalizedStakeA,
+    normalizedStakeB,
   );
 
   send(
@@ -878,6 +899,9 @@ function queueDuelCombatResultTransition(
 
         resetCombatState(participant);
         participant.worldInitialized = true;
+        participant.duelTermsAvailable = false;
+        participant.combatSessionId = undefined;
+        participant.combatPeerSessionId = undefined;
         sendToWorldSession(
           participant,
           buildWelcomePacket(),
@@ -955,6 +979,10 @@ export function tryStartStagedDuelCombat(
   if (combatSession?.mode !== 'duel') {
     return false;
   }
+  if (combatSession.state !== 'staged') {
+    connLog.debug('[world/duel] ignoring staged-combat start for session=%s state=%s', combatSession.id, combatSession.state);
+    return true;
+  }
 
   const [sessionAId, sessionBId] = combatSession.participantSessionIds;
   const playerA = players.get(sessionAId);
@@ -974,10 +1002,6 @@ export function tryStartStagedDuelCombat(
     clearSessionDuelState(players, session, connLog, 'participant unavailable');
     return true;
   }
-  if (combatSession.state === 'active') {
-    return true;
-  }
-
   const participants = [
     { local: playerA, peer: playerB, localX: 0, localY: 0, remoteX: 0, remoteY: BOT_SPAWN_DISTANCE },
     { local: playerB, peer: playerA, localX: 0, localY: BOT_SPAWN_DISTANCE, remoteX: 0, remoteY: 0 },
@@ -1014,6 +1038,7 @@ export function tryStartStagedDuelCombat(
     participant.local.combatShotsRejected = 0;
     participant.local.combatShotsAction0Correlated = 0;
     participant.local.combatShotsDirectCmd10 = 0;
+    participant.local.duelTermsAvailable = false;
     participant.local.phase = 'combat';
   }
 
@@ -1865,6 +1890,7 @@ export function clearSessionDuelState(
       if (peer.combatPeerSessionId === session.id) {
         peer.combatPeerSessionId = undefined;
       }
+      peer.duelTermsAvailable = false;
       if (combatSession.state === 'active' && peer.phase === 'combat') {
         resetCombatState(peer);
         peer.worldInitialized = true;
@@ -1904,6 +1930,7 @@ export function clearSessionDuelState(
 
   session.combatSessionId = undefined;
   session.combatPeerSessionId = undefined;
+  session.duelTermsAvailable = false;
 }
 
 function handleDuelTextCommand(
@@ -2014,8 +2041,10 @@ function handleDuelTextCommand(
     session.pendingDuelInviteFromSessionId = undefined;
     challenger.combatSessionId = combatSession.id;
     challenger.combatPeerSessionId = session.id;
+    challenger.duelTermsAvailable = true;
     session.combatSessionId = combatSession.id;
     session.combatPeerSessionId = challenger.id;
+    session.duelTermsAvailable = true;
     connLog.info(
       '[world/duel] staged duel session=%s room=%s players="%s" vs "%s"',
       combatSession.id,

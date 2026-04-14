@@ -528,8 +528,12 @@ function handleWorldGameData(
     handleComstarTextReply(players, session, parsed.dialogId, parsed.text, connLog, capture);
 
   } else if (cmdIdx === 15) {
-    if (session.phase !== 'world') {
-      connLog.debug('[world] cmd-15 ignored outside world phase: phase=%s', session.phase);
+    if (session.phase !== 'world' || !session.worldInitialized) {
+      connLog.debug(
+        '[world] cmd-15 duel terms ignored outside initialized world phase: phase=%s worldInitialized=%s',
+        session.phase,
+        session.worldInitialized === true ? 'true' : 'false',
+      );
       return;
     }
     const parsed = parseClientCmd15DuelTerms(payload);

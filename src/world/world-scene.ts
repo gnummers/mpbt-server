@@ -264,7 +264,7 @@ export function buildSceneInitForSession(session: ClientSession) {
     { type: 6, label: 'Mech Bay' },
   ];
   if (isArena) {
-    if (session.combatSessionId) {
+    if (session.duelTermsAvailable) {
       arenaOptions.push({ type: 7, label: 'Duel Terms' });
     }
     arenaOptions.push({ type: 5, label: 'Fight' });

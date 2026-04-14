@@ -165,6 +165,8 @@ export interface ClientSession {
   combatSessionId?: string;
   /** Opponent session ID for the staged or active PvP combat session. */
   combatPeerSessionId?: string;
+  /** True only while the world scene should advertise the staged-duel terms action. */
+  duelTermsAvailable?: boolean;
 
   /** Optional scripted combat verification mode consumed on the next /fight bootstrap. */
   combatVerificationMode?: 'autowin' | 'autolose' | 'dmglocal' | 'dmgbot' | 'strictfire' | 'headtest';
