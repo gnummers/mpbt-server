@@ -31,20 +31,20 @@ export const JUMP_JET_STEP = 240;
 /** Tick interval (ms) for prototype jump-jet altitude updates. */
 export const JUMP_JET_TICK_MS = 120;
 
-/** Jump-jet fuel max value (percentage-like integer scale). */
-export const JUMP_JET_FUEL_MAX = 100;
+/** Jump-jet fuel max value; client caps DAT_004f21a2 at 0x78 (120). */
+export const JUMP_JET_FUEL_MAX = 120;
+
+/** Client requires fuel > 0x32 (50) before it emits cmd12/action 4. */
+export const JUMP_JET_START_FUEL_THRESHOLD = 50;
 
 /** Jump-jet fuel drained on each ascent/descent tick. */
 export const JUMP_JET_FUEL_DRAIN_PER_TICK = 8;
 
-/** Grounded jump-jet fuel regen applied on each movement frame. */
-export const JUMP_JET_FUEL_REGEN_PER_FRAME = 2;
+/** Passive grounded jump-jet fuel regen interval (ms); client updates fuel continuously. */
+export const JUMP_JET_FUEL_REGEN_INTERVAL_MS = 100;
 
-/** Passive grounded jump-jet fuel regen interval (ms). */
-export const JUMP_JET_FUEL_REGEN_INTERVAL_MS = 500;
-
-/** Passive grounded jump-jet fuel regen amount per interval tick. */
-export const JUMP_JET_FUEL_REGEN_PER_TICK = 4;
+/** Passive grounded jump-jet fuel regen amount per interval tick; client adds dt*10/100. */
+export const JUMP_JET_FUEL_REGEN_PER_TICK = 10;
 
 // ── Weapon fire gate ──────────────────────────────────────────────────────────
 
