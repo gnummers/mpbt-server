@@ -8,7 +8,7 @@
 
 import * as net from 'net';
 
-import { listCharacters } from '../db/characters.js';
+import { listCharacters, STARTING_CBILLS } from '../db/characters.js';
 import {
   type DuelResultRow,
   listAllDuelResults,
@@ -85,6 +85,8 @@ import {
 import {
   computeSolarisStandings,
   type SolarisStanding,
+  formatSolarisRankLabel,
+  formatSolarisStandingLine,
 } from './solaris-rankings.js';
 
 // ── Low-level send helpers ────────────────────────────────────────────────────
@@ -205,13 +207,6 @@ interface PersonnelRecordContext {
   latestResult?: DuelResultRow;
 }
 
-function formatPersonnelRank(standing?: SolarisStanding): string {
-  if (!standing || standing.matches <= 0 || standing.tierKey === 'UNRANKED') {
-    return 'Unranked';
-  }
-  return `${standing.tierLabel} #${standing.tierRank}`;
-}
-
 function countMatchesForAccount(results: DuelResultRow[], accountId: number | undefined): number {
   if (!accountId) return 0;
   let matches = 0;
@@ -257,32 +252,45 @@ function getPersonnelMechSummary(target: ClientSession): { chassis: string; clas
   return { chassis, classLabel };
 }
 
+function formatPersonnelLong(value: number): string {
+  return String(Math.max(0, Math.trunc(value))).padStart(10);
+}
+
+function getPersonnelEconomySummary(target: ClientSession): { earnings: number; wealth: number } {
+  const wealth = Math.max(0, Math.trunc(target.cbills ?? 0));
+  return {
+    earnings: Math.max(0, wealth - STARTING_CBILLS),
+    wealth,
+  };
+}
+
 export function buildPersonnelRecordLines(
   target: ClientSession,
   page: number,
   context: PersonnelRecordContext = {},
 ): string[] {
   const { standing, latestResult } = context;
+  const { chassis, classLabel } = getPersonnelMechSummary(target);
+  const { earnings, wealth } = getPersonnelEconomySummary(target);
   if (page <= 1) {
     return [
       // The client's Cmd14 header always shows the querying user's own callsign
       // as "Handle" (it reads from the room-roster selection cursor, which
       // defaults to self).  We have no wire field that overrides it, so we
       // repeat the correct handle as the first body line.
-      `Handle   : ${getDisplayName(target)}`,
-      `Rank    : ${formatPersonnelRank(standing)}`,
-      `House    : ${target.allegiance ?? 'Unaffiliated'}`,
-      `Location : ${getPresenceLocation(target)}`,
-      'Status   : Online',
-      `ComStar  : ${getComstarId(target)}`,
+      `Handle  : ${getDisplayName(target)}`,
+      `Rank    : ${formatSolarisRankLabel(standing)}`,
+      formatSolarisStandingLine(target.allegiance, standing),
+      `Earnings: ${formatPersonnelLong(earnings)}`,
+      `Wealth  : ${formatPersonnelLong(wealth)}`,
+      `ID      : ${getComstarId(target)}`,
     ];
   }
 
-  const { chassis, classLabel } = getPersonnelMechSummary(target);
   return [
-    `Winnings : ${Math.max(0, Math.trunc(target.cbills ?? 0))} cb`,
-    `Mech     : ${chassis}`,
-    `Class    : ${classLabel}`,
+    `Stable  : ${chassis} (${classLabel})`,
+    `Location : ${getPresenceLocation(target)}`,
+    'Status   : Online',
     `Score    : ${standing?.score ?? 0}`,
     `Record   : ${standing?.ratioText ?? '0/0'}`,
     buildLastDuelLine(target, latestResult),
@@ -680,11 +688,13 @@ export function sendPersonnelRecord(
   session.worldInquiryTargetId = resolvedTargetId;
   session.worldInquiryPage = page;
 
-  // The client's Cmd14 handler looks up the handle for the record in the room
-  // presence table (seeded by Cmd10/Cmd13), which is keyed by worldRosterId.
-  // Sending getComstarId (100000+accountId) as comstarId results in a lookup
-  // miss → "Handle = null" and the client falls back to its own callsign.
-  // The real ComStar ID is already shown in the body lines ('ComStar  : N').
+  // The client's Cmd14 header splits its data sources:
+  //   - Handle comes from the local room-presence table (Cmd10/Cmd13), keyed by worldRosterId.
+  //   - ID comes from the packet's type4 comstarId field.
+  // World login now aligns authenticated worldRosterId with the pilot's real
+  // ComStar ID, so Cmd14 can usually drive both header fields correctly with a
+  // single identifier. The body `ID` line remains as a compatibility fallback
+  // for any non-authenticated or legacy/fallback presence IDs.
   const presenceId = target.worldRosterId ?? 0;
 
   connLog.info(

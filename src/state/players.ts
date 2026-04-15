@@ -126,9 +126,10 @@ export interface ClientSession {
    */
   playerHealth?: number;
   /**
-   * Stable per-connection roster identifier used by world presence packets
-   * (Cmd10/Cmd11/Cmd12/Cmd13). This is distinct from accountId and only needs to be
-   * unique within the current server process.
+   * World presence identifier used by Cmd10/Cmd11/Cmd12/Cmd13.
+   * Authenticated world sessions prefer `100000 + accountId` so client-side
+   * personnel/ranking header lookups can align with ComStar IDs; pre-auth and
+   * fallback sessions use an in-memory unique ID instead.
    */
   worldRosterId?: number;
   /**
@@ -397,6 +398,16 @@ export class PlayerRegistry {
 
   all(): ClientSession[] {
     return [...this.sessions.values()];
+  }
+
+  /** First non-destroyed session already authenticated for the given account. */
+  findActiveSessionByAccountId(accountId: number, excludeId?: string): ClientSession | undefined {
+    return this.all().find(session =>
+      session.id !== excludeId &&
+      session.accountId === accountId &&
+      session.phase !== 'closing' &&
+      !session.socket.destroyed,
+    );
   }
 
   /** Sessions currently in a given room. */

@@ -23,6 +23,11 @@ export type SolarisTierKey =
 
 export type SolarisClassKey = 'LIGHT' | 'MEDIUM' | 'HEAVY' | 'ASSAULT';
 
+export interface SolarisStandingContext {
+  tierKey?: SolarisTierKey;
+  classKey?: SolarisClassKey;
+}
+
 export interface SolarisStanding {
   accountId: number;
   displayName: string;
@@ -66,6 +71,10 @@ const TIER_BANDS: Array<{ key: Exclude<SolarisTierKey, 'UNRANKED'>; label: strin
   { key: 'AMATEUR', label: 'Amateur', minScore: 1300 },
   { key: 'NOVICE', label: 'Novice', minScore: 0 },
 ];
+
+function formatClassLabel(classKey: SolarisClassKey): string {
+  return `${classKey.charAt(0)}${classKey.slice(1).toLowerCase()}`;
+}
 
 function ensureStanding(
   standings: Map<number, MutableStanding>,
@@ -228,4 +237,28 @@ export function findStandingByComstarId(
   comstarId: number,
 ): SolarisStanding | undefined {
   return standings.find(standing => standing.comstarId === comstarId);
+}
+
+export function formatSolarisRankLabel(standing?: SolarisStanding): string {
+  if (!standing || standing.matches <= 0 || standing.tierKey === 'UNRANKED') {
+    return 'Unranked';
+  }
+  return `${standing.tierLabel} #${standing.tierRank}`;
+}
+
+export function formatSolarisStandingLine(
+  allegiance: string | undefined,
+  standing?: SolarisStanding,
+  context?: SolarisStandingContext,
+): string {
+  const safeAllegiance = allegiance?.trim() || 'Unaffiliated';
+  if (!standing || standing.matches <= 0) {
+    return `Standing with ${safeAllegiance} : Unranked`;
+  }
+  const standingText = context?.classKey
+    ? `#${standing.overallRank} ${formatClassLabel(context.classKey)}`
+    : context?.tierKey
+      ? `#${standing.tierRank} ${standing.tierLabel}`
+      : `#${standing.overallRank} Overall`;
+  return `Standing with ${safeAllegiance} : ${standingText}`;
 }

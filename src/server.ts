@@ -161,7 +161,7 @@ function handleConnection(socket: net.Socket): void {
 
       switch (pkt.type) {
         case Msg.LOGIN:
-          handleLogin(session, pkt.payload, connLog, capture);
+          handleLogin(players, session, pkt.payload, connLog, capture);
           break;
 
         case Msg.SYNC:
@@ -235,6 +235,7 @@ function handleConnection(socket: net.Socket): void {
 // ── Login handler ─────────────────────────────────────────────────────────────
 
 function handleLogin(
+  players: PlayerRegistry,
   session: ClientSession,
   payload: Buffer,
   connLog: Logger,
@@ -277,7 +278,20 @@ function handleLogin(
       return;
     }
 
-    session.accountId = authResult.account.id;
+    const accountId = authResult.account.id;
+    const existingSession = players.findActiveSessionByAccountId(accountId, session.id);
+    if (existingSession) {
+      connLog.warn(
+        '[login] rejected duplicate session for accountId=%d (existingSession=%s phase=%s)',
+        accountId,
+        existingSession.id.slice(0, 8),
+        existingSession.phase,
+      );
+      session.socket.destroy();
+      return;
+    }
+
+    session.accountId = accountId;
     session.phase = 'lobby';
 
     if (authResult.created) {

@@ -1134,7 +1134,7 @@ No seed change happens mid-session in standard gameplay.
 | 43 | `0x4c` | `0x0040EED0` | |
 | 44 | `0x4d` | `0x00410000` | `Cmd44_KeyedSingleStringList` (mid-function entry into `FUN_0040fe80`) | Reads a `type1 list_id`, a title string, a count, then per row a `type4 item_id` plus one wire string. Builds a numbered selection list while preserving the wire `item_id` for later `Cmd7(listId, item_id + 1)` replies. The ordinary callback (`LAB_00410a70`) sends plain `Cmd7` for ESC / row pick, then only skips the close helper `FUN_0040faf0()` for keep-open list ids `0x08`, `0x0c`, `0x22`, `0x25`, and `0x34`. Special case: `list_id == 0x22` appends a synthetic `item_id = 100` row labeled `Exit to online service` (`MPBT.MSG[139]`) locally, and picking that row opens `FUN_00444af0()` instead of sending a wire request. An alternate callback (`LAB_00410bb0`) exists but uses `cmd29` control-family `2` for both ESC and row pick, so it should not be treated as the ordinary terminal-picker path. Strong current candidate for compact chooser menus such as **Choose a ranking tier** / **Choose a mech class**. |
 | 45 | `0x4e` | `0x0040CEF0` | `Cmd45_ScrollListShell` | Reads a 1-byte mode and a `Frame_ReadString` title/body string into `DAT_004e1844`, normalizing `\` to newlines. Creates/reuses a type-6 scroll-list window backed by `DAT_004e2620`, installs callbacks `FUN_0040ce70` / `FUN_0040ca70`, and copies the previously latched list-id from `DAT_00472a34` into `window[0x512]` so later Enter/ESC actions can emit `Cmd7(listId, selection)` replies. Enter on a populated row goes straight to `Cmd7(listId, item_id + 1)`; only `listId == 0` diverts into the local `Personal inquiry on:` submenu. Mode `0/1` creates a plain list shell, `2/4` add Space/ESC footer controls, and `3` adds a Space-only footer. Crucial paging clue: in `FUN_0040ca70`, pressing **Space** while `mode != 3` sends raw outbound byte `0x1c` (client `cmd28`), flushes, and clears the shared row store, which is the strongest current match for a built-in **MORE / next-page** action. New hard proof from `FUN_00433310`: when the long string is rendered into a real window it feeds each line through `FUN_00431f10`, so the `|NN|%id` / `|NN|$text` row-feed grammar can ride **inline inside the same Cmd45 body string** rather than requiring a separate visible carrier command. |
-| 46 | `0x4f` | `0x00414130` | Rich record / info panel (mid-function entry inside `World_HandleInfoPanelPacket_v123`) | The containing handler reads one `type4` id, one `type3` numeric value, skips two additional `type4` fields, then reads **six wire strings** and renders a modal text/info page. The proven title/label format hardcodes `MPBT.MSG` fields including `Handle`, `ID`, and `Battles to date`, making this the strongest current candidate for richer Solaris ranking/personnel detail beyond the simpler `Cmd14` page. |
+| 46 | `0x4f` | `0x00414130` | Rich record / info panel (mid-function entry inside `World_HandleInfoPanelPacket_v123`) | The containing handler reads one `type4` id, one `type3` numeric value, skips two additional `type4` fields, then reads **six wire strings** and renders a modal text/info page. The proven title/label format hardcodes `MPBT.MSG` fields including `Handle`, `ID`, and `Battles to date`, making this the strongest current candidate for richer Solaris ranking/personnel detail beyond the simpler `Cmd14` page. Follow-up xrefs show it also pushes the client-global room-presence buffer `004f4238` for its visible `Handle` line, so it is **not** an escape hatch from the same local-handle dependency that affects `Cmd14`. |
 | 47 | `0x50` | `0x004192F0` | |
 | 48 | `0x51` | `0x00411DF0` | `Cmd48_KeyedTripleStringList` | Wrapper to `FUN_00411e20(1)`. Reads `type1 list_id`, a `Frame_ReadArg` title string, a 1-byte count, then per row: `type4 item_id` + three `Frame_ReadArg` strings. Builds a type-4 numbered selection window where each line formats as `N. <item_id> <str1> <str2> <str3>` when `item_id != 0`. Selecting an entry later emits `Cmd7(list_id, item_id + 1)` via `FUN_00412190`. This is the strongest current candidate for the real global all-roster / KP5 response, because the payload naturally fits `ComStar ID + handle + sector + location` style rows. |
 | 49 | `0x52` | `0x0040F980` | Solaris map connector / path overlay. Reads one compact type3 value, resolves two map-node indices plus a color/style value, and draws a line between the corresponding Solaris map locations. |
@@ -1402,6 +1402,12 @@ page opener itself:
     - `Battles to date: %ld` (`160`)
   - This makes it a strong candidate for the richer Solaris ranking/personnel
     summary page that goes beyond the simpler, already-proven `Cmd14` personnel record.
+  - `BT-MAN.txt` also says this option shows the player's current tier rank and rank
+    score **and** presents the seven-tier menu. The current server now follows that
+    manual-backed compatibility shape by sending the `Cmd46` personal panel and then
+    immediately opening the proven `Cmd44` tier chooser. The remaining uncertainty is
+    only whether retail kept both surfaces visible concurrently or sequenced them in a
+    slightly different UI arrangement.
 
 - **Solaris Match Results** — current best fit: also the **`Cmd45` scroll-list shell family**.
   - Best current inference is that match results are presented as a paged list or
@@ -1420,9 +1426,11 @@ page opener itself:
 - **What is *not* currently favored**
   - The richer client submit path `Cmd16` is **not** a global requirement.
     Current RE narrows it to special numbered-list ids `0x20` and `0x3e`.
-  - That means sanctioned rankings/results should be assumed to stay on ordinary
-    `Cmd7` selection unless capture or further RE proves one of those two
-    multi-select numbered-list ids is actually involved.
+  - For the current Solaris ranking/result candidate flow, the practical working
+    conclusion is now: `Cmd44` chooser + `Cmd45` / `Cmd58` scroll shell still
+    submits ordinary row picks through `Cmd7`, while **MORE** stays on raw
+    outbound `cmd28`. No current evidence ties sanctioned rankings or match
+    results to the `Cmd16` multi-select path.
 
 Combat-handler revalidation against the local `MPBTWIN.EXE` on 2026-04-06 gives the
 first useful M7 position-sync lead, but it is **combat-mode only** and should not be
@@ -1605,7 +1613,10 @@ Additional world-client senders confirmed after the first real-client M4 pass:
   `1b 21 2a 22 2b 4d 6f 6f 73 69 6e 67 74 6f 6e 25 27 2c 26 1b`
   Decoded: `seq=0`, `cmd=9`, `subcmd=1`, string length `10`, text `"Moosington"`, selected index `4`. The probe persisted `display_name="Moosington"`, `allegiance="Marik"`, then redirected to world. Lobby capture: `1775518868442_2e0cf05d-0986-4971-bd8f-df4ea8fcc43a.txt`; world follow-up capture: `1775518908694_13dc7a16-2abd-49f6-933b-01844f7473b8.txt`. Caveat: the local probe did not yet seed a launch record before REDIRECT, so the world-side init still fell back to username/mech defaults; that is a probe integration gap, not a `Cmd9` UI failure.
 - Clean implementation follow-up: the server now uses `Cmd9` for normal first-login character creation, persists the typed display name and selected House directly from the `cmd 9 / subcmd 1` reply, and carries `accountId`, `displayName`, `allegiance`, and the default mech launch context across REDIRECT via `launchRegistry`. Socket smoke confirmed first-login and returning-account world init both render the typed callsign in `Cmd4`.
-- That `Cmd7(0x3f2, target_id + 1)` personnel-data request now has a concrete reply: world `Cmd14_PersonnelRecord` (`0x2f`, `FUN_00415700`). The handler renders a modal text page using the currently selected roster handle, a payload `type4 comstar_id`, a payload `type3 battles_to_date`, and six server-supplied text lines. Inference from the local `MPBT.MSG` around lines `151..160`: those extra lines likely cover the remaining personnel fields such as rank, standing, unit, earnings, wealth, and stable.
+- That `Cmd7(0x3f2, target_id + 1)` personnel-data request now has a concrete reply: world `Cmd14_PersonnelRecord` (`0x2f`, `FUN_00415700`). The handler renders a modal text page using the currently selected roster handle, a payload `type4 comstar_id`, a payload `type3 battles_to_date`, and six server-supplied text lines. The local `Mpbt.msg` / `MPBT.MSG` files now confirm the exact adjacent personnel labels at indices `154..160`: `Rank`, `Standing with`, `Unit`, `Earnings`, `Wealth`, `Stable`, `Battles to date`.
+- Additional client disassembly around the unlabeled `Cmd14` build path strengthens the current server limitation note: the dialog's visible header is split across two sources. The `ID` / battles values come from packet payload fields, but the `Handle` line still depends on the client-local room-presence roster state rather than a server-supplied handle string. That means the current server cannot show both the real target handle and the real target ComStar ID in the `Cmd14` header simultaneously without a deeper roster-table manipulation or a different record path.
+- The strongest alternate-path candidate, `Cmd46`, does **not** avoid that dependency: `World_HandleInfoPanelPacket_v123` also formats its visible `Handle` line from the room-presence-backed global `004f4238`, which is updated by `World_HandleRoomPresenceSync_v123` / rename / event handlers. So the clean current fix is not "switch from `Cmd14` to `Cmd46`"; it is to align authenticated world presence IDs with real ComStar IDs.
+- Server-side follow-up on 2026-04-15 now applies that cleaner fix directly. Lobby and world login both reject duplicate sessions for the same account, and authenticated world sessions now set `worldRosterId = 100000 + accountId`. That lets the room-presence table and the `Cmd14`/`Cmd46` header `ID` payload speak the same identifier for normal pilots, so the client can resolve the correct target handle without giving up the real ComStar ID. The remaining body `ID` line in the server is now only a compatibility fallback for non-authenticated/legacy edge cases until live GUI validation confirms the header is correct in practice.
 - `Cmd14_PersonnelRecord` is paged. Its dialog callback `FUN_00415690` closes on Enter/ESC, but Space emits `Cmd7(0x95, 2)` before flushing. This is the strongest current candidate for the follow-up `More` request that advances to a second personnel-record page.
 - Follow-up trace on `Cmd7(0x95, 2)`: no separate second-page reply handler has been identified so far. `FUN_00415690` is only installed by `Cmd14_PersonnelRecord`, and this pass did not uncover another world-command parser dedicated to a later personnel page. Strongest current inference: the server answers `Cmd7(0x95, 2)` with another `Cmd14_PersonnelRecord` page carrying a different set of six lines, rather than switching to a distinct command code.
 - The only `Cmd48`-specific hard-coded `list_id` branch found so far is `0x2e`, which installs modal close boilerplate (`FUN_00411e00`) rather than a personal-inquiry action split. Inference: if KP5/all-roster really reuses `Cmd48`, the first row pick likely goes straight back to the server as `Cmd7(list_id, item_id + 1)`, and any later `ComStar vs personnel` split is either server-driven or implemented as a separate local follow-up packet sequence.
@@ -2615,6 +2626,14 @@ Confirmed call sites:
 | `4` | `Combat_JumpJetInputTick_v123` (`0x00422c50`) | Jump jet fire request. Requires jump input bit, remaining jump fuel/energy (`DAT_004f21a2 > 0x32`), no active jump flags, and not in a blocked animation state. |
 | `6` | `FUN_00448d80` | Jump/landing transition request. Sent when an airborne actor reaches ground contact and the local jump-state flags are cleared. |
 
+Additional jump-fuel findings from `FUN_0042cf60 -> FUN_0042c610`:
+
+- `DAT_004f21a2` is capped at `0x78` (`120`) rather than `100`.
+- The client only allows jump start when fuel is **strictly greater than** `0x32` (`50`).
+- The local jump-ready indicator uses hysteresis: it flips back on when recharge crosses above `0x3c` (`60`) and flips off again once active fuel drops below `0x32` while still above `0x28` (`40`).
+- Grounded recharge is continuous in the main movement/update loop (`+ dt * 10 / 100`), not a separate movement-frame bonus plus passive timer.
+- The local jump input path also refuses start while jump state flags are already active, matching a server-side "ignore duplicate airborne start" guard more closely than the earlier prototype restart behavior.
+
 **Jump jet fire — `Combat_SendCmd12Action_v123('\x04')`:**
 ```
 Wire:  ESC '!'  [0x0C+0x21=0x2D]  [0x04+0x21=0x25]  [CRC]
@@ -2933,6 +2952,10 @@ narrow the missing public-results layer substantially:
   - `1122` — `Class Rankings`
   - `154` — `Rank    : %s`
   - `155` — `Standing with %s : %s`
+  - `156` — `Unit    : %s`
+  - `157` — `Earnings: %10ld`
+  - `158` — `Wealth  : %10ld`
+  - `159` — `Stable  : %s (%s)`
   - `160` — `Battles to date: %ld`
 - `BT-MAN.txt` confirms the intended sanctioned-match behavior:
   - sanctioned arena results are fed immediately into **SCentEx** (Solaris central
@@ -2961,10 +2984,12 @@ narrow the missing public-results layer substantially:
     on the ordinary single-pick path
   - the separate `Cmd45` scroll-list family (`Cmd58` sets its list id) also submits via
     plain `Cmd7(list_id, item_id + 1)` on Enter
-  - current best inference: the current Solaris ranking/result candidates
-    (`Cmd44` chooser -> `Cmd45` paged results -> optional `Cmd46` detail page)
-    do **not** require either `cmd 10` or `cmd 16` unless capture/RE proves the result
-    set actually uses one of the special `Cmd26` / `Cmd32` multi-select list ids
+  - current best inference is now strong enough to guide the server: the current
+    Solaris ranking/result candidates (`Cmd44` chooser -> `Cmd45` paged results
+    -> optional `Cmd46` detail page) stay on ordinary `Cmd7` selection plus
+    `cmd28` for page advance, and do **not** require either `cmd 10` or
+    `cmd 16` unless future capture/RE proves the result set actually uses one of
+    the special `Cmd26` / `Cmd32` multi-select list ids
 
 ### Open sanctioned-duel questions
 

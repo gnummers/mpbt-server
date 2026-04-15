@@ -141,6 +141,7 @@ const WELCOME_TEXT = 'Welcome to the game world.';
 // ── Login handler ─────────────────────────────────────────────────────────────
 
 async function handleWorldLogin(
+  players:  PlayerRegistry,
   session:  ClientSession,
   payload:  Buffer,
   connLog:  Logger,
@@ -177,19 +178,37 @@ async function handleWorldLogin(
     return;
   }
 
+  if (launch.accountId !== undefined) {
+    const existingSession = players.findActiveSessionByAccountId(launch.accountId, session.id);
+    if (existingSession) {
+      connLog.warn(
+        '[world-login] rejected duplicate session for accountId=%d (existingSession=%s phase=%s)',
+        launch.accountId,
+        existingSession.id.slice(0, 8),
+        existingSession.phase,
+      );
+      session.socket.destroy();
+      return;
+    }
+  }
+
   session.accountId       = launch.accountId;
   session.displayName     = launch.displayName;
   session.allegiance      = launch.allegiance;
   session.cbills          = launch.cbills;
   session.selectedMechId   = launch.mechId;
   session.selectedMechSlot = launch.mechSlot;
+  if (session.accountId !== undefined) {
+    session.worldRosterId = 100000 + session.accountId;
+  }
   connLog.info(
-    '[world-login] launch record found: displayName="%s" allegiance=%s mech=%s (id=%d slot=%d)',
+    '[world-login] launch record found: displayName="%s" allegiance=%s mech=%s (id=%d slot=%d rosterId=%d)',
     session.displayName ?? session.username,
     session.allegiance ?? '(none)',
     launch.mechTypeString,
     launch.mechId,
     launch.mechSlot,
+    session.worldRosterId ?? 0,
   );
 
   session.phase          = 'world';
@@ -860,7 +879,7 @@ function handleWorldConnection(socket: net.Socket, players: PlayerRegistry, log:
 
       switch (pkt.type) {
         case Msg.LOGIN:
-          handleWorldLogin(session, pkt.payload, connLog, capture).catch((err: unknown) => {
+          handleWorldLogin(players, session, pkt.payload, connLog, capture).catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             connLog.error('[world] uncaught error in handleWorldLogin: %s', msg);
             socket.destroy();

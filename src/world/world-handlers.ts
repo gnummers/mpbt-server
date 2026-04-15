@@ -144,6 +144,8 @@ import {
   type SolarisStanding,
   computeSolarisStandings,
   findStandingByComstarId,
+  formatSolarisRankLabel,
+  formatSolarisStandingLine,
 } from './solaris-rankings.js';
 import {
   BOT_INITIAL_HEALTH,
@@ -153,8 +155,8 @@ import {
   JUMP_JET_STEP,
   JUMP_JET_TICK_MS,
   JUMP_JET_FUEL_MAX,
+  JUMP_JET_START_FUEL_THRESHOLD,
   JUMP_JET_FUEL_DRAIN_PER_TICK,
-  JUMP_JET_FUEL_REGEN_PER_FRAME,
   JUMP_JET_FUEL_REGEN_INTERVAL_MS,
   JUMP_JET_FUEL_REGEN_PER_TICK,
   FIRE_ACTION_WINDOW_MS,
@@ -168,13 +170,19 @@ import {
 
 function regenJumpFuelIfGrounded(
   session: ClientSession,
-  amount = JUMP_JET_FUEL_REGEN_PER_FRAME,
+  amount: number,
 ): void {
   if (session.combatJumpTimer !== undefined) return;
   if ((session.combatJumpAltitude ?? 0) > 0) return;
   const fuel = session.combatJumpFuel ?? JUMP_JET_FUEL_MAX;
   if (fuel >= JUMP_JET_FUEL_MAX) return;
   session.combatJumpFuel = Math.min(JUMP_JET_FUEL_MAX, fuel + amount);
+}
+
+function selectedMechSupportsJumpJets(session: ClientSession): boolean {
+  const mechEntry = WORLD_MECH_BY_ID.get(session.selectedMechId ?? FALLBACK_MECH_ID);
+  const stats = mechEntry ? MECH_STATS.get(mechEntry.typeString) : undefined;
+  return stats === undefined || stats.disabled || stats.jumpMeters !== null;
 }
 
 const DEFAULT_BOT_ARMOR_VALUES = Array<number>(10).fill(10);
@@ -567,12 +575,6 @@ function settleDuelCbills(
     });
 }
 
-function buildRankingLabel(standing: SolarisStanding): string {
-  return standing.tierKey === 'UNRANKED'
-    ? 'Unranked'
-    : `${standing.tierLabel} #${standing.tierRank}`;
-}
-
 function findLatestResultForAccount(
   results: DuelResultRow[],
   accountId: number,
@@ -606,17 +608,12 @@ function buildRankingInfoPanelLines(
     classKey?: SolarisClassKey;
   },
 ): string[] {
-  const contextLine = context?.classKey
-    ? `Class   : #${standing.overallRank} ${context.classKey.charAt(0)}${context.classKey.slice(1).toLowerCase()}`
-    : context?.tierKey
-      ? `Tier    : #${standing.tierRank} ${standing.tierLabel}`
-      : `Overall : #${standing.overallRank}`;
   return [
-    `Rank    : ${buildRankingLabel(standing)}`,
+    `Rank    : ${formatSolarisRankLabel(standing)}`,
     `Score   : ${standing.score}`,
     `Record  : ${standing.ratioText}`,
     `House   : ${standing.allegiance}`,
-    contextLine,
+    formatSolarisStandingLine(standing.allegiance, standing, context),
     buildRankingLastDuelLine(standing, latestResult),
   ];
 }
@@ -708,7 +705,7 @@ const TIER_RANKING_LABELS = new Map<SolarisTierKey, string>([
 function buildRankingShellRows(standings: SolarisStanding[]) {
   return standings.map((standing) => ({
     itemId: standing.comstarId,
-    text: `${standing.displayName.slice(0, 12).padEnd(12)} ${String(standing.score).padStart(5)} ${standing.ratioText.padStart(7)}`,
+    text: `${String(standing.comstarId).padStart(6)} ${standing.displayName.slice(0, 8).padEnd(8)} ${String(standing.score).padStart(5)} ${standing.ratioText.padStart(5)}`,
   }));
 }
 
@@ -780,6 +777,7 @@ function showPersonalTierRanking(
         return;
       }
       sendRankingInfoPanel(session, standing, latestResult, capture, 'CMD46_PERSONAL_TIER_RANK');
+      sendTierRankingChooser(session, connLog, capture);
     })
     .catch((err: unknown) => {
       const detail = err instanceof Error ? err.message : String(err);
@@ -2467,12 +2465,14 @@ export function handleComstarTextReply(
           return;
         }
         if (!target.socket.destroyed && target.socket.writable) {
-          send(
-            session.socket,
-            buildCmd3BroadcastPacket(`ComStar sent to ${targetName}.`, nextSeq(session)),
-            capture,
-            'CMD3_COMSTAR_ACK',
-          );
+          if (!session.socket.destroyed && session.socket.writable) {
+            send(
+              session.socket,
+              buildCmd3BroadcastPacket(`ComStar sent to ${targetName}.`, nextSeq(session)),
+              capture,
+              'CMD3_COMSTAR_ACK',
+            );
+          }
           const canPromptLive = target.phase === 'world' && target.worldInitialized === true;
           if (!canPromptLive) {
             connLog.info('[world] ComStar recipient is busy; leaving message unread for later retrieval');
@@ -2516,12 +2516,14 @@ export function handleComstarTextReply(
           const msg = err instanceof Error ? err.message : String(err);
           connLog.error('[world] failed to save disconnected-target ComStar message: %s', msg);
         });
-        send(
-          session.socket,
-          buildCmd3BroadcastPacket('ComStar message queued for offline delivery.', nextSeq(session)),
-          capture,
-          'CMD3_COMSTAR_QUEUED',
-        );
+        if (!session.socket.destroyed && session.socket.writable) {
+          send(
+            session.socket,
+            buildCmd3BroadcastPacket('ComStar message queued for offline delivery.', nextSeq(session)),
+            capture,
+            'CMD3_COMSTAR_QUEUED',
+          );
+        }
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
@@ -4323,7 +4325,6 @@ export function handleCombatMovementFrame(
   if (cmd === 8) {
     const frame = parseClientCmd8Coasting(payload);
     if (!frame) return;
-    regenJumpFuelIfGrounded(session);
     session.combatX          = frame.xRaw - COORD_BIAS;
     session.combatY          = frame.yRaw - COORD_BIAS;
     session.combatHeadingRaw = frame.headingRaw;
@@ -4354,7 +4355,6 @@ export function handleCombatMovementFrame(
   if (cmd === 9) {
     const frame = parseClientCmd9Moving(payload);
     if (!frame) return;
-    regenJumpFuelIfGrounded(session);
     session.combatX          = frame.xRaw - COORD_BIAS;
     session.combatY          = frame.yRaw - COORD_BIAS;
     session.combatHeadingRaw = frame.headingRaw;
@@ -4827,19 +4827,31 @@ export function handleCombatActionFrame(
   }
 
   if (action.action === 4) {
-    const fuel = session.combatJumpFuel ?? JUMP_JET_FUEL_MAX;
-    if (fuel <= 0) {
-      connLog.info('[world/combat] cmd-12 jump action=4 ignored (fuel depleted)');
+    if (!selectedMechSupportsJumpJets(session)) {
+      connLog.info('[world/combat] cmd-12 jump action=4 ignored (selected mech has no jump jets)');
       return;
     }
 
-    if (session.combatJumpTimer !== undefined) {
-      clearInterval(session.combatJumpTimer);
-      session.combatJumpTimer = undefined;
+    const fuel = session.combatJumpFuel ?? JUMP_JET_FUEL_MAX;
+    if (fuel <= JUMP_JET_START_FUEL_THRESHOLD) {
+      connLog.info(
+        '[world/combat] cmd-12 jump action=4 ignored (fuel=%d threshold=%d)',
+        fuel,
+        JUMP_JET_START_FUEL_THRESHOLD,
+      );
+      return;
+    }
+
+    if (session.combatJumpTimer !== undefined || (session.combatJumpAltitude ?? 0) > 0) {
+      connLog.info('[world/combat] cmd-12 jump action=4 ignored (jump already active)');
+      return;
     }
 
     let jumpDirection = 1;
     session.combatJumpAltitude = Math.max(0, session.combatJumpAltitude ?? 0);
+    session.combatThrottle = 0;
+    session.combatLegVel = 0;
+    session.combatSpeedMag = 0;
 
     const sendJumpUpdate = (tag: string): void => {
       const x = session.combatX ?? 0;
