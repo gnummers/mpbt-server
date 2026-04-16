@@ -246,7 +246,6 @@ export function getSolarisRoomDescription(roomId: number): string {
 
 export function getSolarisSceneHeaderText(roomId: number): string {
   const name = getSolarisRoomName(roomId);
-  if (usesClientMapDescription(roomId)) return name;
   const desc = getSolarisRoomDescription(roomId);
   return desc ? `${name}\x5c${desc}` : name;
 }
