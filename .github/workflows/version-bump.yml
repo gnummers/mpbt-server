@@ -37,6 +37,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       # ── Parse @version directive and calculate new version ─────────────────
       - name: Resolve new version
