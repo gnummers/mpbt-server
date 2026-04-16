@@ -60,26 +60,12 @@ export const COMSTAR_ACCESS_ACTION_TYPE = 0x08;
 export const ARENA_SIDE_ACTION_TYPE     = 0x09;
 export const ARENA_STATUS_ACTION_TYPE   = 0x0A;
 
-export const TERMINAL_MENU_ITEMS = [
+// Keep the always-available ComStar button on the smallest retail-GUI-safe surface.
+// Deeper news and ranking flows stay reachable from the News Grid submenu.
+export const GLOBAL_COMSTAR_MENU_ITEMS = [
   { itemId: 0, text: 'Send a ComStar message' },
   { itemId: 1, text: 'Receive a ComStar message' },
   { itemId: 2, text: 'Check News Grid' },
-  { itemId: 3, text: 'Examine Planetary Info' },
-  { itemId: 4, text: 'Set News Agent Options' },
-  { itemId: 5, text: 'Move without any Mechs' },
-  { itemId: 6, text: 'General news' },
-  { itemId: 7, text: 'Access Newsgrid' },
-  { itemId: 8, text: 'Transfer funds to someone' },
-  { itemId: 9, text: 'Change Handle' },
-  { itemId: 10, text: 'Review Personal Status' },
-  { itemId: 11, text: 'Examine my Contract' },
-  { itemId: 12, text: 'Review Unit Status' },
-] as const;
-
-export const GLOBAL_COMSTAR_MENU_ITEMS = [
-  'Send a ComStar message',
-  'Receive a ComStar message',
-  'Check News Grid',
 ] as const;
 
 export const COMSTAR_SEND_TARGET_MENU_ITEMS = [

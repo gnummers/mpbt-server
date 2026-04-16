@@ -92,6 +92,7 @@ import {
   FALLBACK_MECH_ID,
   WORLD_MECH_BY_ID,
   WORLD_MECHS,
+  GLOBAL_COMSTAR_MENU_ITEMS,
   DEFAULT_MAP_ROOM_ID,
   DEFAULT_SCENE_NAME,
   MATCH_RESULTS_MENU_LIST_ID,
@@ -864,17 +865,15 @@ const TIER_RANKING_LABELS = new Map<SolarisTierKey, string>([
 ]);
 
 function buildRankingMenuRows(standings: SolarisStanding[]) {
-  return standings.map((standing) => ({
-    itemId: standing.comstarId,
-    text: `${String(standing.comstarId).padStart(6)} ${standing.displayName.slice(0, 8).padEnd(8)} ${String(standing.score).padStart(5)} ${standing.ratioText.padStart(5)}`,
-  }));
+  return standings.map(
+    standing => `${String(standing.comstarId).padStart(6)} ${standing.displayName.slice(0, 8).padEnd(8)} ${String(standing.score).padStart(5)} ${standing.ratioText.padStart(5)}`,
+  );
 }
 
 function buildMatchResultMenuRows(results: DuelResultRow[]) {
-  return results.map((result) => ({
-    itemId: result.id,
-    text: `${result.winner_display_name.slice(0, 8)} vs ${result.loser_display_name.slice(0, 8)}`,
-  }));
+  return results.map(
+    result => `${result.winner_display_name.slice(0, 8)} vs ${result.loser_display_name.slice(0, 8)}`,
+  );
 }
 
 function sendRankingPage(
@@ -2929,169 +2928,91 @@ export function handleComstarAccessSelection(
   connLog: Logger,
   capture: CaptureLogger,
 ): void {
-  const selectedItemId = selection - 1;
   if (selection <= 0) {
     connLog.info('[world] ComStar access menu closed');
     return;
   }
 
-  if (selectedItemId === 0) {
-    session.pendingComstarTargetPrompt = false;
-    connLog.info('[world] ComStar access: opening send-target chooser');
-    sendComstarSendTargetMenu(session, connLog, capture);
-    return;
-  }
-
-  if (selectedItemId === 1) {
-    connLog.info('[world] ComStar access: receive-message check');
-    const recipientAccountId = session.accountId;
-    if (recipientAccountId === undefined) {
-      send(
-        session.socket,
-        buildCmd20Packet(COMSTAR_DIALOG_ID, 2, 'No messages waiting.', nextSeq(session)),
-        capture,
-        'CMD20_COMSTAR_EMPTY',
-      );
-      return;
-    }
-    fetchNextSavedUnreadMessage(recipientAccountId)
-      .then((msg) => {
-        if (!msg) {
-          if (!session.socket.destroyed && session.socket.writable) {
-            send(
-              session.socket,
-              buildCmd20Packet(COMSTAR_DIALOG_ID, 2, 'No messages waiting.', nextSeq(session)),
-              capture,
-              'CMD20_COMSTAR_EMPTY',
-            );
-          }
-          return;
-        }
-        if (!session.socket.destroyed && session.socket.writable) {
-          if (msg.id === session.pendingIncomingComstarMessageId) {
-            clearPendingIncomingComstarPrompt(session);
-          }
-          send(
-            session.socket,
-            buildCmd36MessageViewPacket(msg.sender_comstar_id, msg.body, nextSeq(session)),
-            capture,
-            'CMD36_COMSTAR_INBOX',
-          );
-        }
-        markRead([msg.id]).catch((err: unknown) => {
-          const detail = err instanceof Error ? err.message : String(err);
-          connLog.error('[world] failed to mark terminal ComStar message read: %s', detail);
-        });
-      })
-      .catch((err: unknown) => {
-        const detail = err instanceof Error ? err.message : String(err);
-        connLog.error('[world] failed to fetch unread ComStar message: %s', detail);
-        if (!session.socket.destroyed && session.socket.writable) {
-          send(
-            session.socket,
-            buildCmd20Packet(COMSTAR_DIALOG_ID, 2, 'Unable to retrieve ComStar messages.', nextSeq(session)),
-            capture,
-            'CMD20_COMSTAR_FAIL',
-          );
-        }
-      });
-    return;
-  }
-
-  if (selectedItemId === 2) {
-    sendNewsCategoryMenu(session, connLog, capture);
-    return;
-  }
-
-  if (selectedItemId === 6) {
-    fetchLatestPublishedArticle()
-      .then((article) => {
-        if (!article || session.socket.destroyed || !session.socket.writable) {
-          if (!article && !session.socket.destroyed && session.socket.writable) {
-            sendNoNewsAvailable(session, capture);
-          }
-          return;
-        }
-        sendNewsArticleText(session, article.title, article.summary, article.body, capture);
-      })
-      .catch((err: unknown) => {
-        const detail = err instanceof Error ? err.message : String(err);
-        connLog.error('[world] failed to fetch general news: %s', detail);
-        if (!session.socket.destroyed && session.socket.writable) {
-          sendNoNewsAvailable(session, capture);
-        }
-      });
-    return;
-  }
-
-  if (selectedItemId === 7) {
-    listLatestPublishedArticles(10)
-      .then((articles) => {
-        if (session.socket.destroyed || !session.socket.writable) return;
-        if (articles.length === 0) {
-          sendNoNewsAvailable(session, capture);
-          return;
-        }
-        sendNewsgridArticleMenu(
-          session,
-          articles.map(article => article.id),
-          articles.map(article => article.title.slice(0, 60)),
-          connLog,
-          capture,
-        );
-      })
-      .catch((err: unknown) => {
-        const detail = err instanceof Error ? err.message : String(err);
-        connLog.error('[world] failed to fetch newsgrid list: %s', detail);
-        if (!session.socket.destroyed && session.socket.writable) {
-          sendNoNewsAvailable(session, capture);
-        }
-      });
-    return;
-  }
-
-  if (selectedItemId === 9) {
-    openHandleChangePrompt(session, connLog, capture);
-    return;
-  }
-
-  if (selectedItemId === 10) {
-    const selfTargetId = getComstarId(session);
-    connLog.info('[world] ComStar access: personal status for self target=%d', selfTargetId);
-    sendPersonnelRecord(players, session, selfTargetId, 1, connLog, capture);
-    return;
-  }
-
-  if (selectedItemId === 12) {
-    const selectedMech = WORLD_MECH_BY_ID.get(session.selectedMechId ?? FALLBACK_MECH_ID);
-    if (!selectedMech) {
-      connLog.warn('[world] ComStar access: no current mech available for unit status');
-      send(
-        session.socket,
-        buildCmd20Packet(COMSTAR_DIALOG_ID, 2, 'No unit status is available yet.', nextSeq(session)),
-        capture,
-        'CMD20_COMSTAR_NO_UNIT',
-      );
-      return;
-    }
-    const examineText = buildMechExamineText(selectedMech.typeString, selectedMech);
-    connLog.info('[world] ComStar access: unit status mech_id=%d (%s)', selectedMech.id, selectedMech.typeString);
+  const selectedItem = GLOBAL_COMSTAR_MENU_ITEMS[selection - 1];
+  if (!selectedItem) {
+    connLog.warn('[world] ComStar access: selection=%d outside compatibility menu', selection);
     send(
       session.socket,
-      buildCmd20Packet(COMSTAR_DIALOG_ID, 2, examineText, nextSeq(session)),
+      buildCmd20Packet(COMSTAR_DIALOG_ID, 2, 'That ComStar option is unavailable from this menu.', nextSeq(session)),
       capture,
-      'CMD20_COMSTAR_UNIT',
+      'CMD20_COMSTAR_INVALID',
     );
     return;
   }
 
-  connLog.info('[world] ComStar access: selection=%d not yet implemented', selection);
-  send(
-    session.socket,
-    buildCmd20Packet(COMSTAR_DIALOG_ID, 2, 'This terminal option is not implemented yet.', nextSeq(session)),
-    capture,
-    'CMD20_COMSTAR_UNIMPL',
-  );
+  switch (selectedItem.itemId) {
+    case 0:
+      session.pendingComstarTargetPrompt = false;
+      connLog.info('[world] ComStar access: opening send-target chooser');
+      sendComstarSendTargetMenu(session, connLog, capture);
+      return;
+
+    case 1: {
+      connLog.info('[world] ComStar access: receive-message check');
+      const recipientAccountId = session.accountId;
+      if (recipientAccountId === undefined) {
+        send(
+          session.socket,
+          buildCmd20Packet(COMSTAR_DIALOG_ID, 2, 'No messages waiting.', nextSeq(session)),
+          capture,
+          'CMD20_COMSTAR_EMPTY',
+        );
+        return;
+      }
+      fetchNextSavedUnreadMessage(recipientAccountId)
+        .then((msg) => {
+          if (!msg) {
+            if (!session.socket.destroyed && session.socket.writable) {
+              send(
+                session.socket,
+                buildCmd20Packet(COMSTAR_DIALOG_ID, 2, 'No messages waiting.', nextSeq(session)),
+                capture,
+                'CMD20_COMSTAR_EMPTY',
+              );
+            }
+            return;
+          }
+          if (!session.socket.destroyed && session.socket.writable) {
+            if (msg.id === session.pendingIncomingComstarMessageId) {
+              clearPendingIncomingComstarPrompt(session);
+            }
+            send(
+              session.socket,
+              buildCmd36MessageViewPacket(msg.sender_comstar_id, msg.body, nextSeq(session)),
+              capture,
+              'CMD36_COMSTAR_INBOX',
+            );
+          }
+          markRead([msg.id]).catch((err: unknown) => {
+            const detail = err instanceof Error ? err.message : String(err);
+            connLog.error('[world] failed to mark terminal ComStar message read: %s', detail);
+          });
+        })
+        .catch((err: unknown) => {
+          const detail = err instanceof Error ? err.message : String(err);
+          connLog.error('[world] failed to fetch unread ComStar message: %s', detail);
+          if (!session.socket.destroyed && session.socket.writable) {
+            send(
+              session.socket,
+              buildCmd20Packet(COMSTAR_DIALOG_ID, 2, 'Unable to retrieve ComStar messages.', nextSeq(session)),
+              capture,
+              'CMD20_COMSTAR_FAIL',
+            );
+          }
+        });
+      return;
+    }
+
+    case 2:
+      sendNewsCategoryMenu(session, connLog, capture);
+      return;
+
+  }
 }
 
 export function handleComstarSendTargetSelection(

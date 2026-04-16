@@ -567,7 +567,7 @@ export function sendComstarAccessMenu(
     buildMenuDialogPacket(
       COMSTAR_ACCESS_MENU_ID,
       'Choose option:',
-      [...GLOBAL_COMSTAR_MENU_ITEMS],
+      GLOBAL_COMSTAR_MENU_ITEMS.map(item => item.text),
       nextSeq(session),
     ),
     capture,
@@ -678,12 +678,12 @@ export function sendRankingResultsList(
   session: ClientSession,
   listId: number,
   title: string,
-  rows: Array<{ itemId: number; text: string }>,
+  rows: string[],
   hasMore: boolean,
   connLog: Logger,
   capture: CaptureLogger,
 ): void {
-  const items = rows.map(row => row.text);
+  const items = [...rows];
   if (hasMore) items.push('More...');
   const label = listId === MATCH_RESULTS_MENU_LIST_ID
     ? 'CMD7_MATCH_RESULTS_MENU'
