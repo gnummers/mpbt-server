@@ -20,12 +20,15 @@ jobs:
     # workflow_dispatch always runs (no workflow_run event present).
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -61,3 +64,19 @@ jobs:
             cd /opt/mpbt
             docker compose pull game
             docker compose up -d game
+
+      # Tag the deployed commit so version-bump can detect it on the next push.
+      # If the tag already exists (manual re-deploy), this is a no-op.
+      - name: Tag release
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — skipping."
+          else
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "Tagged $TAG"
+          fi
