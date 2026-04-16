@@ -733,15 +733,22 @@ export function parseClientCmd12Action(payload: Buffer): ClientCmd12Action | nul
 
 /** Parse a client-sent combat cmd13 contact-report frame. */
 export function parseClientCmd13ContactReport(payload: Buffer): ClientCmd13ContactReport | null {
-  if (payload.length < 17 || payload[0] !== 0x1B) return null;
+  if (payload.length < 16 || payload[0] !== 0x1B) return null;
   if (payload[2] - 0x21 !== 13) return null;
+
+  const hasTrailingEsc = payload[payload.length - 1] === 0x1B;
+  const crcOffset = payload.length - (hasTrailingEsc ? 4 : 3);
+  if (crcOffset < 13) return null;
+
   let off = 3;
   const contactActorId = payload[off] - 0x21;
   off += 1;
+
   let responseA: number, responseB: number, responseC: number;
   [responseA, off] = decodeArgType2(payload, off);
   [responseB, off] = decodeArgType2(payload, off);
-  [responseC] = decodeArgType2(payload, off);
+  [responseC, off] = decodeArgType2(payload, off);
+  if (off > crcOffset) return null;
   return {
     seq: payload[1] - 0x21,
     contactActorId,
