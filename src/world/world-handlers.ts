@@ -111,6 +111,7 @@ import {
   getSolarisRoomExits,
   getSolarisRoomName,
   setSessionRoomPosition,
+  SOLARIS_TRAVEL_ACTION_TYPE,
   CLASS_KEYS,
   getMechWeightClass,
   getMechChassis,
@@ -4302,7 +4303,7 @@ export function handleWorldTextCommand(
           sceneDetail: '',
           arenaOptions: [
             { type: 0, label: 'Help' },
-            { type: 4, label: 'Travel' },
+            { type: SOLARIS_TRAVEL_ACTION_TYPE, label: 'Travel' },
           ],
         },
         nextSeq(session),

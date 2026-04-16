@@ -84,6 +84,7 @@ import {
   ARENA_STATUS_LIST_ID,
   ARENA_SIDE_ACTION_TYPE,
   ARENA_STATUS_ACTION_TYPE,
+  SOLARIS_TRAVEL_ACTION_TYPE,
   SOLARIS_TRAVEL_CONTEXT_ID,
   getSolarisSceneHeaderDetail,
   getSolarisRoomName,
@@ -515,6 +516,14 @@ function handleWorldGameData(
     }
     connLog.info('[world] cmd-5 scene action: type=%d', parsed.actionType);
     if (parsed.actionType === 4) {
+      if (session.phase !== 'world') {
+        connLog.warn('[world] cmd-5 ComStar icon ignored outside world phase: phase=%s', session.phase);
+        return;
+      }
+      sendComstarAccessMenu(session, connLog, capture);
+      return;
+    }
+    if (parsed.actionType === SOLARIS_TRAVEL_ACTION_TYPE) {
       if (session.phase !== 'world') {
         connLog.warn('[world] cmd-5 travel-map request ignored outside world phase: phase=%s', session.phase);
         return;

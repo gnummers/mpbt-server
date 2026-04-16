@@ -1304,6 +1304,9 @@ page opener itself:
       - Manual (`BT-MAN.txt` 398-423): players can send ComStar messages by clicking
         the lower-left ComStar logo, and the manual explicitly says that clicking it
         "will provide the same functions as a ComStar terminal."
+      - Deeper world-scene RE now shows a fixed lower-left scene control path in
+        `World_HandleSceneWindowInput_v123`: widget id `1` bypasses the server-supplied
+        `Cmd4` roster table and directly sends `cmd5 actionType 4`.
       - Manual (`BT-MAN.txt` 586-609): the terminal section explicitly documents at
         least `Send a ComStar message`, `Receive a ComStar message`, and
         `Tier rankings`.
@@ -3017,12 +3020,17 @@ shell with separate presence/state feeds":
   **action ids + display text**. These become the clickable scene buttons shown in the
   world window.
 - `World_HandleSceneRosterAction_v123` confirms those buttons are not hardwired to
-  special arena forms. Clicking one of the scene entries simply sends `cmd 5` with the
-  server-supplied scene action id from `g_world_SceneRosterEntryTable`.
+  special arena forms, but the dispatch window is narrower than the UI suggests:
+  button `0x100` is still local Help, only `0x101`–`0x105` forward as `cmd 5` using the
+  server-supplied scene action id from `g_world_SceneRosterEntryTable`, and `0x106+`
+  falls through the local default handler.
 - `World_HandleSceneWindowInput_v123` confirms the scene window is a generic shell:
   location buttons send `cmd 23`, scene-action buttons dispatch through
   `World_HandleSceneRosterAction_v123`, and the special roster key/button path at
   widget id `0x121` opens the separate room-roster UI.
+- The same handler also has at least one **fixed** scene control outside the `Cmd4`
+  roster table: widget id `1` sends `cmd 5` action `4` directly instead of reading
+  from `g_world_SceneRosterEntryTable`.
 - `World_HandleRoomPresenceSync_v123`, `World_HandleRoomPresenceRename_v123`,
   `World_HandleRoomPresenceEvent_v123`, and `World_HandleRoomPresenceArrival_v123`
   maintain a **live room-presence table** completely outside opcode `17`.
