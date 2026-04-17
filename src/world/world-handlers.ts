@@ -791,7 +791,8 @@ function getCombatReadyParticipants(
     !participant.socket.destroyed
     && participant.phase === 'combat'
     && participant.combatSessionId === combatSession.id
-    && participant.combatInitialized,
+    && participant.combatInitialized
+    && participant.combatWorldRestoreTimer === undefined
   );
 }
 
@@ -5829,6 +5830,7 @@ export function handleCombatMovementFrame(
     const clientSpeed       = frame.rotationRaw - MOTION_NEUTRAL;
 
     if (clientSpeed !== 0) {
+      session.combatSpeedMag = clientSpeed;
       mirrorCombatRemotePosition(players, session, 'CMD65_COMBAT_REMOTE_COAST');
       maybeLogCollisionProbeCandidate(players, session, connLog, 'CMD8_COAST');
       connLog.debug(
