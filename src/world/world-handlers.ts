@@ -164,9 +164,9 @@ import {
   JUMP_JET_DEFAULT_APEX_METERS,
   JUMP_JET_ASCENT_STEPS,
   JUMP_JET_TICK_MS,
+  JUMP_JET_REMOTE_MIRROR_MS_PER_APEX_METER,
   JUMP_JET_FUEL_MAX,
   JUMP_JET_START_FUEL_THRESHOLD,
-  JUMP_JET_FUEL_DRAIN_PER_TICK,
   JUMP_JET_FUEL_REGEN_INTERVAL_MS,
   JUMP_JET_FUEL_REGEN_PER_TICK,
   COLLISION_PROBE_HORIZONTAL_DISTANCE,
@@ -186,6 +186,7 @@ function regenJumpFuelIfGrounded(
   session: ClientSession,
   amount: number,
 ): void {
+  if (session.combatJumpActive) return;
   if (session.combatJumpTimer !== undefined) return;
   if ((session.combatJumpAltitude ?? 0) > 0) return;
   const fuel = session.combatJumpFuel ?? JUMP_JET_FUEL_MAX;
@@ -206,7 +207,7 @@ function getSelectedMechJumpArc(session: ClientSession): { apexUnits: number; st
   const apexMeters =
     documentedJumpMeters === null || documentedJumpMeters === undefined
       ? JUMP_JET_DEFAULT_APEX_METERS
-      : Math.max(JUMP_JET_DEFAULT_APEX_METERS, Math.round(documentedJumpMeters / 5));
+      : Math.max(JUMP_JET_DEFAULT_APEX_METERS, Math.round(documentedJumpMeters / 2));
   const apexUnits = apexMeters * COMBAT_WORLD_UNITS_PER_METER;
   return {
     apexUnits,
@@ -215,6 +216,54 @@ function getSelectedMechJumpArc(session: ClientSession): { apexUnits: number; st
       Math.round(apexUnits / JUMP_JET_ASCENT_STEPS),
     ),
   };
+}
+
+function getSelectedMechJumpMirrorDurationMs(session: ClientSession): number {
+  const { apexUnits } = getSelectedMechJumpArc(session);
+  const apexMeters = Math.max(1, Math.round(apexUnits / COMBAT_WORLD_UNITS_PER_METER));
+  return Math.max(JUMP_JET_TICK_MS * 8, apexMeters * JUMP_JET_REMOTE_MIRROR_MS_PER_APEX_METER);
+}
+
+function getLocalCmd65Altitude(session: ClientSession): number {
+  return session.combatJumpActive ? 0 : (session.combatJumpAltitude ?? 0);
+}
+
+function startPeerOnlyJumpMirror(
+  players: PlayerRegistry,
+  session: ClientSession,
+): void {
+  if (session.combatJumpTimer !== undefined) {
+    clearInterval(session.combatJumpTimer);
+    session.combatJumpTimer = undefined;
+  }
+
+  const { apexUnits } = getSelectedMechJumpArc(session);
+  const durationMs = getSelectedMechJumpMirrorDurationMs(session);
+  const startedAt = Date.now();
+  const startedFuel = session.combatJumpFuel ?? JUMP_JET_FUEL_MAX;
+  session.combatJumpAltitude = 0;
+
+  session.combatJumpTimer = setInterval(() => {
+    if (!session.combatJumpActive) {
+      if (session.combatJumpTimer !== undefined) {
+        clearInterval(session.combatJumpTimer);
+        session.combatJumpTimer = undefined;
+      }
+      return;
+    }
+
+    const elapsedMs = Date.now() - startedAt;
+    const progress = Math.min(1, elapsedMs / Math.max(durationMs, 1));
+    const mirroredAltitude =
+      progress >= 1
+        ? COMBAT_WORLD_UNITS_PER_METER
+        : Math.max(COMBAT_WORLD_UNITS_PER_METER, Math.round(apexUnits * 4 * progress * (1 - progress)));
+
+    session.combatJumpAltitude = mirroredAltitude;
+    session.combatJumpFuel = Math.max(0, Math.round(startedFuel * (1 - progress)));
+    mirrorDuelRemotePosition(players, session, 'DUEL_CMD65_JUMP_MIRROR');
+  }, JUMP_JET_TICK_MS);
+  session.combatJumpTimer.unref();
 }
 
 const DEFAULT_BOT_ARMOR_VALUES = Array<number>(10).fill(10);
@@ -1617,6 +1666,7 @@ export function stopCombatTimers(session: ClientSession): void {
     clearInterval(session.combatJumpTimer);
     session.combatJumpTimer = undefined;
   }
+  session.combatJumpActive = undefined;
   if (session.combatJumpFuelRegenTimer !== undefined) {
     clearInterval(session.combatJumpFuelRegenTimer);
     session.combatJumpFuelRegenTimer = undefined;
@@ -1637,6 +1687,7 @@ export function resetCombatState(session: ClientSession): void {
   session.combatPlayerInternalValues = undefined;
   session.combatPlayerCriticalStateBytes = undefined;
   session.combatRetaliationCursor = undefined;
+  session.combatJumpActive = undefined;
   session.combatJumpAltitude = undefined;
   session.combatJumpFuel = undefined;
   session.combatLastCollisionProbeAt = undefined;
@@ -2028,6 +2079,7 @@ function stopSessionActiveCombatLoops(session: ClientSession): void {
     clearInterval(session.combatJumpTimer);
     session.combatJumpTimer = undefined;
   }
+  session.combatJumpActive = false;
   if (session.combatJumpFuelRegenTimer !== undefined) {
     clearInterval(session.combatJumpFuelRegenTimer);
     session.combatJumpFuelRegenTimer = undefined;
@@ -2450,10 +2502,10 @@ export function tryStartStagedDuelCombat(
             terrainResourceId:  0,
             terrainPoints:      [],
             arenaPoints:        [],
-            globalA:            2800,
-            globalB:            0,
+            globalA:            1462,
+            globalB:            39, // RE: preserves grounded top speed while adding ~50% more jump height than 1600/33
             globalC:            0,
-            headingBias:        0,
+            headingBias:        0, // RE: Cmd72 type1 seeds DAT_004f4210 (heat path), not jump height
             identity0:          localCallsign.substring(0, 11),
             identity1:          localCallsign.substring(0, 31),
             identity2:          localMechEntry?.typeString ?? '',
@@ -3536,6 +3588,7 @@ export function sendCombatBootstrapSequence(
     clearInterval(session.combatJumpFuelRegenTimer);
     session.combatJumpFuelRegenTimer = undefined;
   }
+  session.combatJumpActive = false;
   session.combatJumpAltitude = 0;
   session.combatJumpFuel = JUMP_JET_FUEL_MAX;
   session.combatLastCollisionProbeAt = undefined;
@@ -3571,10 +3624,10 @@ export function sendCombatBootstrapSequence(
         terrainResourceId:  0,      // ASSUMPTION: no additional resource
         terrainPoints:      [],
         arenaPoints:        [],
-        globalA:            2800,   // D=2800 → D²=7840000; equilibrium v = speed_target (RE: FUN_0042c830)
-        globalB:            0,
+        globalA:            1462,   // RE: tuned for ~+50% Jenner jump apex while keeping grounded top speed near speed_target
+        globalB:            39,     // RE: ground-only drag offset in FUN_0042cd20; decouples grounded throttle from jump gravity
         globalC:            0,
-        headingBias:        0,      // ASSUMPTION: 0 → MOTION_NEUTRAL after encode
+        headingBias:        0,      // RE: Cmd72 type1 seeds DAT_004f4210 (heat path), not jump height
         identity0:          callsign.substring(0, 11),
         identity1:          callsign.substring(0, 31),
         identity2:          mechEntry?.typeString ?? '',
@@ -3690,104 +3743,102 @@ export function sendCombatBootstrapSequence(
     }, JUMP_JET_FUEL_REGEN_INTERVAL_MS);
     session.combatJumpFuelRegenTimer.unref();
 
-    // Bot fires back at the player every BOT_FIRE_INTERVAL_MS milliseconds.
-    // Stops once the server-side per-location local durability state shows the
-    // player has been structurally destroyed.
-    session.botFireTimer = setInterval(() => {
-    if (session.socket.destroyed || !session.socket.writable) return;
-
-    const playerArmorValues = [...(session.combatPlayerArmorValues ?? DEFAULT_BOT_ARMOR_VALUES)];
-    const playerInternalValues = [...(session.combatPlayerInternalValues ?? DEFAULT_BOT_INTERNAL_VALUES)];
-    const playerCriticalStateBytes = [...(session.combatPlayerCriticalStateBytes ?? createCriticalStateBytes(mechEntry?.extraCritCount))];
-    const playerHeadArmor = session.combatPlayerHeadArmor ?? HEAD_ARMOR_VALUE;
-    if (isActorDestroyed(playerInternalValues)) {
-      clearInterval(session.botFireTimer);
-      session.botFireTimer = undefined;
-      connLog.info('[world/combat] player IS depleted (server-side estimate) — bot stopped firing');
-      queueCombatResultTransition(
-        players,
-        session,
-        connLog,
-        capture,
-        COMBAT_RESULT_LOSS,
-        'player already structurally destroyed',
-        PLAYER_RESULT_DELAY_MS,
-      );
-      return;
-    }
-
-    const hitSection = verificationMode === 'headtest'
-      ? HEAD_RETALIATION_SECTION
-      : chooseRetaliationHitSection(session, playerArmorValues, playerInternalValues, playerHeadArmor);
-    const previousInternalValues = [...playerInternalValues];
-    const damageResult = applyDamageToSection(
-      playerArmorValues,
-      playerInternalValues,
-      hitSection,
-      BOT_RETALIATION_DAMAGE,
-      playerHeadArmor,
-    );
-    session.combatPlayerArmorValues = playerArmorValues;
-    session.combatPlayerInternalValues = playerInternalValues;
-    const headCriticalUpdates =
-      hitSection.internalIndex === 7 && damageResult.updates.some(update => update.damageCode === 0x27)
-        ? applyHeadCriticalStateUpdates(playerCriticalStateBytes, playerInternalValues[7] ?? 0)
-        : [];
-    const weaponSectionUpdates = getWeaponSectionLossUpdates(
-      session.selectedMechId,
-      previousInternalValues,
-      playerInternalValues,
-    );
-    session.combatPlayerCriticalStateBytes = playerCriticalStateBytes;
-    session.combatPlayerHeadArmor = damageResult.headArmor;
-    session.playerHealth = getCombatDurability(playerArmorValues, playerInternalValues);
-    session.playerHealth += damageResult.headArmor;
-    const allUpdates = [...damageResult.updates, ...headCriticalUpdates, ...weaponSectionUpdates];
-    const armorRemaining = hitSection.armorIndex >= 0
-      ? `${playerArmorValues[hitSection.armorIndex] ?? 0}`
-      : `${damageResult.headArmor}`;
-    connLog.debug(
-      '[world/combat] bot fires Cmd67: damage=%d hit=%s playerHealth=%d armor=%s internal=%d updates=%s',
-      BOT_RETALIATION_DAMAGE,
-      hitSection.label,
-      session.playerHealth,
-      armorRemaining,
-      playerInternalValues[hitSection.internalIndex] ?? 0,
-      allUpdates.map(update => `0x${update.damageCode.toString(16)}=${update.damageValue}`).join(',') || 'none',
-    );
-    for (const update of allUpdates) {
-      send(
-        session.socket,
-        buildCmd67LocalDamagePacket(update.damageCode, update.damageValue, nextSeq(session)),
-        capture,
-        `CMD67_BOT_RETALIATION_${update.damageCode.toString(16)}`,
-      );
-    }
-    if (isActorDestroyed(playerInternalValues)) {
-      clearInterval(session.botFireTimer);
-      session.botFireTimer = undefined;
-      const fatalReason = (playerInternalValues[7] ?? 0) <= 0
-        ? 'head destroyed'
-        : 'center torso destroyed';
-      connLog.info(
-        '[world/combat] player IS depleted by hit=%s (%s, server-side section tracking) — bot stopped firing',
-        hitSection.label,
-        fatalReason,
-      );
-      queueCombatResultTransition(
-        players,
-        session,
-        connLog,
-        capture,
-        COMBAT_RESULT_LOSS,
-        fatalReason,
-        PLAYER_RESULT_DELAY_MS,
-      );
-    }
-    }, BOT_FIRE_INTERVAL_MS);
-    session.botFireTimer.unref();
-
     const verificationMode = session.combatVerificationMode;
+    if (verificationMode === 'headtest') {
+      // Keep scripted retaliation only for the explicit headtest verifier.
+      session.botFireTimer = setInterval(() => {
+        if (session.socket.destroyed || !session.socket.writable) return;
+
+        const playerArmorValues = [...(session.combatPlayerArmorValues ?? DEFAULT_BOT_ARMOR_VALUES)];
+        const playerInternalValues = [...(session.combatPlayerInternalValues ?? DEFAULT_BOT_INTERNAL_VALUES)];
+        const playerCriticalStateBytes = [...(session.combatPlayerCriticalStateBytes ?? createCriticalStateBytes(mechEntry?.extraCritCount))];
+        const playerHeadArmor = session.combatPlayerHeadArmor ?? HEAD_ARMOR_VALUE;
+        if (isActorDestroyed(playerInternalValues)) {
+          clearInterval(session.botFireTimer);
+          session.botFireTimer = undefined;
+          connLog.info('[world/combat] player IS depleted (server-side estimate) — bot stopped firing');
+          queueCombatResultTransition(
+            players,
+            session,
+            connLog,
+            capture,
+            COMBAT_RESULT_LOSS,
+            'player already structurally destroyed',
+            PLAYER_RESULT_DELAY_MS,
+          );
+          return;
+        }
+
+        const hitSection = HEAD_RETALIATION_SECTION;
+        const previousInternalValues = [...playerInternalValues];
+        const damageResult = applyDamageToSection(
+          playerArmorValues,
+          playerInternalValues,
+          hitSection,
+          BOT_RETALIATION_DAMAGE,
+          playerHeadArmor,
+        );
+        session.combatPlayerArmorValues = playerArmorValues;
+        session.combatPlayerInternalValues = playerInternalValues;
+        const headCriticalUpdates =
+          hitSection.internalIndex === 7 && damageResult.updates.some(update => update.damageCode === 0x27)
+            ? applyHeadCriticalStateUpdates(playerCriticalStateBytes, playerInternalValues[7] ?? 0)
+            : [];
+        const weaponSectionUpdates = getWeaponSectionLossUpdates(
+          session.selectedMechId,
+          previousInternalValues,
+          playerInternalValues,
+        );
+        session.combatPlayerCriticalStateBytes = playerCriticalStateBytes;
+        session.combatPlayerHeadArmor = damageResult.headArmor;
+        session.playerHealth = getCombatDurability(playerArmorValues, playerInternalValues);
+        session.playerHealth += damageResult.headArmor;
+        const allUpdates = [...damageResult.updates, ...headCriticalUpdates, ...weaponSectionUpdates];
+        const armorRemaining = hitSection.armorIndex >= 0
+          ? `${playerArmorValues[hitSection.armorIndex] ?? 0}`
+          : `${damageResult.headArmor}`;
+        connLog.debug(
+          '[world/combat] bot fires Cmd67: damage=%d hit=%s playerHealth=%d armor=%s internal=%d updates=%s',
+          BOT_RETALIATION_DAMAGE,
+          hitSection.label,
+          session.playerHealth,
+          armorRemaining,
+          playerInternalValues[hitSection.internalIndex] ?? 0,
+          allUpdates.map(update => `0x${update.damageCode.toString(16)}=${update.damageValue}`).join(',') || 'none',
+        );
+        for (const update of allUpdates) {
+          send(
+            session.socket,
+            buildCmd67LocalDamagePacket(update.damageCode, update.damageValue, nextSeq(session)),
+            capture,
+            `CMD67_BOT_RETALIATION_${update.damageCode.toString(16)}`,
+          );
+        }
+        if (isActorDestroyed(playerInternalValues)) {
+          clearInterval(session.botFireTimer);
+          session.botFireTimer = undefined;
+          const fatalReason = (playerInternalValues[7] ?? 0) <= 0
+            ? 'head destroyed'
+            : 'center torso destroyed';
+          connLog.info(
+            '[world/combat] player IS depleted by hit=%s (%s, server-side section tracking) — bot stopped firing',
+            hitSection.label,
+            fatalReason,
+          );
+          queueCombatResultTransition(
+            players,
+            session,
+            connLog,
+            capture,
+            COMBAT_RESULT_LOSS,
+            fatalReason,
+            PLAYER_RESULT_DELAY_MS,
+          );
+        }
+      }, BOT_FIRE_INTERVAL_MS);
+      session.botFireTimer.unref();
+    }
+
     session.combatVerificationMode = undefined;
     session.combatRequireAction0 = verificationMode === 'strictfire';
     session.combatShotsAccepted = 0;
@@ -4725,14 +4776,14 @@ export function handleCombatMovementFrame(
     send(
       session.socket,
       buildCmd65PositionSyncPacket(
-        {
-          slot:     0,
-          x:        session.combatX,
-          y:        session.combatY,
-          z:        session.combatJumpAltitude ?? 0,
-          facing:   getCombatCmd65Facing(session),
-          throttle,
-          legVel,
+          {
+            slot:     0,
+            x:        session.combatX,
+            y:        session.combatY,
+            z:        getLocalCmd65Altitude(session),
+            facing:   getCombatCmd65Facing(session),
+            throttle,
+            legVel,
           speedMag: clientSpeed,
         },
         nextSeq(session),
@@ -5169,107 +5220,49 @@ export function handleCombatActionFrame(
     }
 
     const fuel = session.combatJumpFuel ?? JUMP_JET_FUEL_MAX;
-    if (fuel <= JUMP_JET_START_FUEL_THRESHOLD) {
-      connLog.info(
-        '[world/combat] cmd-12 jump action=4 ignored (fuel=%d threshold=%d)',
-        fuel,
-        JUMP_JET_START_FUEL_THRESHOLD,
-      );
-      return;
-    }
-
-    if (session.combatJumpTimer !== undefined || (session.combatJumpAltitude ?? 0) > 0) {
+    if (
+      session.combatJumpActive
+      || session.combatJumpTimer !== undefined
+      || (session.combatJumpAltitude ?? 0) > 0
+    ) {
       connLog.info('[world/combat] cmd-12 jump action=4 ignored (jump already active)');
       return;
     }
 
-    let jumpDirection = 1;
     const jumpArc = getSelectedMechJumpArc(session);
-    session.combatJumpAltitude = Math.max(0, session.combatJumpAltitude ?? 0);
+    const mirrorDurationMs = getSelectedMechJumpMirrorDurationMs(session);
+    session.combatJumpActive = true;
+    session.combatJumpAltitude = 0;
     session.combatThrottle = 0;
     session.combatLegVel = 0;
     session.combatSpeedMag = 0;
+    session.combatJumpFuel = fuel;
     session.combatLastJumpLandAt = undefined;
     session.combatLastJumpLandAltitude = undefined;
+    startPeerOnlyJumpMirror(players, session);
 
-    const sendJumpUpdate = (tag: string): void => {
-      const x = session.combatX ?? 0;
-      const y = session.combatY ?? 0;
-      const throttle = session.combatThrottle ?? 0;
-      const legVel = session.combatLegVel ?? 0;
-      const speedMag = session.combatSpeedMag ?? 0;
-      send(
-        session.socket,
-        buildCmd65PositionSyncPacket(
-          {
-            slot:     0,
-            x,
-            y,
-            z:        session.combatJumpAltitude ?? 0,
-            facing:   getCombatCmd65Facing(session),
-            throttle,
-            legVel,
-            speedMag,
-          },
-          nextSeq(session),
-        ),
-        capture,
-        tag,
+    if (fuel <= JUMP_JET_START_FUEL_THRESHOLD) {
+      connLog.debug(
+        '[world/combat] cmd-12 jump action=4 accepted with stale server fuel snapshot=%d (client owns jump threshold)',
+        fuel,
       );
-      mirrorDuelRemotePosition(players, session, `DUEL_${tag}`);
-      maybeLogCollisionProbeCandidate(players, session, connLog, tag);
-    };
+    }
 
-    // Emit the first ascent step immediately so jump feedback is visible without delay.
-    session.combatJumpAltitude = Math.min(jumpArc.apexUnits, (session.combatJumpAltitude ?? 0) + jumpArc.stepUnits);
-    session.combatJumpFuel = Math.max(0, fuel - JUMP_JET_FUEL_DRAIN_PER_TICK);
     connLog.info(
-      '[world/combat] cmd-12 jump action=4 altitude=%d fuel=%d apex=%d (ascent start)',
+      '[world/combat] cmd-12 jump action=4 altitude=%d fuel=%d apex=%d mirrorDurationMs=%d (client-owned local jump, peer-only Cmd65 mirror)',
       session.combatJumpAltitude,
       session.combatJumpFuel,
       jumpArc.apexUnits,
+      mirrorDurationMs,
     );
-    sendJumpUpdate('CMD65_JUMP_ASCENT');
-
-    session.combatJumpTimer = setInterval(() => {
-      if (session.socket.destroyed || !session.socket.writable) return;
-
-      const currentFuel = session.combatJumpFuel ?? 0;
-      if (currentFuel <= 0) {
-        jumpDirection = -1;
-      }
-
-      const currentAltitude = session.combatJumpAltitude ?? 0;
-      if (jumpDirection > 0) {
-        const nextAltitude = Math.min(jumpArc.apexUnits, currentAltitude + jumpArc.stepUnits);
-        session.combatJumpAltitude = nextAltitude;
-        session.combatJumpFuel = Math.max(0, currentFuel - JUMP_JET_FUEL_DRAIN_PER_TICK);
-        sendJumpUpdate('CMD65_JUMP_ASCENT');
-        if (nextAltitude >= jumpArc.apexUnits) {
-          jumpDirection = -1;
-        }
-        return;
-      }
-
-      const nextAltitude = Math.max(0, currentAltitude - jumpArc.stepUnits);
-      session.combatJumpAltitude = nextAltitude;
-      session.combatJumpFuel = Math.max(0, currentFuel - JUMP_JET_FUEL_DRAIN_PER_TICK);
-      sendJumpUpdate('CMD65_JUMP_DESCENT');
-      if (nextAltitude <= 0) {
-        recordCombatLanding(session, currentAltitude);
-        clearInterval(session.combatJumpTimer);
-        session.combatJumpTimer = undefined;
-        maybeLogCollisionProbeCandidate(players, session, connLog, 'CMD65_JUMP_TOUCHDOWN');
-        connLog.info('[world/combat] jump arc complete (fuel=%d)', session.combatJumpFuel ?? 0);
-      }
-    }, JUMP_JET_TICK_MS);
-    session.combatJumpTimer.unref();
+    mirrorDuelRemotePosition(players, session, 'DUEL_CMD65_JUMP_START');
+    maybeLogCollisionProbeCandidate(players, session, connLog, 'DUEL_CMD65_JUMP_START');
     return;
   }
 
   if (action.action === 6) {
     const landedFromAltitude = session.combatJumpAltitude ?? 0;
-    if (session.combatJumpTimer === undefined && landedFromAltitude <= 0) {
+    if (!session.combatJumpActive && session.combatJumpTimer === undefined && landedFromAltitude <= 0) {
       connLog.info('[world/combat] cmd-12 jump action=6 ignored (no active jump)');
       return;
     }
@@ -5277,6 +5270,7 @@ export function handleCombatActionFrame(
       clearInterval(session.combatJumpTimer);
       session.combatJumpTimer = undefined;
     }
+    session.combatJumpActive = false;
     session.combatJumpAltitude = 0;
     recordCombatLanding(session, landedFromAltitude);
 

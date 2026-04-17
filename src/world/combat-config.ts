@@ -29,13 +29,19 @@ export const COMBAT_WORLD_UNITS_PER_METER = 1_000;
  * Fallback visible jump apex (meters) when a chassis has jump jets but no
  * documented BT-MAN jump range yet.
  */
-export const JUMP_JET_DEFAULT_APEX_METERS = 24;
+export const JUMP_JET_DEFAULT_APEX_METERS = 48;
 
 /** Number of ascent updates before the prototype jump arc peaks. */
 export const JUMP_JET_ASCENT_STEPS = 5;
 
 /** Tick interval (ms) for prototype jump-jet altitude updates. */
 export const JUMP_JET_TICK_MS = 120;
+
+/**
+ * Peer-only jump mirror duration scale. A Jenner's manual/.MEC-aligned 150m jump
+ * maps to a ~75m apex and roughly a 5s retail-local airtime in live capture.
+ */
+export const JUMP_JET_REMOTE_MIRROR_MS_PER_APEX_METER = 67;
 
 /** Jump-jet fuel max value; client caps DAT_004f21a2 at 0x78 (120). */
 export const JUMP_JET_FUEL_MAX = 120;
