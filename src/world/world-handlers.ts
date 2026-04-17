@@ -791,7 +791,8 @@ function getCombatReadyParticipants(
     !participant.socket.destroyed
     && participant.phase === 'combat'
     && participant.combatSessionId === combatSession.id
-    && participant.combatInitialized,
+    && participant.combatInitialized
+    && participant.combatWorldRestoreTimer === undefined
   );
 }
 
@@ -5827,6 +5828,7 @@ export function handleCombatMovementFrame(
     session.combatTurnMomentumRaw = frame.turnMomRaw;
 
     const clientSpeed       = frame.rotationRaw - MOTION_NEUTRAL;
+    session.combatSpeedMag  = clientSpeed;
 
     if (clientSpeed !== 0) {
       mirrorCombatRemotePosition(players, session, 'CMD65_COMBAT_REMOTE_COAST');
