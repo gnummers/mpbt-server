@@ -50,13 +50,13 @@ import {
   TIER_RANKING_RESULTS_LIST_ID,
   CLASS_RANKING_RESULTS_LIST_ID,
   PERSONNEL_LIST_ID,
-  COMSTAR_ACCESS_ACTION_TYPE,
   ARENA_SIDE_ACTION_TYPE,
   ARENA_STATUS_ACTION_TYPE,
   ARENA_SIDE_MENU_ID,
   ARENA_STATUS_LIST_ID,
   ARENA_READY_ROOM_MAX_PARTICIPANTS,
   ARENA_SIDE_MENU_ITEMS,
+  SOLARIS_TRAVEL_ACTION_TYPE,
   FALLBACK_MECH_ID,
   SOLARIS_TRAVEL_CONTEXT_ID,
   GLOBAL_COMSTAR_MENU_ITEMS,
@@ -65,7 +65,8 @@ import {
   getSolarisRoomExits,
   getSolarisSceneIndex,
   getSolarisRoomName,
-  getSolarisRoomDescription,
+  getSolarisSceneHeaderDetail,
+  getSolarisSceneHeaderTitle,
   getSolarisRoomIcon,
   WORLD_MECHS,
   getMechChassis,
@@ -410,29 +411,28 @@ export function buildSceneInitForSession(session: ClientSession) {
   );
 
   // Room-type-aware action buttons.
-  // actionType 4 → "Travel" (opens Cmd43 travel map).
+  // actionType 4 is reserved for the fixed lower-left world icon path.
+  // Top-row Travel therefore uses a separate server-defined action id.
   // actionType 5 → "Fight"  (enter combat; handled by cmd-5 dispatch in server-world.ts).
   // actionType 6 → "Mech"/"Mech Bay" (opens the 3-step mech picker).
-  // actionType 8 → "ComStar"/"Terminal" (opens the world-safe Cmd7 utility menu).
-  // The client hard-codes actionType 0 (0x100 wire) as the local Help button.
+  // The client hard-codes button 0x100 as Help and only dispatches 0x101..0x105,
+  // so arena rows must fit within 6 visible buttons total.
   const isArena = mapRoom?.type === 'arena';
-  const hasRoomTerminal = mapRoom?.type === 'bar' || mapRoom?.type === 'terminal';
   const arenaOptions: Array<{ type: number; label: string }> = [
     { type: 0, label: 'Help' },
-    { type: 4, label: 'Travel' },
+    { type: SOLARIS_TRAVEL_ACTION_TYPE, label: 'Travel' },
   ];
   if (isArena) {
     arenaOptions.push({ type: 6, label: 'Mech' });
     arenaOptions.push({ type: ARENA_SIDE_ACTION_TYPE, label: 'Side' });
-    arenaOptions.push({ type: ARENA_STATUS_ACTION_TYPE, label: 'Status' });
-    arenaOptions.push({ type: COMSTAR_ACCESS_ACTION_TYPE, label: hasRoomTerminal ? 'Terminal' : 'ComStar' });
     if (session.duelTermsAvailable) {
       arenaOptions.push({ type: 7, label: 'Duel Terms' });
+    } else {
+      arenaOptions.push({ type: ARENA_STATUS_ACTION_TYPE, label: 'Status' });
     }
     arenaOptions.push({ type: 5, label: 'Fight' });
   } else {
     arenaOptions.push({ type: 6, label: 'Mech Bay' });
-    arenaOptions.push({ type: COMSTAR_ACCESS_ACTION_TYPE, label: hasRoomTerminal ? 'Terminal' : 'ComStar' });
   }
 
   return buildCmd4SceneInitPacket(
@@ -452,13 +452,8 @@ export function buildSceneInitForSession(session: ClientSession) {
         }
         return arr;
       })(),
-      callsign:         getDisplayName(session),
-      sceneName:        (() => {
-        const name = getSolarisRoomName(roomId);
-        const desc = getSolarisRoomDescription(roomId);
-        // 0x5C (\) is a hard line-break in both FUN_00416710 and FUN_00431320
-        return desc ? `${name}\x5c${desc}` : name;
-      })(),
+      sceneHeader:      getSolarisSceneHeaderTitle(roomId),
+      sceneDetail:      getSolarisSceneHeaderDetail(roomId),
       arenaOptions,
     },
     nextSeq(session),
