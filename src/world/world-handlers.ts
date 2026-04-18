@@ -4174,7 +4174,7 @@ export function handleComstarIncomingPromptCmd20(
 
   clearPendingIncomingComstarPrompt(session);
 
-  if (selection === 0) {
+  if (selection === 1) {
     connLog.info('[world] live ComStar prompt accepted: msgId=%d sender=%d', messageId, senderId);
     send(
       session.socket,

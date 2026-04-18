@@ -641,9 +641,6 @@ function handleWorldGameData(
       const requestedSlot = Number.isFinite(slotPlusOne) ? slotPlusOne - 1 : 0;
       selection = Math.max(0, requestedSlot);
     }
-    if (handleComstarIncomingPromptCmd20(session, selection, connLog, capture)) {
-      return;
-    }
     if (handleMechPickerCmd20(session, selection, connLog, capture)) {
       return;
     }
@@ -699,6 +696,10 @@ function handleWorldGameData(
     connLog.info('[world] cmd-7 menu reply: listId=%d selection=%d', parsed.listId, parsed.selection);
 
     if (handleMechPickerCmd7(players, session, parsed.listId, parsed.selection, connLog, capture)) {
+      return;
+    }
+
+    if (parsed.listId === 7 && handleComstarIncomingPromptCmd20(session, parsed.selection, connLog, capture)) {
       return;
     }
 
