@@ -116,7 +116,8 @@ import {
 import {
   handleComstarTextReply,
   handleComstarAccessSelection,
-  handleComstarIncomingPromptCmd20,
+  COMSTAR_INCOMING_DIALOG_ID,
+  handleComstarIncomingPromptCmd7,
   handleComstarSendTargetSelection,
   handleMatchResultsSelection,
   handleNewsCategorySelection,
@@ -699,7 +700,10 @@ function handleWorldGameData(
       return;
     }
 
-    if (parsed.listId === 7 && handleComstarIncomingPromptCmd20(session, parsed.selection, connLog, capture)) {
+    if (
+      parsed.listId === COMSTAR_INCOMING_DIALOG_ID
+      && handleComstarIncomingPromptCmd7(session, parsed.selection, connLog, capture)
+    ) {
       return;
     }
 
