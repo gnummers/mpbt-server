@@ -286,7 +286,7 @@ const BOT_RESULT_DELAY_MS = 1500;
 const COMBAT_DROP_DELAY_MS = 4000;
 const RESULT_WORLD_RESTORE_DELAY_MS = 10_500;
 const COMSTAR_DIALOG_ID = 6;
-const COMSTAR_INCOMING_DIALOG_ID = 7;
+export const COMSTAR_INCOMING_DIALOG_ID = 7;
 const HEAD_RETALIATION_SECTION: CombatAttachmentHitSection = {
   armorIndex: NO_ARMOR_INDEX,
   internalIndex: 7,
@@ -4159,7 +4159,7 @@ export function handleComstarSendTargetSelection(
   connLog.warn('[world] ComStar send-target: unsupported selection=%d', selection);
 }
 
-export function handleComstarIncomingPromptCmd20(
+export function handleComstarIncomingPromptCmd7(
   session: ClientSession,
   selection: number,
   connLog: Logger,
@@ -4174,7 +4174,9 @@ export function handleComstarIncomingPromptCmd20(
 
   clearPendingIncomingComstarPrompt(session);
 
-  if (selection === 0) {
+  // Cmd7 prompt replies are 1-based; for this incoming ComStar prompt,
+  // selection 1 is the retail client's "Read now" choice.
+  if (selection === 1) {
     connLog.info('[world] live ComStar prompt accepted: msgId=%d sender=%d', messageId, senderId);
     send(
       session.socket,
