@@ -2685,7 +2685,7 @@ Confirmed call sites:
 
 | Action | Caller | Current read |
 |--------|--------|--------------|
-| `0` | `Combat_InputActionDispatch_v123` (`0x004231c0`), case `0x15` | Primary selected-weapon fire request. It is gated by combat-ready state, selected target/weapon state (`DAT_004f1f42`/`DAT_004f1f44`), and heat/animation guards, then emits `cmd 12, action 0`. Live 2026-04-12 TIC-A captures showed no matching `cmd12/action0` on NumLock group fire, so treat action `0` as the selected-weapon path rather than a required TIC gate. |
+| `0` | `Combat_InputActionDispatch_v123` (`0x004231c0`), case `0x15` | Downed recovery / stand-up request. It is gated by support-intact, downed, gyro, posture, torso-pair, crit-budget, and collapse-callback state, then emits `cmd 12, action 0`. Fresh 2026-04-20 Ghidra caller audit shows `Combat_SendCmd12Action_v123` has only three live callers total (`action 0`, jump `4`, landing `6`), and the `action 0` caller is this case-`0x15` recovery branch, not ordinary selected-weapon fire. |
 | `4` | `Combat_JumpJetInputTick_v123` (`0x00422c50`) | Jump jet fire request. Requires jump input bit, remaining jump fuel/energy (`DAT_004f21a2 > 0x32`), no active jump flags, and not in a blocked animation state. |
 | `6` | `FUN_00448d80` | Jump/landing transition request. Sent when an airborne actor reaches ground contact and the local jump-state flags are cleared. |
 
@@ -2694,6 +2694,7 @@ Confirmed call sites:
 - Dumping those tables for `VK_HOME (0x24)` and `VK_F1..VK_F12 (0x70..0x7b)` returned `0` in all four tables on the current `Mpbtwin.exe`, and the special-key helper `FUN_0043d040` only tracks Shift/Ctrl/Alt state.
 - Fresh 2026-04-18 fallback keymap confirmation: the compiled fallback action table at `DAT_00478c50` still has entry `0x15 = 0x58` (scan code `0x58`, i.e. F12 on the normal PC set), so `action 0x15` remains the strongest direct F12 candidate even though the late-built `VK_*` tables themselves are zero for `VK_F12`.
 - Fresh 2026-04-18 recovery-gate correction: `Combat_InputActionDispatch_v123` case `0x15` still sends `Combat_SendCmd12Action_v123(0)` only when the local actor is in the down/recovery state (`DAT_004f208e != 0`, i.e. actor offset `+0x35e`), `DAT_004f1ee2 < 2`, and at least one of `DAT_004f1f42` / `DAT_004f1f44` is non-zero. But those globals are **not legs** once the initializer is traced through fully; they are the local copies of class-2 slots `2/3`, which the retail damage-state initializer still seeds as left/right torso. So this gate no longer proves the user-facing "both legs gone => no stand" rule.
+- Fresh 2026-04-19 stand-gate naming follow-up: `MPBT.MSG` entries `489..493` name crit types `16..20` directly as **Cockpit**, **Sensors**, **Life Support**, **Gyro**, and **Fusion Engine**. Because the local stand-up gate reads `DAT_004f1ee2 = actor + 0x1b2 = damageState + 0x8c`, that field is now concretely **gyro hits** (crit type `19`), not a leg or posture counter. Practical read: the `action 0x15 -> cmd12(0)` gate is `downed && gyroHits < 2 && torsoPairNonZero`, plus the separate cockpit/fusion-engine/CT/head support gate.
 - Fresh 2026-04-18 stand-helper follow-up: `FUN_0043b440` (generic stand/resume) clears actor offset `+0x35e`, while inbound `Cmd70` subcommands `6/8` set that same flag before driving the grounded/collapse helper path. That makes `DAT_004f208e` the strongest current candidate for the local "down / waiting to recover" flag.
 - Fresh 2026-04-18 stand/fall-helper audit: `FUN_0043b470` (fall animation helper) is only called from inbound `Combat_Cmd70_ActorAnimState_v123` subcommand `1`, while `FUN_0043b440` / `FUN_0043b400` (stand/landing-to-stand helpers) are reached from inbound `Cmd70` and the local landing-state path `FUN_00448d80`.
 - Fresh 2026-04-18 negative result: client-local damage/contact paths still do **not** call `FUN_0043b470`; `Cmd66`/`Cmd67` damage-state updates by themselves are therefore not enough to make a mech fall after leg loss.
@@ -2715,6 +2716,7 @@ Confirmed call sites:
 - Fresh 2026-04-18 `Cmd73` priority check: the recovered `Combat_Cmd73_UpdateActorRateFields_v123` handler only writes the two actor-rate fields at `DAT_004f202a/+0x202e` (actor offsets `+0x2fa/+0x2fe`) and no direct read xrefs to those fields have been recovered yet in the current `Mpbtwin.exe` database or flat decomp. That does **not** prove `Cmd73` is irrelevant, but it weakens it as the first fall/recovery blocker compared with the already-confirmed crit-update and `Cmd70` gaps.
 - Fresh 2026-04-18 server data-model follow-up: `mpbt-server` does **not** currently parse the `.MEC` critical-type table at `0xde`; it only loads `extraCritCount`, armor-like maxima, weapon mount IS refs, weapon ids, and ammo data. But because the installed retail `.MEC` roster's base crit table is now known to be the direct identity map `0..20`, that missing field is no longer a hard blocker for synthesizing the stable leg-actuator codes `8..15`.
 - Fresh 2026-04-18 server experiment landed: `mpbt-server` now synthesizes the leg-actuator crit band conservatively when a leg's class-2 internal slot first drops to zero. The server raises the four actuator codes for that leg (`8..11` or `12..15`) to state `1` exactly once, matching the retail critical handler's monotonic `oldState < newState` gate without guessing any multi-hit escalation. In the same post-damage pass, the server now also emits a non-death `Cmd70/8` collapse for that actor (local or remote slots as appropriate in bot, duel, and arena combat), while still leaving `Cmd73` and stand-up/recovery handling untouched.
+- Fresh 2026-04-20 server-side correction: the "conservative" leg-actuator state `1` is likely under-reporting a fully destroyed leg. `Combat_UpdateCriticalDamageState_v123` only applies actuator side effects when the critical state increases, and a leg internal section reaching zero means those actuators are destroyed, not merely damaged. `mpbt-server` now sends the four actuator codes for the destroyed leg as state `2` (`CRITICAL_STATE_DESTROYED`) directly. This preserves the untouched retail client and tests whether the missing late-1990s-faithful fall/stand behavior was caused by incomplete server damage-state synchronization rather than a client timing defect.
 - Fresh 2026-04-19 live GUI validation: packet proof is now paired with a real retail-client windowed run. A small env-gated local probe hook (`MPBT_FORCE_VERIFICATION_ACCOUNT` + `MPBT_FORCE_VERIFICATION_MODE=legtest`) was added so the ordinary **Fight** button could arm the existing forced left-leg verifier for account `gui_leg_0419b` without relying on synthetic text entry, which the retail client did not accept reliably. On the rebuilt server, the Fight-button path logged the forced `legtest` override, then delivered the expected left-leg damage sequence through `0x25 = 0` plus actuator crits `0x08..0x0b = 1` and the non-death `Cmd70/8` collapse at `01:23:58`. But the captured client window stayed in the normal upright cockpit view before, during, and after that decisive packet, including a fresh post-collapse screenshot taken after the `Cmd70/8` event. No inbound `cmd12/action 0x15` or other obvious recovery-side request appeared in the same window. Practical read: the current minimum subset is wire-correct but still **not sufficient to produce visible retail fall**.
 - Fresh 2026-04-19 `Cmd70` sequence follow-up: the next live probe added an opt-in `legseq` verifier that keeps the same left-leg destruction path but emits non-death `Cmd70 1 -> 8` instead of bare `8`, using a fresh per-launch `.pcgi` file for every retail-client launch (matching the launcher's contract; the client deletes/consumes the sandbox `play.pcgi` on use). Wire-side, the probe worked exactly as intended: the Fight button armed the forced `legseq` override, the client entered combat normally, left-leg internal reached `0`, actuator crits `0x08..0x0b = 1` landed, and the server logged `leg-loss transition slot=0 mode=fall-then-collapse sequence=1->8`. But the live `+12s` and `+22s` combat screenshots still showed an upright, stable cockpit view with no visible fall. Practical read: adding subcommand `1` before non-death `8` is **still visually insufficient**, so the next best `Cmd70` target has narrowed further toward the airborne / landing-resolution side (`4` / `6`) rather than the simple fall-helper path alone.
 - Fresh 2026-04-19 `Cmd70 4->8->6` follow-up: the next opt-in verifier (`legair`) now drives the strongest currently recovered non-death airborne sequence for left-leg loss: `Cmd70/4` (airborne), `Cmd70/8` (deferred collapse while airborne), and `Cmd70/6` (landing resolution). Packet-side, the probe is live and exact: `fight-leg-airborne-sequence-smoke.mjs` passes with `cmd70=0/4,0/8,0/6`, and a real launcher-based GUI run using a fresh per-launch `.pcgi` plus a real Fight-button click logged `forced verification override: username=gui_leg_0419b mode=legair` followed by `leg-loss transition slot=0 mode=airborne-collapse-land sequence=4->8->6`. The timing matters: the new screenshots show the world ready room before click, an upright cockpit at `+12s`, and another upright cockpit at `+22s`; the final left-leg-zero event and `4->8->6` transition fired at `08:33:57.924Z`, and the `+22s` screenshot was taken at `08:34:00`, i.e. about two seconds **after** the transition had already landed. Practical read: even the recovered airborne / deferred-collapse / landing sequence is still **not producing an obvious sustained visible fall** on the retail client.
@@ -2737,6 +2739,597 @@ Confirmed call sites:
 - Fresh 2026-04-19 recovery-ack correction from Ghidra MCP: `Combat_Cmd70_ActorAnimState_v123` cases `4` and `6` are effectively **remote-only** (`if (iVar8 != 0)`), so they do nothing for the local actor at slot `0`. That means the extra airborne/landing pieces in the earlier `legair` / `legfull` experiments were only meaningful for remote actors, not for the player’s own local mech. By contrast, inbound `Cmd70/0` runs for local actors too and its default helper `FUN_0043b440` explicitly clears the local down flag at actor `+0x35e`. Practical read: if the server needs to acknowledge a local stand-up request after non-death fall, the strongest current candidate is **slot-0 `Cmd70/0`**, not slot-0 `Cmd70/6`.
 - Fresh 2026-04-19 live F12 follow-up: after a `legfull` GUI run, pressing F12 once produced **no** `cmd12/action0` or `cmd10` traffic on the server. The session only continued to emit idle `cmd8` coasting frames before disconnect. Practical read: either the client never entered the local down/recover-gated state that would let F12 send wire `action0`, or one of the remaining local gates still blocked the stand request before any server round-trip happened.
 - Fresh 2026-04-19 server-side recovery probe: verifier-only `/fightlegrecover` now emits local `Cmd70 1->8->0`, and `C:\MPBT\tools-local\fight-leg-recovery-sequence-smoke.mjs` passes with `cmd70=0/1,0/8,0/0` while the prior `fight-leg-full-sequence-smoke.mjs` still passes unchanged. `handleCombatActionFrame(...)` now also treats inbound `cmd12/action0` as an ambiguous fire-or-recovery trigger and starts a short follow-up timer; if no `cmd10` arrives inside the normal fire window, the server logs and counts an `action0NoShot` event. Practical read: the next GUI run can directly test both "does slot-0 `Cmd70/0` change local posture?" and "does the retail client ever emit `cmd12/action0` without a shot after fall?".
+- Fresh 2026-04-19 raw-capture and local-branch follow-up:
+  - the live `legrecover` capture `1776594199998_9b5a1586-5664-49af-a1f6-79834a540a73.txt` decodes exactly to local `Cmd70` bytes `0/1`, `0/8`, and `0/0`; the actor byte on the wire is `0`, not `9`
+  - older **working** local duel/arena destruction captures use that same actor byte `0` for local `Cmd70/8` collapse and local `Cmd70/4` wreck, so the "wrong local actor byte" theory is now weak
+  - exact decompilation of `Combat_Cmd70_ActorAnimState_v123` tightens the remaining branch for the local actor:
+    - `Cmd70/4` and `Cmd70/6` are no-ops for local slot `0`
+    - local `Cmd70/8` **does** set the down latch at `+0x35e` and run the collapse helper, but only when `DAT_004f21a6 & 0x01` and `DAT_004f21a6 & 0x80` are both clear
+    - if either airborne bit is still set, local `Cmd70/8` only arms the deferred-collapse bit and returns without entering the grounded down state
+  - practical read: the remaining decisive question is no longer slot mapping. It is whether the local actor still has one of those airborne bits set when the server delivers `Cmd70/8`, or whether the earlier F12 test simply happened outside the real down window after the server-side `Cmd70/0` recovery probe had already cleared it.
+- Fresh 2026-04-19 input-window follow-up:
+  - re-reading `Combat_InputActionDispatch_v123` case `0x15` shows the stand-up input gate does **not** read `DAT_004f21a6` at all; it only checks:
+    - support gate `FUN_0042bb00(localActor + 0x126)`
+    - local down latch `DAT_004f208e != 0`
+    - `gyroHits < 2` via `DAT_004f1ee2`
+    - posture/aux guards `DAT_004f208a < 2`, `DAT_004f208c < 0xd`
+    - torso-pair presence `DAT_004f1f42 != 0 || DAT_004f1f44 != 0`
+    - local flag `((byte)DAT_004f1e0c & 0x10) == 0`
+  - practical consequence: airborne bits only matter **indirectly**, by deciding whether local `Cmd70/8` ever sets the down latch in the first place
+  - the current verifier-side `Cmd70/0` explanation is now stronger too:
+    - `FUN_0043b440` (slot-0 `Cmd70/0`) explicitly clears actor `+0x35e`
+    - the existing `legrecover` probe sends `Cmd70/0` about 1.6 seconds after `Cmd70/8`
+    - so any later manual recovery-key press after that ack is **not** a valid test of whether the preceding `Cmd70/8` briefly entered the downed state
+  - current best next probe:
+    - hold the client in a pure local `Cmd70/8` collapse window (or delay `Cmd70/0` much longer)
+    - if testing recovery input manually, press the key during that collapse-only window rather than after the explicit stand/resume packet
+- Fresh 2026-04-19 collapse-callback follow-up:
+  - disassembly of the collapse helper confirms `FUN_0043b4a0` installs animation state `8` with callback `0x43b3d0`
+  - raw bytes at `0x43b3d0` show that callback only clears actor `+0xdc` bit `0x10` (the collapse-animation-in-progress marker); it does **not** clear actor `+0x35e` or force a stand/resume transition
+  - nearby posture helpers still chain back to stand explicitly:
+    - `FUN_0043b4e0` / `FUN_0043b500` install states `0xb` / `0xc` with callback `FUN_0043b440`
+    - `FUN_0043b520` / `FUN_0043b540` install states `0xe` / `0xd` with callback `FUN_0043b4e0`
+    - `FUN_0043b440` is the one that clears actor `+0x35e`
+  - practical read: a successful local `Cmd70/8` should **not** auto-clear the down latch just because animation `8` finished. The current `legrecover` false-negative risk really does come from the verifier-side explicit `Cmd70/0`, not from the collapse helper secretly standing the actor back up on its own.
+  - testing consequence: the already-existing `legseq` verifier (`Cmd70 1->8` with no follow-up `0`) is now the strongest current live probe for the recovery-input window; no new verifier mode is required just to avoid an automatic local stand packet.
+- Fresh 2026-04-19 fall-path and airborne-flag follow-up:
+  - local `Cmd70/1` is now decompiled cleanly:
+    - `Combat_Cmd70_ActorAnimState_v123` case `1` calls `FUN_0043b470`
+    - `FUN_0043b470` only clears actor `+0x35e` and enters animation state `1`
+    - it does **not** set `DAT_004f21a6` airborne bits, so the `legseq` probe is not self-poisoning the later `Cmd70/8` gate by way of `Cmd70/1`
+  - the only confirmed local setter for `DAT_004f21a6 & 0x01` is the jump-jet input tick:
+    - `Combat_JumpJetInputTick_v123` sends `cmd12/action4`
+    - then sets `DAT_004f21a6 |= 3`
+    - then enters animation state `4`
+    - practical read: bit `0x01` is a real local jump/airborne state, not a generic side effect of inbound leg-collapse sequencing
+  - `Combat_Cmd65_UpdateActorPosition_v123` reads `DAT_004f21a6 & 0x80` to suppress its normal local movement-animation update, but this pass did **not** reveal any new setter for bit `0x80`
+  - existing `legseq` server captures are useful for packet timing but were **not** valid manual recovery probes:
+    - recent pure `legseq` captures still show only `Cmd70 1->8`
+    - there is no follow-up `Cmd70/0`
+    - there is also no inbound `cmd12/action0` before those scripted sessions terminate about two seconds later
+  - practical next step:
+    - the next decisive experiment is a real GUI `legseq` probe where recovery is pressed during the live collapse-only window
+    - if that still shows no visible collapse / no `cmd12/action0`, the remaining best RE target is the unresolved source of local bit `0x80`
+- Fresh 2026-04-19 live GUI `legseq` probe follow-up:
+  - after restarting the local server, the newest live run as `Moose` produced:
+    - auth capture `captures\1776612250504_b9ff3957-210f-490b-ba7f-c5a3155767eb.txt`
+    - world capture `captures\1776612250963_2afdd64e-6a0e-4827-854c-69e00f17c610.txt`
+  - log/capture alignment:
+    - combat entry completed at `2026-04-19T15:24:29.699Z`
+    - verifier armed `legseq` at `15:24:30.904Z`
+    - left leg hit to `internal=4` at `15:24:32.704Z`
+    - left leg hit to `internal=0` plus actuator crits `0x8..0xb = 1` at `15:24:35.717Z`
+    - server then emitted local `Cmd70 1->8` (`fall-then-collapse`) at `15:24:35.720Z` and `15:24:36.029Z`
+  - decisive negative result:
+    - from immediately after `Cmd70/8` until disconnect at `15:24:57.375Z`, the server log shows only repeated inbound `cmd8` coasting packets from the client
+    - there was no inbound `cmd12/action0`
+    - there was no correlated `cmd10`
+    - session summary ended with `action0NoShot=0`
+  - practical read:
+    - this was the cleanest pure collapse-only live probe so far, and it still did **not** produce any server-visible recovery request
+    - the remaining best explanations are now:
+      - the client still never enters the true local downed/recoverable state from `Cmd70 1->8`, or
+      - it does so only under another unresolved local posture/flag condition that the server still is not reproducing
+    - with `Cmd70/0` now removed from the probe and `Cmd70/1` ruled out as the source of airborne bit `0x01`, the next best target is the post-collapse recovery gate itself rather than another simple `Cmd70` packet variant
+- Fresh 2026-04-19 F12 / collapse-gate follow-up:
+  - `BT-MAN.txt`, the built-in client keymap, and the captured client reference sheet now line up on the key identity:
+    - manual text says "Press the `<F12>` key" to stand up
+    - screenshot artifact `screenshots\mpbt-keyboard-mouse-bindings.png` explicitly labels `F12` as `Get Up`
+    - the built-in keymap table at `DAT_00478c50` binds action `0x15 -> 0x58`, i.e. scan code `0x58` / `F12`
+    - the runtime combat lookup tables at `DAT_004ef380` / `DAT_004eef70` / `DAT_004ef180` / `DAT_004eed70` are rebuilt from that keymap by `FUN_0040b760`, so the earlier all-zero table dump was only a pre-init snapshot, not evidence against `F12`
+    - user recollection from late-1990s live play supports a **hold** interaction after knockdown while the cockpit fall animation played
+    - follow-up recollection also says rapid repeated `F12` tapping may have worked in practice, so the real client interaction may have tolerated either sustained hold or repeated presses rather than a single narrow tap
+  - whole-program scalar scan on actor flag offset `+0x476` now narrows the old `0x80` theory sharply:
+    - the only recovered `OR ... [actor + 0x476], 0x80` writer is `Combat_Cmd70_ActorAnimState_v123` case `4`
+    - that branch explicitly skips local slot `0`
+    - practical read: local bit `0x80` is no longer a strong explanation for the failed pure-`legseq` recovery probe
+  - the stand-up gate itself is now tighter:
+    - `Combat_InputActionDispatch_v123` case `0x15` still requires the down latch, support gate, `gyroHits < 2`, torso-pair presence, and posture/aux guards
+    - **in addition**, it requires local actor `+0xdc bit 0x10` to be clear
+    - that same bit is set by `FUN_0043b4a0` when `Cmd70/8` installs collapse animation state `8`
+    - raw callback `0x43b3d0` only clears `+0xdc bit 0x10` after the animation completes
+  - deeper timing read on that collapse-animation gate:
+    - the active animation clock is `timeGetTime() / 10` via `FUN_00429610`
+    - local actor animation updates flow through `FUN_004341b0`, which is called from the normal local render/update paths (`FUN_00423bf0`, `FUN_00424120`, and the portrait/view helpers)
+    - `FUN_004345a0` advances the current animation frame by `(animSpeed * deltaTicks) / 6000`
+    - collapse helper callers set `animSpeed = 0x12c0` first, so state `8` advances at roughly one frame every 2 scheduler ticks, i.e. about **20 ms per frame**
+    - when that frame index runs off the end, `FUN_00435050`:
+      - invokes the installed callback
+      - leaves the animation parked on its final frame
+      - clears the animation-running bits instead of looping the state
+    - whole-program scan on actor `+0xdc bit 0x10` found only:
+      - setter: `FUN_0043b4a0`
+      - clearer: raw callback `0x43b3d0`
+      - no second hidden writer/clearer was recovered in the main runtime path
+  - practical consequence:
+    - `F12` pressed during the active collapse-animation window is expected to be ignored even if `Cmd70/8` already set the down latch
+    - but this gate is **not** a long-lived timer and does **not** look like a one-frame blip either: once the callback fires, the bit should clear and stay clear while the actor remains parked on the collapse end pose
+    - the double-`Cmd70/8` pattern in the live `legseq` probe can only restart that short animation-gate once; it does not explain the full multi-second absence of `cmd12/action0` by itself
+    - practical next probe: begin with a sustained `F12` hold shortly after the **last** observed `Cmd70/8` and continue for several seconds, then also test a rapid repeated-press burst in the same post-collapse window; that matches the recovered gate logic and the broader remembered retail interaction better than a single brief tap
+    - if that still yields no `cmd12/action0`, collapse-animation timing is effectively ruled out as the primary blocker, and the next best RE target is why state `8` never seems to leave the client in a truly recoverable local posture
+- Fresh 2026-04-19 collapse-trigger follow-up:
+  - `FUN_0043b4a0` is now clearly the **state-8 collapse installer**, not the upstream cause:
+    - it clears two posture/fall bits in the actor flag field
+    - sets actor `+0xdc bit 0x10`
+    - then calls `FUN_00432950(..., 8, 0x43b3d0, actor)` to install animation state `8`
+  - there are now two distinct recovered ways to reach that installer:
+    - direct packet path: `Combat_Cmd70_ActorAnimState_v123` case `0x0b`
+      - clears movement / posture state
+      - sets the local down latch
+      - calls `FUN_0043b4a0`
+      - for local slot `0`, also calls `FUN_004262d0(0)` before the state-8 install
+    - local movement/landing path: `FUN_00449220 -> FUN_00448d80`
+      - this is a normal actor update path, not just packet decode
+      - a flat-decomp helper at `FUN_0040ab90` computes a fall impulse and sets actor `+0xdc bit 0x08` when its support check passes and the companion fall-state flag `0x80` is already present
+      - later in `FUN_00448d80`, touchdown chooses between:
+        - normal landing via `FUN_0043b400` when `+0xdc bit 0x08` is clear
+        - collapse via `FUN_0043b4a0` when `+0xdc bit 0x08` is set
+      - that same collapse branch then clears `+0xdc bit 0x08`, so the bit behaves like a pending hard-fall / collapse-on-touchdown latch
+  - practical read:
+    - the visible "mech falls onto the ground" animation is not just "receive a collapse packet"; it is also a **local landing decision** once the hard-fall latch is armed
+    - this is the strongest static evidence so far for why some server sequences can leave the client upright: if they never arm the pending hard-fall latch before touchdown, the client can resolve to a normal landing/state-0 path instead of the state-8 collapse path
+    - remembered retail behavior also says the same visible fall could follow **single-leg loss, both-leg loss, a very hard torso hit, or a collision/ramming event**
+    - `BT-MAN.txt` gives direct text evidence for the collision piece: charging/ramming attacks usually result in both participants falling, and higher collision speed raises the chance that both mechs lose balance and fall
+    - practical implication: do **not** treat the recovered collapse path as leg-exclusive; the client likely has a shared knockdown / hard-fall pipeline whose upstream arming conditions can be reached by multiple damage causes
+  - still unresolved:
+    - what exact upstream event sets the companion fall-state flag `0x80` for the local mech in the real leg-loss / `legseq` case
+    - whether torso-hit, leg-loss, and collision/ramming knockdowns share the same upstream `0x80` / `+0xdc bit 0x08` arming path or only converge later at touchdown
+    - whether `FUN_004262d0(0)` contributes to the visible cockpit-fall presentation or is only a local HUD / posture refresh helper
+- Fresh 2026-04-19 low-level flag scan follow-up:
+  - direct instruction scan on `Mpbtwin.exe` tightened the flag story beyond the decompiler view:
+    - the only explicit recovered writer of `OR [actor + 0x476], 0x80` is still `Combat_Cmd70_ActorAnimState_v123` subcommand `4` at `0040e8ab`
+    - local slot `0` still skips that branch, so the retail client's local `0x80` path must come from some other indirect copy/state source if it exists at all
+  - `Cmd70` subcommand `8` (shown as `'\b'` in Ghidra decomp, not `0x0b`) is now more nuanced than the earlier high-level read suggested:
+    - if actor flag bit `0x01` is already set, it does **not** enter state `8` immediately; it only sets actor `+0xdc bit 0x08` and returns
+    - if actor flag bit `0x80` is already set, it does the same thing: set `+0xdc bit 0x08` and return
+    - only when neither `0x01` nor `0x80` is present does the same subcommand clear movement state, set the down latch, call `FUN_004262d0(0)` for local slot `0`, and install collapse state `8`
+  - practical consequence:
+    - the real "collapse" trigger can be either:
+      - **immediate**: `Cmd70/8` directly enters state `8`
+      - **deferred**: `Cmd70/8` merely arms the pending hard-fall latch (`+0xdc bit 0x08`), and the actual visible collapse happens later at touchdown through `FUN_00448d80 -> FUN_0043b4a0`
+    - this is the strongest evidence so far that multiple upstream causes can converge on the same visible fall animation without all using the same packet sequence
+- Fresh 2026-04-19 local-vs-remote airborne flag follow-up:
+  - a flat-decomp pass over the local movement/input state machine finally gives a strong semantic read on actor flag bits `0x01`, `0x02`, and `0x80`:
+    - local jump start path (`Mpbtwin.exe.c` around `34318-34323`) requires jump fuel `> 0x32`, then:
+      - sends outbound `cmd4`
+      - sets `DAT_004df83e |= 3`
+      - calls `FUN_00439260(...)`, which installs animation state `4`
+    - later local tick logic (`FUN_0042cf60` analog in the flat decomp) clears bit `0x02` and applies `| 0x160` after a short timer, while preserving bit `0x01`
+    - no equivalent local `DAT_004df83e |= 0x80` writer was recovered in the flat decomp
+  - practical read:
+    - **state `4` is the airborne / jump animation**
+    - local actors use:
+      - `0x01` = local airborne/jump-active state
+      - `0x02` = active thrust / initial jump phase layered on top of `0x01`
+    - remote/server-synchronized actors instead use:
+      - `Cmd70/4` -> `OR [actor + 0x476], 0x80`
+      - then install the same animation state `4`
+    - that makes the split inside `Cmd70/8` much more coherent:
+      - if `0x01` is set, the local mech is already airborne by its own movement state machine, so collapse is deferred until touchdown
+      - if `0x80` is set, the actor is already in the server-synchronized airborne/state-4 path, so collapse is likewise deferred until touchdown
+      - if neither is set, collapse can happen immediately
+  - strongest new implication:
+    - local `0x80` now looks **unlikely** to be the ordinary local jump/fall path
+    - the more likely interpretation is:
+      - `0x01/0x02` = local jump-airborne state
+      - `0x80` = remote / server-driven airborne-state marker that reuses the same state-4 animation
+    - that sharply narrows the remaining mystery in `legseq`: if the local retail client is not already airborne, `Cmd70/8` should usually be the **immediate** collapse path unless another upstream condition arms the deferred landing path first
+  - one more landing-side detail strengthens that read:
+    - the local touchdown branch in `FUN_00448d80` (`Mpbtwin.exe.c` around `7217-7228`) only clears local airborne bit `0x01` when the actor is in the jump-active bucket and has actually reached ground (`z <= ground`)
+    - practical consequence: an ordinary deferred-collapse path through local `0x01` still looks like a real airborne/touchdown case, not a generic upright-on-ground fallback
+    - next target therefore shifts further toward movement/ground-contact ordering or another non-ordinary state source, not a second obvious local `|= 0x80` writer
+- Fresh 2026-04-19 overwrite-path check:
+  - the shared caller graph is narrower than feared:
+    - `FUN_0043b4a0` (collapse installer) is only called by `Combat_Cmd70_ActorAnimState_v123` and `FUN_00448d80`
+    - `FUN_0043b400` (plain stand/resume installer) is likewise only called by those same two functions
+  - the generic posture installer `FUN_00432950` does have many callers, but the two most relevant "could this overwrite collapse?" paths are both guarded:
+    - `Combat_Cmd65_UpdateActorPosition_v123` only drives `FUN_00432950` when the remote-airborne marker `0x80` is clear **and** the down latch is clear (`DAT_004f208e == 0`)
+    - `FUN_004262d0` likewise only drives `FUN_00432950` while local airborne `0x01` is clear, the down latch is clear, and the collapse-animation gate bit `0x10` is clear
+  - the explicit stand-clear path is also now clearer:
+    - `Cmd70/0` on an actor currently in collapse state `8` routes through `FUN_0043b500`, whose callback `FUN_0043b440` explicitly clears the down latch (`+0x35e = 0`) before returning to state `0`
+  - practical consequence:
+    - no new evidence supports the idea that a **successful immediate collapse** is being silently overwritten by ordinary movement updates
+    - the unresolved `legseq` failure now looks more likely to be **upstream of the down latch**: either local `Cmd70/8` never takes the immediate-collapse path, or it takes a deferred path that never satisfies the real touchdown/collapse preconditions
+- Fresh 2026-04-19 direct flag-field rescan:
+  - a flat-decomp grep on the actor flag field (`+0x47e` in `Mpbtwin.exe.c`, corresponding to the Ghidra `+0x476` naming) only turned up:
+    - reads of `0x01/0x80`
+    - landing-side clears of `0x01` / posture bits
+    - stand/collapse helper clears of `0x01/0x80`
+    - init-time zeroing of the field
+  - it did **not** recover any additional ordinary direct writer that sets bit `0x01` or bit `0x80`
+  - paired with the local `DAT_004df83e |= 3` jump-start path, this further weakens the idea that `legseq` is missing some common obvious second airborne-writer; if such a source exists, it now looks indirect or highly specialized rather than part of the ordinary movement loop
+- Fresh 2026-04-19 down-latch consumer check:
+  - xrefs to the local down latch (`DAT_004f208e`) are narrower than feared:
+    - `Combat_Cmd70_ActorAnimState_v123` still owns the decisive collapse-side writes
+    - `Combat_Cmd65_UpdateActorPosition_v123` only reads it to decide whether landing should stand or collapse
+    - the remaining xrefs are all consumers/gates in local input/UI helpers
+  - the most important consumer is `Combat_InputActionDispatch_v123` action `0x15`:
+    - it only sends the stand-up request (`cmd12/action0`) when `DAT_004f208e != 0`
+    - it also requires the mech to be alive (`FUN_0042bb00(...) != 0`), not shutdown (`DAT_004f208a < 2`), the collapse-animation gate clear (`(DAT_004f1e0c & 0x10) == 0`), body state below `0x0d` (`DAT_004f208c < 0xd`), and one of the local posture fields `DAT_004f1f42/44` to be nonzero
+  - two more local helpers reinforce the same interpretation:
+    - `FUN_00422aa0` suppresses the local torso/aim-delta path whenever `DAT_004f208e != 0`
+    - `FUN_0044bfc0` and `FUN_0044c0c0` likewise gate their local centering/turn behavior off when the down latch is set
+  - practical consequence:
+    - the earlier live absence of `cmd12/action0` after `legseq` is now **stronger evidence** that local `Cmd70/8` never truly left the client in the downed state (or that verifier-side `Cmd70/0` had already cleared it), not that `F12` itself was the wrong recovery input
+- Fresh 2026-04-19 local tick-helper audit:
+  - the local `FUN_0042cf60` per-tick cluster got a focused pass:
+    - `FUN_0042c440`, `FUN_0042c610`, `FUN_0042c830`, and `FUN_0042cd20` all **read** `DAT_004f21a6` to scale movement, fuel drain, angular velocity, and damping
+    - `FUN_0042cc10` / `FUN_0042cb10` are weapon/timer maintenance helpers and do not mutate the local airborne bits either
+  - within that cluster, the only recovered ordinary mutation of the local jump-state flags is still the already-known timeout transition in `FUN_0042cf60`:
+    - when the short jump-start timer expires, it clears bit `0x02` and applies `| 0x160`
+    - that transition **preserves** bit `0x01`; it does not create airborne state from a grounded state
+  - paired with `Combat_JumpJetInputTick_v123`, the practical read is now sharper:
+    - ordinary local airborne entry is still the explicit jump-input path (`|= 3`)
+    - the ordinary local per-frame helpers mainly **consume** that state; they do not appear to inject a second common route into the `Cmd70/8` deferred bucket
+- Fresh 2026-04-19 landing-reentry check:
+  - `FUN_00449220` is just the motion integrator that feeds proposed coordinates into `FUN_00448d80`
+  - the important local touchdown branch inside `FUN_00448d80` is narrower than the earlier overwrite worry:
+    - it only runs the stand/collapse choice when `flag 0x02` is clear, local airborne bit `0x01` is still set, and the proposed `z` has reached ground
+    - only **then** does it clear `0x01`, send the local touchdown action, and choose:
+      - plain stand when pending-fall bit `+0xdc bit 0x08` is clear
+      - collapse when that pending bit is set
+  - that matters because the immediate collapse installer (`FUN_0043b4a0` / flat `FUN_00439320`) explicitly clears both `0x01` and `0x80` before installing state `8`
+  - practical consequence:
+    - a successful **immediate** `Cmd70/8` collapse cannot then be silently "stood back up" by the ordinary local touchdown branch unless some separate path first re-sets local airborne bit `0x01`
+    - paired with the earlier direct-flag rescan, that makes landing re-entry a **weaker** explanation for upright `legseq` than "local `Cmd70/8` never actually took the immediate-collapse path"
+- Fresh 2026-04-19 raw latch-offset scan:
+  - a direct instruction scan on offsets `+0x35e`, `+0x35a`, and `+0x364` tightened ownership of the local down latch beyond the decompiler view:
+    - `+0x35e` (local down latch) is set to `1` in:
+      - `Combat_Cmd70_ActorAnimState_v123` immediate-collapse path
+      - `FUN_00448d80` touchdown-collapse branches
+    - `+0x35e` is cleared to `0` only in the two state-wrapper callbacks:
+      - `FUN_0043b440` -> install state `0`
+      - `FUN_0043b470` -> install state `1`
+    - init paths (`Combat_InitActorRuntimeFromMec_v123`) zero it as expected
+    - no new generic/local-tick/helper writer or clearer of `+0x35e` was recovered
+  - one adjacent detail is worth keeping in mind:
+    - `FUN_0042d150` really does read actor fields `+0x212/+0x214` directly when recomputing posture timing, matching the `Combat_InputActionDispatch_v123` recovery gate that also reads the local aliases at `DAT_004f1f42/44`
+    - combined with the sparse xrefs, that keeps the current read intact: those recovery-gate fields still look like a narrow torso-/posture-related condition, not a leg-collapse-owned latch
+  - practical consequence:
+    - the "something else must be clearing the down latch right after `Cmd70/8`" theory is now substantially weaker
+    - remaining explanations continue to collapse toward:
+      - local `Cmd70/8` never taking the immediate-collapse path, or
+      - a still-unrecovered indirect/specialized state source affecting the airborne/deferred decision before `Cmd70/8`
+- Fresh 2026-04-19 critical-damage posture-state recheck:
+  - `Combat_UpdateCriticalDamageState_v123` is the only caller of the leg-actuator crit updater reached from `Combat_ApplyDamageCodeValue_v123`, so it is the right place to test whether synthetic leg crits are accidentally forcing the client into the hard cripple/destruction posture state
+  - recovered crit-table behavior is now cleaner:
+    - crit types `8` / `0xc`:
+      - halve the actor movement field at `+0x372`-adjacent state (`param_1 + 0x364/+0x366/+0x36a` cluster)
+      - increment the movement-penalty accumulator by `2`
+      - call `FUN_0042d150(param_1, 0)` and, for the local actor, `FUN_004262d0(0)`
+    - crit types `9..0xb` / `0xd..0xf`:
+      - decrement that same movement field by `1`
+      - increment the movement-penalty accumulator by `1`
+      - call `FUN_0042d150(param_1, 0)` and, for the local actor, `FUN_004262d0(0)`
+    - importantly, **none** of crit types `8..15` directly writes actor `+0x35a = 3`
+  - by contrast, the explicit `+0x35a = 3` posture-state writes in this function only occur on other crit families:
+    - crit type `0x10`
+    - crit type `0x11` when its counter reaches `2`
+    - crit type `0x14` when its counter reaches `3`
+  - practical consequence:
+    - the synthetic leg-actuator crit burst is now a **weaker** explanation for why `legseq` never exposes a recoverable downed state
+    - current evidence is more consistent with leg crits only degrading movement/rate state while the real failure remains upstream around the `Cmd70/8` immediate-vs-deferred collapse decision or another still-missing collapse precondition
+- Fresh 2026-04-19 collapse-animation gate follow-up:
+  - direct instruction scan on actor `+0xdc` ownership tightened the recovery-side gate story:
+    - pending hard-fall bit `0x08` is still only touched by the already-known paths:
+      - `Combat_Cmd70_ActorAnimState_v123` deferred-collapse branch
+      - `FUN_00449c60`
+      - landing-side clears in `FUN_00448d80`
+    - collapse-animation gate bit `0x10` is **set only** by `FUN_0043b4a0`
+  - `FUN_0043b4a0` is now fully pinned down:
+    - it clears actor airborne flags `0x01` and `0x80`
+    - sets actor `+0xdc bit 0x10`
+    - installs state `8` through `FUN_00432950(..., 8, 0x43b3d0, actor)`
+  - the callback at `0043b3d0` is a tiny inline helper, not a normal named function:
+    - `MOV EAX,[ESP+8]`
+    - `if (EAX != 0) AND [EAX + 0xdc], 0xffffffef`
+    - `RET`
+  - xrefs show `0043b3d0` is only referenced from `FUN_0043b4a0`
+  - practical consequence:
+    - the local `F12` / action-`0x15` recovery block on `+0xdc bit 0x10` is now directly explained by the collapse state itself
+    - "hold F12 / tap F12 until the mech finishes falling" now matches recovered code much better: the stand-up request cannot be emitted until the state-8 callback clears bit `0x10`
+    - if `legseq` never reaches a state where `0x10` is later cleared, that would produce a **partial-collapse / blocked-recovery** failure even if the down latch had been set
+- Fresh 2026-04-19 stand-gate mapping follow-up:
+  - `FUN_0042bb00` is less leg-owned than it first looked
+  - `Combat_InitDamageStateFromMec_v123` proves the embedded damage-state block stores internal-structure values at:
+    - `+0xe8/+0xea` = arms
+    - `+0xec/+0xee` = side torsos
+    - `+0xf0` = center torso
+    - `+0xf2/+0xf4` = legs
+    - `+0xf6` = head
+  - with that map in hand, `FUN_0042bb00` checks:
+    - `*(short *)(base + 0xf0) != 0` -> center torso still present
+    - `*(short *)(base + 0xf6) != 0` -> head still present
+    - **not** the leg slots `+0xf2/+0xf4`
+    - plus two more non-leg state fields at `+0x8e` and `+0x86`
+  - practical consequence:
+    - the shared helper used by touchdown collapse gating and `F12` recovery input still does **not** explain a leg-specific stand lockout by itself
+    - the retail leg-collapse mystery remains more likely to live in:
+      - the upstream `Cmd70/8` immediate-vs-deferred bucket, or
+      - another leg-owned posture/state source outside `FUN_0042bb00`
+- Fresh 2026-04-19 internal-zero helper recheck:
+  - `FUN_0040e000`, the helper called immediately after class-2 internal-structure damage changes, is narrower than a collapse owner:
+    - it only acts when the updated internal value reaches zero
+    - it maps the destroyed section id to a presentation/effect id and calls `FUN_00433030`
+    - for the local actor, it also calls `FUN_0043b170`
+  - no collapse-state write, down-latch write, or `Cmd70`-style state transition was recovered in `FUN_0040e000`
+  - practical consequence:
+    - "leg internal reached zero" still does **not** directly trigger collapse through the ordinary internal-damage helper
+    - that further reinforces the current model: visible knockdown still appears to depend on a separate animation/state path (especially `Cmd70/8` and the collapse-state callback), not just on the raw leg-internal update itself
+- Fresh 2026-04-19 collapse-callback lifecycle follow-up:
+  - the actor-side animation pump is now pinned down:
+    - `FUN_00439380` is the per-frame actor animation loop
+    - for each active actor it calls `FUN_00432010(actor->anim_state, now)`
+    - `FUN_00432010` advances the animation through `FUN_00432400`
+  - the callback fire point is specifically `FUN_00432e90`:
+    - `FUN_00432400` calls `FUN_00432e90` only when the current animation frame index wraps past the active animation's frame count
+    - `FUN_00432e90` is the only recovered place that actually consumes the callback fields at animation-object offsets `+0x24/+0x28`
+    - when no queued next-state pointer is present at `+0x1c`, `FUN_00432e90`:
+      - clears animation progress flags
+      - copies the final frame count into the current-frame slot
+      - reads callback pointer `+0x24` and callback arg `+0x28`
+      - clears both fields
+      - invokes the callback
+  - this matters because `FUN_00432950` does more than just "enter state":
+    - it writes the active transition descriptor at `+0x18`
+    - writes the queued target-state descriptor at `+0x1c`
+    - writes the callback pointer/arg at `+0x24/+0x28`
+  - practical consequence:
+    - the collapse callback `0043b3d0` is **not** called immediately when `FUN_0043b4a0` installs collapse state `8`
+    - it is also not called on the first transition wrap if a queued next state is still present
+    - instead, bit `+0xdc 0x10` can remain set across the transition into the collapse state and only clear after the queued transition chain drains and the final animation cycle ends
+    - that is the strongest code-level support so far for the remembered behavior that holding or repeatedly tapping `F12` was effective only after the fall animation had visibly finished
+    - it also leaves open a sharper failure mode for `legseq`: the client may enter a partial collapse path that never reaches the final callback point, which would keep `0x10` set and suppress stand-up input even if some downed-state work had occurred
+- Fresh 2026-04-19 post-collapse recovery-chain follow-up:
+  - the wrapper chain around `Combat_Cmd70_ActorAnimState_v123` is now precise enough to separate **collapse completion** from **stand-up acknowledgment**
+  - already-established piece:
+    - collapse installer `FUN_0043b4a0` -> state `8` with callback `0043b3d0`
+    - that callback only clears actor `+0xdc bit 0x10`
+    - it does **not** clear the local down latch `+0x35e`
+  - recovery-side wrappers show the next phase is separate:
+    - `FUN_0043b500` -> install state `0xc` with callback `FUN_0043b440`
+    - `FUN_0043b4e0` -> install state `0xb` with callback `FUN_0043b440`
+    - `FUN_0043b520` -> install state `0xe` with callback `FUN_0043b4e0`
+    - `FUN_0043b540` -> install state `0xd` with callback `FUN_0043b4e0`
+    - `FUN_0043b440` is the actual latch-clear helper: it sets actor `+0x35e = 0` and then installs state `0`
+  - `Combat_Cmd70_ActorAnimState_v123` case `0` routes through those wrappers based on the current downed animation state:
+    - current state `8` -> `FUN_0043b500` -> state `0xc` -> callback `FUN_0043b440` -> state `0` and latch clear
+    - current state `7` -> `FUN_0043b4e0` -> state `0xb` -> callback `FUN_0043b440`
+    - current state `10` -> `FUN_0043b520` -> state `0xe` -> callback `FUN_0043b4e0` -> state `0xb` -> callback `FUN_0043b440`
+    - current state `9` -> `FUN_0043b540` -> state `0xd` -> callback `FUN_0043b4e0` -> state `0xb` -> callback `FUN_0043b440`
+  - practical consequence:
+    - finishing the fall animation and clearing `+0xdc bit 0x10` is **not enough** to stand back up
+    - the client still needs a later recovery/ack animation chain, and for the ordinary collapse state `8` the strongest current candidate remains inbound local-slot **`Cmd70/0`**
+    - that materially strengthens the earlier protocol read:
+      - `F12` / local action `0x15` -> outbound `cmd12/action0` is the **request**
+      - inbound `Cmd70/0` is the best current candidate for the **acknowledged get-up sequence**
+    - therefore a server that never converts a valid post-fall `cmd12/action0` into the matching local `Cmd70/0` chain can leave the client stuck down even after the fall animation has completed and `0x10` has cleared
+- Live action0-recovery experiment probe (2026-04-19, Moose / forced `legseq`):
+  - restarted `mpbt-server` with:
+    - `MPBT_FORCE_VERIFICATION_ACCOUNT=Moose`
+    - `MPBT_FORCE_VERIFICATION_MODE=legseq`
+    - `MPBT_EXPERIMENT_ACTION0_RECOVERY=1`
+    - `MPBT_EXPERIMENT_ACTION0_RECOVERY_WINDOW_MS=15000`
+  - fresh live world/combat session: `0001329e`
+    - capture: `captures\1776618312335_0001329e-a6f0-4970-986c-b3660a684e4d.txt`
+    - forced verifier armed at `17:05:36.321Z`
+    - left-leg destruction emitted local `Cmd70 1->8` at `17:05:46.345Z` / `17:05:46.651Z`
+  - decisive result:
+    - after the collapse packets, the capture shows only repeated inbound `cmd8` coasting frames until disconnect
+    - there was **no** inbound `cmd12/action0`
+    - there was **no** inbound `cmd10`
+    - there was **no** `action0NoShot` increment in the session summary
+    - there was **no** `action0 recovery experiment` log line, so the one-shot local `Cmd70/0` fallback never fired
+  - practical consequence:
+    - repeated F12 taps in this live post-collapse window still did **not** make the retail client reach the stand-request wire path
+    - the new server-side action0->Cmd70/0 experiment is wired, but current live evidence says the blocker remains **upstream** of that ack path
+    - the next best target is again the missing local state that should allow `Combat_InputActionDispatch_v123` case `0x15` to emit `cmd12/action0` in the first place
+- Direct local-flag writer audit and deferred-collapse asymmetry (2026-04-19 follow-up):
+  - direct actor-offset scan on `+0x476`, `+0x35e`, and `+0xdc` tightened the remaining ownership:
+    - the only direct visible **`+0x476 bit 0x80` setter** in ordinary code is still `Combat_Cmd70_ActorAnimState_v123` case `4` (`0040e8ab`)
+    - `FUN_0043b400` / `FUN_0043b4a0` both **clear** local bits `0x01` and `0x80`
+    - `FUN_0042cf60` only clears bit `0x02` and later ORs `0x160`; it does not introduce `0x80`
+    - `Combat_InitActorRuntimeFromMec_v123` zeroes both `+0x476` and `+0x35e` at startup
+    - direct `+0x35e` writes still reduce to the already-known owners: immediate collapse, landing-collapse, and the clear callbacks
+  - `FUN_00448d80` revealed a new asymmetry in the deferred collapse path:
+    - for the **local actor** (`actor slot 0`), the normal touchdown/re-entry branch only consumes deferred collapse when local airborne bit `0x01` is still set and ground contact is reached
+    - the local slot-0 path does **not** have a parallel "consume pending collapse when only `0x80` is set" branch
+    - the collapse-on-landing conversions that set `+0x35e = 1` and call `FUN_0043b4a0` appear in:
+      - the non-local (`slot != 0`) `0x80` branch, and
+      - the generic touchdown branch that still requires local bit `0x01`
+  - practical consequence:
+    - if local `Cmd70/8` ever defers because of local `+0x476 bit 0x80` **without** bit `0x01`, the pending-collapse flag can be stranded:
+      - no local `+0x35e = 1`
+      - no `FUN_0043b4a0` collapse state `8`
+      - no local touchdown `cmd12/action6`
+      - and therefore no later `F12 -> cmd12/action0` recovery request
+    - that asymmetry fits the recent clean live `legseq` probes unexpectedly well: after the `Cmd70 1->8` attempt, captures still showed only repeated `cmd8` coasting and **no** `cmd12/action6` or `cmd12/action0`
+  - current best read:
+    - the next most valuable proof target is now the unresolved **source / meaning of local bit `0x80`**, or a stronger proof that the live client is reaching the deferred-collapse bucket at all
+    - if local `0x80` really can exist without local `0x01`, that alone could explain why the retail client never transitions into the true local downed/recoverable state even when the server-side packet sequence looks close
+- Supporting follow-up on the same gate (2026-04-19, later pass):
+  - `Combat_SendCmd12Action_v123` has only three recovered callers:
+    - `Combat_InputActionDispatch_v123`
+    - `Combat_JumpJetInputTick_v123`
+    - `FUN_00448d80`
+  - practical consequence:
+    - the recent live `legseq` captures showing **no** `cmd12/action6` really do mean the local touchdown / landing-collapse path in `FUN_00448d80` never fired
+  - slot-map audit also weakened the old "wrong actor" fear:
+    - `Combat_Cmd72_InitLocalActor_v123` explicitly writes `DAT_00478d98[inboundLocalSlot] = 0`
+    - so the local bootstrap directly binds the player’s server slot to runtime actor `0`
+    - that makes an ordinary slot-0 / actor-0 mismatch a weaker explanation for the failed local collapse
+  - new refinement to the `0x80` theory:
+    - `Combat_Cmd70_ActorAnimState_v123` case `4` sets `+0x476 bit 0x80` only for **non-local** actors; local slot `0` still ignores inbound `Cmd70/4`
+    - together with the earlier audit, there is now **no discovered ordinary local `0x80` setter** after actor init
+    - so the "deferred because of local `0x80` alone" theory remains structurally possible only if some still-unrecovered indirect/specialized local setter exists
+  - practical read:
+    - unresolved local `0x80` is still worth tracing, but it is now a **weaker** blocker candidate than before
+    - the remaining stronger candidates are:
+      - some still-missing specialized local setter for `0x80`, or
+      - a later state-8 / callback / queued-animation gate that keeps the client from ever exposing a post-collapse recovery window even after immediate collapse should have happened
+- Live local-state CDB probe of that state-8 gate (2026-04-19, Moose / forced `legseq`):
+  - launched a fresh retail client into room `147` with `MPBT_FORCE_VERIFICATION_MODE=legseq`, `MPBT_EXPERIMENT_ACTION0_RECOVERY=1`, and CDB breakpoints on local `Cmd70/8`, `Combat_StartFallDownAnim_SetRecoveryBlock_v123` (`0x0043b4a0`), `Combat_AnimCallback_ClearActorRecoveryBlock_v123` (`0x0043b3d0`), and the F12/action-`0x15` send path
+  - server session `2ed59558` hit the expected Fight-button path and logged `leg-loss transition slot=0 mode=fall-then-collapse sequence=1->8` at `23:25:32.059Z`
+  - CDB proved the local actor took the immediate `Cmd70/8` path, not a deferred exit:
+    - `CMD70/8 entry`: actor `004f1d30`, `flags476=00000000`, `flagsdc=00000001`, `latch35e=0`
+    - `CMD70/8 IMMEDIATE latch-write`: pre-latch `0`
+    - `CMD70/8 call fall-helper`: `latch35e=1`
+    - `FallHelper entry`: `dc=00000001`, `latch35e=1`
+  - after waiting post-collapse and sending repeated/timed F12 inputs, direct process memory still read:
+    - `DAT_004f208e` / actor `+0x35e = 0x0001`
+    - `DAT_004f1e0c` / actor `+0xdc = 0x00000011`
+    - `DAT_004f21a6` / actor `+0x476 = 0`
+    - stand-gate support values were otherwise passable (`gyro=0`, `+0x35c=9`, torso aliases `8/8`)
+  - no breakpoint hit occurred at `0x0043b3d0`, `Combat_InputActionDispatch_v123` case `0x15`, the final F12 send point, or `Combat_SendCmd12Action_v123`
+  - practical consequence:
+    - the missing gate is now pinned more tightly: local `Cmd70/8` **does set** the down latch `+0x35e`, but the fall animation's recovery-block bit `+0xdc bit 0x10` remains set because the state-8 completion callback does not fire in this live path
+    - this makes the state-8 animation/callback completion path a stronger current blocker than the earlier deferred-collapse/airborne-bit theories
+- Live low-overhead callback/F12 proof (2026-04-19, Player / forced `legseq`):
+  - reran the same room-147 Fight-button path with CDB breakpoints only on animation install/boundary, callback, F12, and `Combat_SendCmd12Action`; server session `33f930f2` logged `leg-loss transition slot=0 mode=fall-then-collapse sequence=1->8` at `23:57:19.668Z`
+  - CDB log `C:\Users\moose\mpbt-cdb-boundary.log` proved the collapse animation chain is finite and callback-backed:
+    - `AnimInstall anim=03a58690 target=8 cb=0043b3d0 arg=004f1d30 pre_active=056a6380 pre_active_id=16 pre_queued=056a2c5a pre_flags=00000007 pre_frame=38 pre_speed=12c0`
+    - first boundary: active state `0x16`, length `0xa0`, queued state-8 pointer still present, frame `0xa0`, `dc=00000011`, `latch35e=1`
+    - second boundary: active state `8`, length `0xa0`, queued `0`, frame `0xa0`, `dc=00000011`, `latch35e=1`
+    - callback hit immediately after the second boundary: `Callback43b3d0 HIT anim=03a58690 actor=004f1d30 pre_dc=00000011 pre_latch35e=1 flags476=00000000`
+  - direct post-callback memory then showed the recovery-block bit cleared while the down latch stayed set:
+    - `actor +0xdc = 0x00000001`
+    - `actor +0x35e = 0x0001`
+    - `actor +0x476 = 0`
+    - remaining F12 gate inputs were passable (`gyro=0`, `+0x35a=0`, `+0x35c=9`, torso aliases `0x15/0x15`)
+  - after posting F12, CDB proved the local gate passed and the client emitted the stand request:
+    - `F12 case entry flags476=00000000 dc=00000001 latch35e=1 gyro=0 state35a=0 aux35c=9 torsoL=15 torsoR=15`
+    - `Combat_SendCmd12Action action=0 flags476=00000000 dc=00000001 latch35e=1 state35a=0`
+    - server log received `client seq=0 cmd=12`
+  - practical consequence:
+    - the missing local state gate is now identified: F12 is blocked until `Combat_AnimCallback_ClearActorRecoveryBlock_v123` clears actor `+0xdc bit 0x10`; once it clears, the retail client does send wire `cmd12/action0`
+    - the server's current action0 recovery experiment did not reply in this proof run only because the fixed `MPBT_EXPERIMENT_ACTION0_RECOVERY_WINDOW_MS=15000` window had expired (`local collapse age=148208ms`)
+    - next implementation target is therefore server-side recovery acknowledgment for a post-fall `cmd12/action0` no-shot request, preferably keyed to session/actor downed state rather than a short wall-clock window from leg destruction
+- Fresh 2026-04-20 server follow-up:
+  - fresh Ghidra re-read tightened the promotion decision too:
+    - `Combat_SendCmd12Action_v123` (`0040eb20`) has only three live callers:
+      - `Combat_InputActionDispatch_v123` case `0x15` -> `action 0`
+      - `Combat_JumpJetInputTick_v123` -> `action 4`
+      - `FUN_00448d80` -> `action 6`
+    - that closes the biggest earlier ambiguity: wire `cmd12/action0` is now best read as the downed recovery/stand-up signal, not ordinary weapon fire
+  - based on that, `src/world/world-handlers.ts` now promotes the server-side follow-up beyond the old env-gated experiment:
+    - the recovery decision no longer uses collapse age or `MPBT_EXPERIMENT_ACTION0_RECOVERY_WINDOW_MS`
+    - slot-0 `Cmd70/8` marks the local actor downed and arms one pending `cmd12/action0` recovery ack
+    - slot-0 `Cmd70/0` clears that local downed state again
+    - if a later `cmd12/action0` produces no `cmd10` inside the normal fire window while that downed state is still pending, the server now emits local `Cmd70/0` by default
+  - focused packet-level coverage now exists in `C:\MPBT\tools-local\fight-leg-action0-recovery-smoke.mjs` (`/fightlegseq` plus raw `cmd12/action0`)
+- Fresh 2026-04-19 stand-gate crit-budget refinement:
+  - the local stand-up input gate's `DAT_004f208c < 0xd` check is actor field `+0x35c`
+  - direct `+0x35c` writers are now tightened to:
+    - `Combat_InitActorRuntimeFromMec_v123`: initializes `+0x35c = 4`
+    - `Combat_UpdateCriticalDamageState_v123`:
+      - crit types `8` and `0xc` add `2`
+      - crit types `9..0xf` add `1`
+      - crit type `0x13` (gyro) can force `+0x35c = 0xd` unless the actor already has the alternate guard state at `+0x1b2 == 1`
+  - existing naming work already ties the stand gate's `DAT_004f1ee2` field to **gyro hits**, and `MPBT.MSG` names crit type `19` (`0x13`) as **Gyro**
+  - practical consequence for the current verifier-side left-leg experiment:
+    - the server's conservative left-leg actuator synth sends only crit codes `0x08..0x0b = 1` once each
+    - that recovered budget is `init 4 + (2 + 1 + 1 + 1) = 9`, which stays safely below the `0x0d` stand-gate cutoff
+    - the same current probe does **not** synthesize gyro crits, so the `gyroHits < 2` gate should also remain satisfied
+  - updated read:
+    - crit-budget / gyro gating is a real retail blocker in general, but it is now a **weaker explanation for the present single-leg `legseq` failure**
+    - for the current server packet set, the stronger remaining explanations stay:
+      - the local down latch (`+0x35e`) never becoming eligible/set in the real path, or
+      - the collapse animation gate (`+0xdc bit 0x10`) never clearing at the right time for `F12 -> cmd12/action0`
+- Fresh 2026-04-19 latch / deferred-collapse narrowing:
+  - direct `+0x35e` writers are now fully tightened:
+    - init path zeroes it
+    - `Combat_Cmd70_ActorAnimState_v123` case `8` sets it on the immediate local collapse path
+    - `Combat_Cmd70_ActorAnimState_v123` case `6` sets it only on the non-local landing-collapse branch
+    - `FUN_00448d80` sets it only on the deferred-collapse touchdown paths
+    - `FUN_0043b440` / `FUN_0043b470` are still the only direct clears
+  - direct actor-flag audit around `+0x476` is now tighter too:
+    - `FUN_0043b400` and `FUN_0043b4a0` clear both bit `0x01` and bit `0x80`
+    - the late landing branch in `FUN_00448d80` clears bit `0x01` plus `0x20/0x40/0x100` after sending local `cmd12/action6`
+    - local jump start is the recovered ordinary **bit-`0x01` setter**: `Combat_JumpJetInputTick_v123` raises `DAT_004f21a6 |= 3` when it starts jump action `4`
+    - direct ordinary local `0x80` set remains only the old remote-only `Cmd70/4` path
+  - pending-collapse bit `+0xdc bit 0x08` is now also tightened:
+    - setters: deferred `Cmd70/8` and `FUN_00449c60`
+    - clearers: immediate `Cmd70/8` path and `FUN_00448d80` touchdown-consume paths
+  - collapse gate bit `+0xdc bit 0x10` is now almost fully closed as a frontier:
+    - setter: `FUN_0043b4a0`
+    - clearer: raw callback `0043b3d0`
+    - recovered direct absolute-global reads are only:
+      - `Combat_InputActionDispatch_v123` (`action 0x15` stand-up gate)
+      - `FUN_004262d0` (local HUD / movement indicator path)
+  - practical consequence for the current verifier:
+    - for a **non-jump** single-leg `legseq` probe, there is now no recovered ordinary path that should leave local bit `0x01` set before inbound `Cmd70/8`
+    - combined with the already-weakened `0x80` theory, deferred-collapse is now a **much weaker** explanation for the failed live stand request
+    - current best read:
+      - local `Cmd70/8` should be taking the immediate path, setting `+0x35e = 1` and `+0xdc bit 0x10 = 1`
+      - if repeated `F12` still never yields `cmd12/action0`, the strongest remaining upstream blocker is now the **state-8 animation completion / callback-clear path** for bit `0x10`, not the earlier airborne/deferred-collapse gate
+- Fresh 2026-04-19 scheduler proof for the state-8 callback gate:
+  - `FUN_00432630` allocates a synthetic transition animation whose state id is literally `0x16`
+    - it scans the loaded transition metadata, picks the widest transition span, and builds a dedicated wrapper state used for enter/exit blends
+    - this closes the old ambiguity around `0x16`: it is not an ordinary posture like `8`; it is the generic generated transition state
+  - `FUN_00432950` now reads cleanly with that model:
+    - it resolves the real target state entry (for collapse, state `8`)
+    - it loads per-part transition metadata from that target state via `FUN_004323d0(...)`
+    - it installs the synthetic `0x16` transition wrapper into animation-object `+0x18`
+    - it queues the real target state into animation-object `+0x1c`
+    - it stores the callback and callback arg into `+0x24/+0x28`
+  - `FUN_00432e90` confirms the completion behavior:
+    - on the **first** completion boundary, if `+0x1c` is non-null, it promotes the queued target into `+0x18`, clears `+0x1c`, and does **not** call the callback yet
+    - only on the **later** completion when `+0x1c == 0` does it clear the active flags and invoke the stored callback from `+0x24/+0x28`
+  - `FUN_00432950` also has a special case for `currentState == 0x16 && queuedNext == targetState`, which just normalizes speed and returns; it does not replace the queued target or callback
+  - the main ordinary runtime callers that could have re-entered `FUN_00432950(...)` are now weaker too:
+    - `Combat_Cmd65_UpdateActorPosition_v123` only does so when remote-airborne bit `0x80` is clear **and** actor `+0x35e == 0`
+    - `FUN_004262d0` only does so when local airborne bit `0x01` is clear, actor `+0x35e == 0`, and collapse gate bit `+0xdc bit 0x10 == 0`
+    - immediate collapse via `FUN_0043b4a0` sets `+0x35e = 1` and `+0xdc bit 0x10 = 1`, so those ordinary movement/HUD paths should not overwrite the queued `0x16 -> 8` chain once collapse has really been installed
+  - practical consequence:
+    - the collapse callback is now proven to sit behind a **generated `0x16 -> 8` two-stage chain**, not behind a single immediate state-8 boundary
+    - this makes "callback clear happens a bit later" a stronger structural explanation than before
+    - but it also narrows the next unknown sharply: once `FUN_0043b4a0` has really installed collapse, ordinary repeat scheduling should not erase the queued target/callback unless some other state request genuinely replaces the chain
+    - the next best proof target is therefore the resource/runtime semantics of the generated `0x16` wrapper and the state-`8` entry itself (finite vs looping/stalled), not broader crit/deferred-collapse theories
+- Fresh 2026-04-19 keyframe/resource timing check:
+  - the actual animation-state ids live in `keyframe.bin`, not `3dobj.bin`
+  - parsing the eight keyed mech animation families in `keyframe.bin` now shows the same collapse-related state set across all of them:
+    - states present: `0, 1, 4, 8, 7, 9, 10, 11, 12`
+    - state `8` is present in every recovered family
+  - recovered timing fields are finite and consistent:
+    - on disk, state `8` has length field `40`
+    - `FUN_0043bc00` shifts that field left by `2`, so runtime state-`8` length is `160`
+    - `FUN_00432630` builds synthetic transition state `0x16` with length `maxStateLen + 1`, which is `41` for the recovered mech families
+  - with the already-recovered scheduler speed `0x12c0` used by the collapse helpers, `FUN_00432400` implies:
+    - transition wrapper `0x16` lasts about `41 * 6000 / 0x12c0 ~= 0.5s`
+    - state `8` itself lasts about `160 * 6000 / 0x12c0 ~= 2.0s`
+    - full generated `0x16 -> 8 -> callback` chain should therefore clear `+0xdc bit 0x10` on the order of **~2.5 seconds**, not indefinitely
+  - updated read:
+    - the keyframe/resource side now makes a permanently stuck state-8 callback a **much weaker** explanation for the existing live tests where `F12` was held or tapped for several seconds after the last local `Cmd70/8`
+    - if those multi-second post-collapse inputs still produce no `cmd12/action0`, the stronger remaining question shifts back upstream:
+      - either local `Cmd70/8` did not really install the immediate down/collapse state after all, or
+      - some other still-unrecovered local gate is preventing `Combat_InputActionDispatch_v123` case `0x15` from seeing the expected post-collapse state
+- Fresh 2026-04-19 upstream gate refinement after re-reading `Cmd70/8` and input dispatch:
+  - `Combat_Cmd70_ActorAnimState_v123` local case `8` is now structurally tighter than before:
+    - it takes the **deferred** path only when local actor flag `+0x476 bit 0x01` or `bit 0x80` is set
+    - otherwise it takes the **immediate** path: clears pending bit `+0xdc bit 0x08`, sets `+0x35e = 1`, zeroes movement accumulators, refreshes local HUD state via `FUN_004262d0(0)` for slot `0`, then calls `FUN_0043b4a0` to install collapse state `8`
+  - full actor-offset scan on `+0x476` weakens the stale-airborne theory again:
+    - recovered direct writes are still only:
+      - init zero in `Combat_InitActorRuntimeFromMec_v123`
+      - remote-only `Cmd70/4` setting `bit 0x80`
+      - `FUN_0043b400` / `FUN_0043b4a0` clearing `bit 0x01` and `bit 0x80`
+      - `FUN_00448d80` clearing `bit 0x01` plus `0x20/0x40/0x100` on the touchdown/deferred-collapse consume paths
+      - `FUN_0042cf60` timeout maintenance, which only rewrites the higher jump bits (`bit 0x02` / `0x20` / `0x40` / `0x100`) and does **not** set local `bit 0x01` or `bit 0x80`
+    - no new ordinary local setter for `bit 0x01` or `bit 0x80` was recovered beyond the already-known jump-start path / remote `Cmd70/4`
+  - `Combat_InputActionDispatch_v123` also sharpened slightly:
+    - the whole action switch is wrapped in the top-level support gate `FUN_0042bb00(localActor + 0x126)`, not just case `0x15`
+    - case `0x15` then rechecks that same support gate plus:
+      - `+0x35e != 0`
+      - `gyroHits < 2`
+      - `+0x35a < 2`
+      - torso-pair nonzero at `+0xec/+0xee`
+      - `+0x35c < 0x0d`
+      - collapse bit `+0xdc bit 0x10` clear
+  - updated read:
+    - for the present **non-jump** `legseq` verifier, a stale ordinary local airborne flag is now an even **weaker** explanation than before
+    - if the retail client still stays upright after the server's non-death `Cmd70/8`, the strongest remaining upstream explanations are narrowing toward:
+      - the packet not actually reaching the local actor as effective case `8`, or
+      - a still-unrecovered indirect/specialized local write to `+0x476 bit 0x01/0x80`
+    - if collapse really is installed, the remaining post-collapse gate list in `Combat_InputActionDispatch_v123` is now essentially closed
 - Fresh 2026-04-18 contradiction check: re-reading `Combat_GetInternalStructureForSection_v123` together with its backing table at `DAT_0047af7c` confirms the retail section-id order is still `[arm, arm, side, side, CT, leg, leg, head]`, i.e. section ids `2/3` return the side-torso column and `5/6` return the leg column. That matches the current server mapping and directly weakens the earlier "server is sending leg loss under the wrong class-2 codes" hypothesis.
 - Practical takeaway for retail fall recovery: the earlier blanket "F12 -> cmd12 is weak" read was too pessimistic, but the later "just remap class-2 legs to `0x22/0x23`" theory is now **not justified**. The best current model is:
   - local stand-up request is still very likely the **context-sensitive** fallback-`F12` / `action 0x15 -> cmd12(0)` path,
@@ -2751,6 +3344,362 @@ Confirmed call sites:
     - simple extension: **non-death `Cmd70 1->8`**
     - airborne extension: **non-death `Cmd70 4->8->6`**
     - mixed extension: **non-death `Cmd70 1->4->8->6`**
+- Fresh 2026-04-20 fall-entry sequence consolidation from Ghidra:
+  - the client does **not** treat any single inbound `Cmd70` subcommand as the full recoverable-fall event
+  - the recovered fall-entry chain is now:
+    1. **airborne / falling state established**
+       - remote actors: inbound `Cmd70/4` sets actor `+0x476 bit 0x80` and plays anim state `4` via `FUN_0043b3e0`
+       - local actor: the only ordinary recovered analogue is the client's own jump-start path (`cmd12/action4`), which sets local `DAT_004f21a6 |= 3` and also plays state `4`
+    2. **collapse is armed but not yet entered**
+       - inbound `Cmd70/8` checks actor `+0x476 bit 0x01/0x80`
+       - if either airborne bit is set, `Cmd70/8` does **not** enter state `8`; it only sets actor `+0xdc bit 0x08` (deferred collapse) and returns
+       - during airborne descent, `FUN_00449c60` can also set that same deferred-collapse bit from position/landing state when support is intact and altitude is still positive
+    3. **touchdown resolves the deferred collapse**
+       - remote actors: inbound `Cmd70/6`
+       - local actor: `FUN_00448d80`, which is the touchdown path reached from `FUN_00449220`, sends wire `cmd12/action6` and then branches exactly like remote `Cmd70/6`
+    4. **actual entry into the fallen/down state**
+       - if actor `+0xdc bit 0x08` is clear at touchdown, the client just calls `FUN_0043b400` and returns to stand/resume
+       - if actor `+0xdc bit 0x08` is set, the client zeroes movement state, sets actor `+0x35e = 1`, calls `Combat_StartFallDownAnim_SetRecoveryBlock_v123` (`FUN_0043b4a0`) to install state `8`, and clears the deferred bit
+       - that state-8 chain later clears actor `+0xdc bit 0x10` through callback `0043b3d0`, after which F12 can finally emit `cmd12/action0`
+  - Fresh 2026-04-20 local slot-0 refinement:
+    - `DAT_004f21a6` is not a separate jump-only shadow; it is the local actor's actual `+0x476` runtime field (`DAT_004f1d30 + 0x476`)
+    - that makes the local recoverable-fall sequence sharper than before:
+      1. `FUN_0043d2a0` runs the local per-tick movement/input update and calls `Combat_JumpJetInputTick_v123`
+      2. `Combat_JumpJetInputTick_v123` emits outbound `cmd12/action4`, sets local actor `+0x476 |= 3` (`DAT_004f21a6 |= 3`), and starts anim state `4`
+      3. the local main loop then runs `FUN_00447170 -> FUN_0042cf60(0) -> FUN_00449220 -> FUN_00448d80`
+      4. inside `FUN_00448d80`, touchdown is gated by local actor `(+0x476 & 1) != 0`; when ground is reached it clears the airborne bits, emits outbound `cmd12/action6`, and only enters state `8` if `+0xdc bit 0x08` is already set
+      5. if that deferred-collapse bit is set at touchdown, `FUN_00448d80` zeroes movement state, sets `+0x35e = 1`, calls `Combat_StartFallDownAnim_SetRecoveryBlock_v123`, and clears `+0xdc bit 0x08`
+    - practical consequence:
+      - the remote recoverable-fall path is `Cmd70/4 -> Cmd70/8 -> Cmd70/6 -> state 8`
+      - the local recoverable-fall path is `cmd12/action4 -> airborne update/touchdown helper -> cmd12/action6 -> state 8`
+      - this also explains why remote `Cmd70/4`/`Cmd70/6` spoofing alone never made the local mech visibly fall: the local mech wants its own action-4/action-6 path, not the remote-only inbound sequence
+  - Fresh 2026-04-20 slot-0 `+0x476 bit 0x80` follow-up:
+    - no ordinary local slot-0 setter for `+0x476 bit 0x80` has been recovered so far
+    - `Combat_Cmd72_InitLocalActor_v123` zeroes local `+0x476`
+    - `Combat_JumpJetInputTick_v123` is still the only ordinary local jump-start writer on slot 0, and it sets `+0x476 |= 3`, not `0x80`
+    - the only confirmed direct `0x80` setter still visible in recovered code is `Combat_Cmd70_ActorAnimState_v123` case `4`, and that branch is explicitly remote-only (`if (iVar8 != 0)`)
+    - the local per-tick movement chain (`FUN_00447170 -> FUN_0042cf60 -> FUN_00449220 -> FUN_00448d80`) reads `0x80`, clears airborne bits later, or consumes them, but does not set `0x80`
+    - practical consequence:
+      - the `FUN_00449c60` pre-touchdown arm path (`support broken && +0x476 bit 0x80 && altitude > 0`) currently looks unreachable on the ordinary slot-0 jump path
+      - if the local player mech is supposed to arm deferred collapse before touchdown in retail, the stronger current candidate is **inbound `Cmd70/8` while local `+0x476 bit 1` is already set by local action-4**, not a hidden local `0x80` setter
+    - stronger 2026-04-20 negative evidence:
+      - a write-only sweep over the decompiled binary for `param + 0x47e` / local alias `DAT_004f21a6` found only:
+        - init zeroing (`Combat_Cmd72_InitLocalActor_v123`)
+        - airborne-bit clears (`FUN_00448d80`, `FUN_00439280`, `Combat_StartFallDownAnim_SetRecoveryBlock_v123`)
+        - local jump-start writes to bits `0/1/2/3/4/5/6` (`Combat_JumpJetInputTick_v123` / alias `DAT_004df83e` in the decompiled dump), but still **no** local `| 0x80`
+      - practical read:
+        - unless the decompiler completely missed a non-structured/raw-memory write, the current recovered code supports **no ordinary local slot-0 path that sets `+0x476 bit 0x80`**
+        - the best remaining explanation is that slot-0 deferred collapse is armed by **incoming `Cmd70/8` while local bit `1` is already live**, because case `8` explicitly accepts either bit `1` or bit `0x80`
+  - practical consequence:
+    - the exact retail-visible fall path is best read as **airborne/falling -> deferred collapse -> touchdown/action6 -> state8/callback**, not as a single magic `Cmd70` packet
+    - for the player's own local mech, inbound `Cmd70/4` and `Cmd70/6` are remote-only, so the unresolved blocker is now even more specifically the **local equivalent** of that airborne/touchdown sequence before `state 8` becomes an effective recoverable-down state
+  - Fresh 2026-04-20 guarded server probe:
+    - `mpbt-server` now has an opt-in `/fightlegdefer` verifier that sends **only local `Cmd70/8`** for non-death leg loss, and only when the server's slot-0 jump ownership flag is already active (`combatJumpActive`, i.e. after client `cmd12/action4`)
+    - the guard is strict:
+      - if local jump/action-4 is not active, the server logs `leg-loss deferred-collapse probe skipped` and sends no local `Cmd70/8`
+      - unlike earlier probes, it does **not** spoof local `Cmd70/4` or local `Cmd70/6`
+    - automated smoke now covers the candidate path end to end:
+      - smoke switches the test account to jump-capable `WSP-1D`
+      - sends `/fightlegdefer`
+      - sends local `cmd12/action4`
+      - waits for forced left-leg destruction
+      - observes local `Cmd70/8`
+      - then sends local `cmd12/action6`
+    - successful smoke evidence:
+      - mech selection persisted to `WSP-1D`
+      - server logged `cmd-12 jump action=4 altitude=0 fuel=120 apex=48000 mirrorDurationMs=3216`
+      - at leg destruction, server logged `leg-loss deferred-collapse probe: sending local Cmd70/8 while jump/action4 is active altitude=12647 fuel=9`
+      - smoke passed with `cmd70=0/8` and then logged local `cmd12/action6`
+    - practical read:
+      - the server can now drive the exact current best hypothesis — **incoming `Cmd70/8` while local airborne bit `1` is active, without spoofed local `4/6`**
+      - the next decisive question is no longer packet wiring; it is whether the live retail client visibly enters the real fall/down path when this guarded sequence happens during an actual GUI run
+  - Fresh 2026-04-20 live GUI `/fightlegdefer` follow-up:
+    - artifacts:
+      - server session: `60d14f59`
+      - capture: `captures\\1776656563875_60d14f59-3cfa-4e50-90c7-06bf9d1d65f2.txt`
+    - the guarded hypothesis fired exactly as intended on the wire:
+      - server logged local `cmd12/action4` jump start at `03:42:57.739Z`
+      - server logged `leg-loss deferred-collapse probe: sending local Cmd70/8 while jump/action4 is active altitude=88368 fuel=68` at `03:43:00.395Z`
+      - capture shows exactly one server-side local `Cmd70`: `CMD70_LOCAL_LEG_COLLAPSE` (`0/8`) at that airborne moment
+      - later, capture shows exactly one client landing frame: local `cmd12/action6` at `03:43:18.688Z`
+    - the negative result is also clean:
+      - after local `Cmd70/8`, there are **no** client `cmd12/action0` frames
+      - after local `Cmd70/8`, there are **no** client `cmd10` fire frames
+      - after local `Cmd70/8`, the capture is only repeated `cmd8` coasting / heading updates until landing, then more `cmd8`
+      - the server sends **no** additional local `Cmd70` beyond that single `0/8`
+      - live user observation matches the wire: cockpit never shows a fall; after landing the mech is standing normally
+    - practical read:
+      - **incoming local `Cmd70/8` while airborne, followed by ordinary local landing/action6, is not sufficient to make the retail client enter the visible recoverable fall/down state**
+      - this sharply weakens the current "bit-1 airborne + inbound 8 is enough" hypothesis
+      - the missing blocker now looks even more local / internal than packet timing alone:
+        - either slot-0 `Cmd70/8` is not taking the expected deferred-collapse path at all
+        - or it sets some partial state that never promotes into the real downed/state-8 chain used by F12 recovery
+      - the best next RE target is now live debugger state inspection during this exact scenario: break on local `Cmd70/8`, `FUN_00448d80`, `Combat_StartFallDownAnim_SetRecoveryBlock_v123` (`0043b4a0`), and callback `0043b3d0`, while watching slot-0 actor `+0xdc`, `+0x35e`, and anim/state fields through airborne collapse and landing
+  - Fresh 2026-04-20 server-triggered debugger snapshot pass on `/fightlegdefer`:
+    - sustained live debugger tracing proved too invasive for interactive play:
+      - both the ordinary `MPBTWIN_windowed.exe` launcher path and the sandbox window froze before useful input/combat progress whenever the debugger stayed live with traces/watchpoints armed
+      - practical workaround: leave gameplay unattached, then trigger a very brief debugger snapshot read from `server.log` events only
+    - working snapshot session:
+      - server session: `66524390`
+      - capture: `captures\\1776658484502_66524390-e064-4d85-81f2-e4c586d93444.txt`
+      - server log proves the same guarded wire sequence again:
+        - `04:14:57.963Z` local `cmd12/action4`
+        - `04:15:00.622Z` local airborne `Cmd70/8`
+        - `04:15:18.912Z` local landing `cmd12/action6`
+      - two debugger snapshot reads were taken against the live `MPBTWIN_windowed.exe` process at the exact airborne-collapse and landing log edges
+    - decisive local-state result:
+      - airborne-collapse snapshot:
+        - `+0xdc = 0x00000009`
+          - bit `0x08` deferred-collapse armed
+          - bit `0x01` also set
+        - `+0x35e = 0`
+        - `+0x476 = 0x03`
+          - local airborne bits still live
+      - landing snapshot:
+        - `+0xdc = 0x00000011`
+          - deferred bit `0x08` cleared
+          - recovery-block bit `0x10` set
+          - bit `0x01` still set
+        - `+0x35e = 1`
+          - **local downed latch is set**
+        - `+0x476 = 0x00`
+          - airborne bits cleared on touchdown
+    - practical read:
+      - this is the first direct live proof that `/fightlegdefer` does drive the retail client through the **real internal deferred-collapse -> touchdown -> downed-latch path**
+      - the earlier blocker theory "slot-0 never truly reaches the internal downed state" is now falsified
+      - the remaining blocker is narrower:
+        - either the visible cockpit/camera fall presentation is decoupled from that internal latch
+        - or the still-missing piece is specifically the **post-landing recovery-input path** (`F12` / local `cmd12/action0`) rather than fall entry itself
+      - matching server summary for session `66524390` still shows `action0Correlated=0` and `action0NoShot=0`, so no recovery request was observed in this run
+      - the best next pass is now an explicit post-landing/F12-focused run, not another attempt to prove downed entry
+  - Fresh 2026-04-20 post-landing `F12` blocker snapshot pass:
+    - focused question:
+      - after proving `+0x35e=1` at landing, determine whether repeated `F12` after landing clears recovery-block bit `+0xdc bit 0x10` or emits local `cmd12/action0`
+    - working snapshot session:
+      - server session: `787bec07`
+      - capture: `captures\\1776686625427_787bec07-15d5-4c3d-b342-5ccf3e18bfd3.txt`
+      - user explicitly pressed `F12` repeatedly for about 6 seconds after landing
+    - three debugger snapshots were taken:
+      - landing:
+        - `+0xdc = 0x00000011`
+        - `+0x35e = 1`
+        - `+0x476 = 0x00`
+      - post-landing +2s:
+        - `+0xdc = 0x00000011`
+        - `+0x35e = 1`
+        - `+0x476 = 0x00`
+      - post-landing +6s:
+        - `+0xdc = 0x00000011`
+        - `+0x35e = 1`
+        - `+0x476 = 0x00`
+    - matching wire result:
+      - capture still shows the server-side local `Cmd70/8`
+      - no `cmd12/action0` was found in the capture during the post-landing `F12` window
+      - no `Cmd70/0` recovery ack was observed
+    - practical read:
+      - the client is **not** failing to recover because it never reached the internal downed state; it did
+      - repeated `F12` is being blocked while the client remains stuck in the **post-landing recovery-blocked state**:
+        - downed latch `+0x35e` stays set
+        - airborne bits remain cleared
+        - recovery-block bit `+0xdc bit 0x10` never clears, at least over the first 6 seconds of repeated `F12`
+      - this strongly shifts the missing piece away from wire timing and toward the local **state-8 / callback / posture completion** path that should eventually clear bit `0x10` (e.g. `Combat_AnimCallback_ClearActorRecoveryBlock_v123`) before recovery input is accepted
+  - Fresh 2026-04-20 delayed visible-fall follow-up (same `legdefer` run, user remained connected):
+    - screenshots:
+      - `screenshots\\2026-04-20 08_09_55-Multiplayer BattleTech.png`
+      - `screenshots\\2026-04-20 08_10_01-Multiplayer BattleTech.png`
+    - visual result:
+      - the fall/camera posture eventually appeared after a **long delay** and looked extremely slow / stuck
+      - camera pitch was badly wrong/inverted:
+        - holding `W` let the user just barely see the top of a building
+        - holding `S` still left the view aimed into the sky
+      - cockpit HUD stayed grounded at `0 kph`
+    - wire/log result for the same session `787bec07`:
+      - the last true fall-entry trigger is still the old pair:
+        - `12:04:15.962Z` local airborne `Cmd70/8`
+        - `12:04:34.238Z` local landing `cmd12/action6`
+      - **no later `Cmd70`**, **no later `Cmd12` action packet**, and **no recovery ack** appeared around the delayed visible fall
+      - after landing, the client spent several minutes sending only idle/coasting `cmd8`
+      - the first later behavioral change on the wire was at `12:07:31.060Z`, when the client began sending continuous `cmd9` movement packets with `clientSpeed=0`; by the screenshot window (`12:09:55` to `12:10:01`) the capture still shows only:
+        - client `cmd9` movement
+        - server `CMD65_MOVEMENT`
+        - server `CMD65_BOT_POSITION`
+    - practical read:
+      - the delayed visible fall was **not triggered by a new server packet**
+      - it is consistent with a **purely local, very slow posture/camera/animation evolution** after the earlier landed downed-state entry
+      - user follow-up: the later `W`/`S` input was only used **after** the visible fall had already begun, to inspect the broken pitch; it should not be treated as the trigger for the delayed onset
+      - the strongest remaining blocker is therefore the local post-landing **camera/posture completion** path, not missing wire after `Cmd70/8`
+  - Fresh 2026-04-20 animation-controller callback / slow-fall follow-up:
+    - `Combat_StartFallDownAnim_SetRecoveryBlock_v123` (`0043b4a0`) does exactly two important things for the local fall entry:
+      - sets actor `+0xdc |= 0x10` (temporary recovery/input blocker)
+      - installs animation **state `8`** with callback `0043b3d0` via `FUN_00432950(...)`
+    - `Combat_AnimCallback_ClearActorRecoveryBlock_v123` (`0043b3d0`) only clears actor `+0xdc bit 0x10`; no packet handler clears that bit directly
+    - the stored callback is not invoked from `Cmd70` handling at all; it is invoked by the local animation controller:
+      - `FUN_00432400` advances the controller clock using controller field `+0x0c` as the playback-rate scalar
+      - when the current state's duration rolls over, `FUN_00432400` calls `FUN_00432e90`
+      - `FUN_00432e90` is the routine that finally calls controller callback field `+0x24`
+    - local render/update flow proves the controller keeps ticking every frame:
+      - `FUN_00438e90` -> `FUN_00438cf0` -> `FUN_00432010` -> `FUN_00432400`
+    - important asymmetry:
+      - the ordinary local motion/HUD updater `FUN_004262d0` only rewrites the local controller's rate/state when the actor is:
+        - not airborne (`+0x476 bit 0x01 == 0`)
+        - not downed (`+0x35e == 0`)
+        - not recovery-blocked (`+0xdc bit 0x10 == 0`)
+      - remote `Cmd65` position updates have a matching guard: they only rewrite controller rate / state `0/1` while `+0x35e == 0`
+    - correction / refinement after tracing the real callers:
+      - the strongest simple version of the "bad inherited jump rate" theory is **too broad**
+      - both the local touchdown helper `FUN_00448d80` and inbound `Combat_Cmd70_ActorAnimState_v123` explicitly write controller `+0x0c = 0x12c0` immediately before calling `Combat_StartFallDownAnim_SetRecoveryBlock_v123`
+      - inbound `Cmd70/0` also resets controller `+0x0c = 0x12c0` before routing into the stand-up states
+      - `FUN_004262d0` likewise uses `0x12c0` as the zero-speed local baseline
+    - updated practical read:
+      - once `/fightlegdefer` lands in the real downed state (`+0x35e=1`, `+0xdc bit 0x10 = 1`), the normal movement-driven controller refresh path is skipped
+      - however, **state `8` does not appear to enter with an arbitrary stale jump-derived rate**; it is reset to the normal `0x12c0` baseline on entry
+      - the delayed visible fall therefore more likely means one of:
+        - controller clock/progress fields are not advancing as expected after state-8 entry
+        - the live state-8 descriptor/duration differs from the simple expectation
+        - a second local posture/camera path, not just the primary controller rate, is what visibly lags
+    - recovery-side state map from inbound `Cmd70/0` is now clearer:
+      - if current state is `8`, client enters state `0x0c`
+      - if current state is `7`, client enters state `0x0b`
+      - if current state is `9`, client enters `0x0d -> 0x0b`
+      - if current state is `10`, client enters `0x0e -> 0x0b`
+      - callback `0043b440` on those stand-up states clears `+0x35e = 0`
+    - best next debugger snapshot targets for the live delayed-fall window:
+      - local controller base `DAT_004f1f52`
+      - controller `+0x00` last-tick timestamp
+      - controller `+0x08` current progress / frame cursor
+      - controller `+0x0c` playback rate
+      - controller `+0x10` flags
+      - controller `+0x18` current-state pointer / current state id
+      - controller `+0x1c` queued-state pointer / queued state id
+      - controller `+0x24` callback pointer
+      - controller `+0x28` callback argument
+      - dereference current-state pointer to capture:
+        - `state id`
+        - `state duration` (`[state + 0x02]`)
+    - controller-layout refinement from `FUN_0043aa90` / `FUN_0043b060`:
+      - local animation controller object is `0x74` bytes
+      - default constructor playback rate is `0x708`
+      - `0x12c0` is therefore a deliberate later reset used by zero-speed local motion and fall/stand packet paths, not the constructor default
+      - relevant confirmed offsets:
+        - `+0x00` last tick
+        - `+0x04` previous progress
+        - `+0x08` current progress
+        - `+0x0c` playback rate
+        - `+0x10` flags
+        - `+0x14` animation-set pointer
+        - `+0x18` current-state pointer
+        - `+0x1c` queued-state pointer
+        - `+0x20` model animation object pointer
+        - `+0x24` callback pointer
+        - `+0x28` callback argument
+        - `+0x30` state-entry array base (`FUN_0043b060` returns entries from here)
+    - transition-bridge refinement from `FUN_00432950` / `FUN_00432e90`:
+      - `Combat_StartFallDownAnim_SetRecoveryBlock_v123(..., state=8, callback=0043b3d0, actor)` does **not** put the controller directly into state `8`
+      - `FUN_00432950` installs the synthetic transition controller object at `controller + 0x18` as the **current** state:
+        - `controller + 0x18` (`param_1[6]`) becomes the transition anim whose state id is `0x16`
+        - `controller + 0x1c` (`param_1[7]`) becomes the queued target state entry (`8` here)
+        - `controller + 0x24` / `+0x28` keep the final callback and argument
+      - `FUN_00432e90` proves the callback does **not** fire when the transition finishes if a queued target exists:
+        - when `controller + 0x1c != 0`, it merely promotes queued state -> current state and clears the queue
+        - only when the current state later finishes with no queued next state does it call the stored callback
+      - practical consequence:
+        - the recovery-block bit `+0xdc bit 0x10` survives through **two stages**:
+          1. transition state `0x16`
+          2. final fall-down state `8`
+        - the next live delayed-fall snapshot must therefore distinguish:
+          - `current state = 0x16, queued = 8`  -> still stuck in transition bridge
+          - `current state = 8, queued = null` -> bridge finished; final state itself is lagging
+      - current best static read:
+        - the delayed visible onset may be the controller spending unexpectedly long in the `0x16 -> 8` bridge rather than state `8` itself being the only lagging piece
+    - Fresh 2026-04-20 live delayed-window controller snapshot:
+      - run/session: `44c20be8` against live `MPBTWIN_windowed.exe` via the brief debugger REST snapshot method
+      - evidence artifacts:
+        - raw snapshot: `captures\2026-04-20-44c20be8-fall-controller-snapshot.json`
+        - late bridge snapshot: `captures\2026-04-20-44c20be8-fall-controller-snapshot-late.json`
+        - post-promotion snapshot: `captures\2026-04-20-44c20be8-fall-controller-snapshot-promote-check.json`
+        - late state-8 snapshot: `captures\2026-04-20-44c20be8-fall-controller-state8-late.json`
+        - screenshot: `screenshots\2026-04-20-44c20be8-fall-controller-snapshot.png`
+        - post-promotion screenshot: `screenshots\2026-04-20-44c20be8-fall-controller-state8.png`
+      - wire/log timeline:
+        - `13:30:45.983Z` local jump `cmd12/action4`
+        - `13:30:48.018Z` server sent local `Cmd70/8` deferred-collapse while airborne
+        - `13:31:06.833Z` local landing `cmd12/action6`
+        - `13:34:19.387Z` debugger snapshot, i.e. about `3m12.554s` after landing and `3m31.369s` after local `Cmd70/8`
+        - surrounding wire still showed only idle/coasting `cmd8`; there was no later `Cmd70`, no new `cmd12/action0`, and no recovery ack near the snapshot
+      - local actor globals at snapshot:
+        - `0x004f1e0c` / actor `+0xdc = 0x00000011`
+        - `0x004f208e` / actor `+0x35e = 1`
+        - `0x004f21a6` / actor `+0x476 = 0x00000000`
+        - `0x004f1f52` controller pointer = `0x03a48660`
+      - controller fields at `0x03a48660`:
+        - `+0x00` last tick = `0x019879f3`
+        - `+0x04` previous progress = `78`
+        - `+0x08` current progress = `78`
+        - `+0x0c` playback rate = `0x12c0`
+        - `+0x10` flags = `7`
+        - `+0x18` current-state ptr = `0x05448b80`
+        - `+0x1c` queued-state ptr = `0x054452f6`
+        - `+0x24` callback ptr = `0x0043b3d0`
+        - `+0x28` callback arg = `0x004f1d30`
+      - dereferenced state entries:
+        - current state pointer `0x05448b80`: `id=0x16`, `duration=160`
+        - queued state pointer `0x054452f6`: `id=8`, `duration=160`
+      - late bridge / promotion follow-up:
+        - `13:37:21.252Z` late snapshot:
+          - actor globals still `+0xdc=0x11`, `+0x35e=1`, `+0x476=0`
+          - controller still `current=0x16`, `queued=8`
+          - progress advanced only from `78` to `151` over about `181.865s`
+        - `13:37:50.730Z` promotion-check snapshot:
+          - actor globals still `+0xdc=0x11`, `+0x35e=1`, `+0x476=0`
+          - controller finally promoted to `current=8`, `queued=null`
+          - progress reset to `2` on state `8`
+        - `13:41:47.627Z` late state-8 snapshot:
+          - actor globals still `+0xdc=0x11`, `+0x35e=1`, `+0x476=0`
+          - controller still `current=8`, `queued=null`
+          - callback `0x0043b3d0` still installed, so recovery-block bit `0x10` has not been cleared yet
+          - state-8 progress advanced only from `2` to `32` over about `236.897s`
+        - surrounding wire still showed only idle/coasting `cmd8` during both snapshots; there was still no later `Cmd70`, no new `cmd12/action0`, and no recovery ack
+      - answer to the delayed-onset fork:
+        - the early delayed visible-fall window is `current=0x16, queued=8`
+        - the bridge is **not permanently stuck**; it eventually promotes to `current=8, queued=null`
+        - the visible/recovery delay continues through state `8` itself: callback `0x0043b3d0` cannot clear `+0xdc bit 0x10` until state `8` also finishes
+      - screenshots taken around the snapshots still show an upright/normal cockpit view, matching the state read that final fall state `8` had either not been promoted yet or had only just begun
+      - static tick-math explanation from `FUN_00432400`:
+        - controller tick source is `FUN_00435da0() = timeGetTime() / 10`, i.e. 10 ms ticks
+        - every tick call copies `currentProgress -> previousProgress`, overwrites `lastTick = now`, then computes:
+          - `deltaProgress = (playbackRate * (now - oldLastTick)) / 6000`
+        - if `deltaProgress == 0`, the function still keeps the new `lastTick`, so fractional progress is discarded rather than accumulated
+        - with `playbackRate = 0x12c0` (`4800`), a one-tick delta computes `(4800 * 1) / 6000 = 0`
+        - therefore a render/update loop that calls this controller roughly every 10 ms can starve animation progress; progress only moves on calls where the elapsed tick delta reaches at least `2`
+        - this matches the live evidence: progress changes are real but extremely sparse/slow, not packet-driven
+      - next narrowed question:
+        - is the retail client normally expected to run this controller at a lower frame cadence where `deltaTicks >= 2`, and does the current windowed/runtime environment call it too frequently for this integer math?
+        - the next RE pass should verify call cadence around `FUN_00432010 -> FUN_00432400` without a heavy debugger trace, then decide whether server-side fall fidelity should avoid relying on this glacial local transition or whether client/runtime throttling is the real test-environment variable
+      - project constraint / implementation direction:
+        - do **not** patch `MPBTWIN.EXE` as the product fix; any client binary timing patch is research-only and must remain reversible
+        - the current server-side isolation pass adds an opt-in verifier mode `legdeferquiet`
+        - `legdeferquiet` keeps the same proven local-airborne `Cmd70/8` deferred-collapse trigger, but after the client's `cmd12/action6` landing it marks the local actor downed server-side and suppresses local `Cmd65` landing/movement echoes while the verifier is active
+        - purpose: determine whether our server's local `Cmd65` echo path is contributing to the `FUN_00432400` starvation, without changing default gameplay or the retail client
+        - next live comparison: run the same debugger snapshot sequence under `MPBT_FORCE_VERIFICATION_MODE=legdeferquiet` and compare controller state/progress timing against session `44c20be8`
+    - Fresh 2026-04-20 real GUI Fight-button pass after the actuator-state correction:
+      - restarted the rebuilt server with `MPBT_FORCE_VERIFICATION_ACCOUNT=moose` and `MPBT_FORCE_VERIFICATION_MODE=legdefer`, restaged Moose into Ishiyama Arena ready room 1, launched `MPBTWIN_windowed.exe` through a fresh `play.pcgi`, and clicked the retail **Fight** button
+      - the GUI path reached the forced verifier and proved the new server-side critical-state packet on a real client connection:
+        - `scripted verification legdefer: damage=10 hit=left-leg playerHealth=82 armor=0 internal=0 updates=0x17=0,0x25=0,0x8=2,0x9=2,0xa=2,0xb=2`
+        - this confirms the server now sends the destroyed left-leg actuator band as state `2` (`CRITICAL_STATE_DESTROYED`) instead of the older under-reported state `1`
+      - this pass did **not** produce the useful airborne delayed-collapse window:
+        - the first Fight-button run (`b67c82ee`) skipped the guarded local `Cmd70/8` because the client was grounded: `leg-loss deferred-collapse probe skipped: slot=0 jump inactive altitude=0`
+        - two follow-up attempts to automate HOME/jump input (`d49bdcd6`, `d7e45f55`) still produced no inbound `cmd12/action4`; the server saw only coasting/input maintenance and again skipped the guarded deferred-collapse probe with `jump inactive altitude=0`
+      - no Ghidra snapshot was useful in this pass because the prerequisite local airborne state was never established
+      - after restoring the server to normal mode, `fight-leg-smoke.mjs` was updated for actuator state `2` and passed with `cmd67=0x17=14,0x17=4,0x17=0,0x25=15,0x25=5,0x25=0,0x8=2,0x9=2,0xa=2,0xb=2,0x2b=1 cmd70=0/8`
+      - protocol-assisted follow-up on the normal server closed the non-GUI half of the blocker:
+        - `fight-leg-deferred-collapse-smoke.mjs` passed with `cmd67=0x17=0,0x25=0,0x8=2,0x9=2,0xa=2,0xb=2,0x29=1,0x2a=1 cmd70=0/8`
+        - server log alignment for session `ab851c4e`:
+          - `19:11:10.836Z` inbound `cmd12/action4`: `cmd-12 jump action=4 altitude=0 fuel=120 apex=48000 mirrorDurationMs=3216`
+          - `19:11:13.846Z` verifier leg-loss packet: `updates=0x17=0,0x25=0,0x8=2,0x9=2,0xa=2,0xb=2,0x29=1,0x2a=1`
+          - `19:11:13.849Z` guarded local fall probe: `leg-loss deferred-collapse probe: sending local Cmd70/8 while jump/action4 is active altitude=12390 fuel=8`
+          - `19:11:13.855Z` inbound `cmd12/action6` landing completed the pending local deferred collapse
+        - practical read: the server-side guard and state-2 damage sequence are correct when a client/protocol participant proves action-4 first; the remaining unresolved piece is specifically getting the retail GUI client to generate that real `cmd12/action4` before the verifier damage tick, then taking a Ghidra controller snapshot in that GUI run
+      - next narrowed question: obtain a reliable real-client jump start before the verifier damage tick, either by manual HOME input during the Fight-button countdown or a protocol-assisted GUI harness that proves `cmd12/action4` in `server.log`, then re-run the controller snapshot only after the log confirms local jump ownership is active
   - that shifts the likely blocker away from "just add the right `Cmd70` trio" and toward either:
     - longer / different timing around the same states, or
     - additional recovery-side/local-state work such as `cmd12/action 0x15`, `Cmd73`, or another still-missing local posture/input transition,
@@ -3551,6 +4500,10 @@ So far, static RE supports:
 - **yes:** ordinary mech bumping/contact, impact sound, effect/report packet, and rebound response
 - **not yet found:** a client-local damage rule for ordinary mech-to-mech collision
 - **still open:** whether DFA / ram-style damage is server-decided from `cmd13`, or lives in a distinct branch not yet identified
+- manual corroboration is stronger than the current recovered code boundary:
+  - `BT-MAN.txt` physical-combat text explicitly says charging/ramming attacks usually cause **both participants to fall**
+  - so collision-caused knockdown is very likely authentic retail behavior
+  - the remaining gap is specifically the **physical-combat / ramming knockdown** branch, not whether collision knockdown existed at all
 
 `Combat_Cmd72_InitLocalActor_v123` field flow:
 

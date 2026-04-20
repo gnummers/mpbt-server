@@ -335,6 +335,9 @@ const LEG_LOSS_FALL_COLLAPSE_RECOVER_TRANSITION = [
   // Recovery probe: slot-0 Cmd70/0 is the strongest current local stand-up ack candidate.
   { subcommand: 0, delayMs: JUMP_JET_TICK_MS * 16, labelSuffix: 'RECOVER' },
 ] as const;
+const LEG_LOSS_DEFER_WHILE_AIRBORNE_TRANSITION = [
+  { subcommand: 8, delayMs: 0, labelSuffix: 'DEFER' },
+] as const;
 const FORCED_COMBAT_VERIFICATION_ACCOUNT =
   process.env['MPBT_FORCE_VERIFICATION_ACCOUNT']?.trim().toLowerCase() ?? '';
 const FORCED_COMBAT_VERIFICATION_MODE_RAW =
@@ -351,6 +354,8 @@ const FORCED_COMBAT_VERIFICATION_MODES = new Set([
   'legair',
   'legfull',
   'legrecover',
+  'legdefer',
+  'legdeferquiet',
 ]);
 
 type ForcedRetaliationVerification = {
@@ -359,7 +364,7 @@ type ForcedRetaliationVerification = {
   stopAfterDestroyedLegInternalIndex?: number;
   queueLossOnActorDestroyed?: boolean;
 };
-type CombatLegLossTransitionMode = 'collapse-only' | 'fall-then-collapse' | 'airborne-collapse-land' | 'fall-airborne-collapse-land' | 'fall-collapse-recover';
+type CombatLegLossTransitionMode = 'collapse-only' | 'fall-then-collapse' | 'airborne-collapse-land' | 'fall-airborne-collapse-land' | 'fall-collapse-recover' | 'defer-while-airborne';
 
 function maybeApplyForcedCombatVerificationMode(
   session: ClientSession,
@@ -441,6 +446,26 @@ function maybeApplyForcedCombatVerificationMode(
       ),
       capture,
       'CMD3_FIGHTLEGRECOVER_ARMED',
+    );
+  } else if (session.combatVerificationMode === 'legdefer') {
+    send(
+      session.socket,
+      buildCmd3BroadcastPacket(
+        'Leg deferred-collapse verifier armed: jump before leg loss so the server can emit local Cmd70/8 only while action4 is active.',
+        nextSeq(session),
+      ),
+      capture,
+      'CMD3_FIGHTLEGDEFER_ARMED',
+    );
+  } else if (session.combatVerificationMode === 'legdeferquiet') {
+    send(
+      session.socket,
+      buildCmd3BroadcastPacket(
+        'Leg deferred-collapse quiet verifier armed: jump before leg loss; local Cmd65 landing/movement echoes are suppressed after deferred touchdown.',
+        nextSeq(session),
+      ),
+      capture,
+      'CMD3_FIGHTLEGDEFERQUIET_ARMED',
     );
   }
 }
@@ -1931,11 +1956,12 @@ function applyLegActuatorCriticalStateUpdates(
   for (const leg of newlyDestroyedLegs) {
     const criticalCodes = LEG_ACTUATOR_CRITICAL_CODES_BY_INTERNAL_INDEX[leg.internalIndex] ?? [];
     for (const damageCode of criticalCodes) {
-      // Conservative retail mirror: when the whole leg IS slot drops to zero, only
-      // raise each actuator crit to the first non-zero state once.
-      if ((criticalStateBytes[damageCode] ?? 0) >= CRITICAL_STATE_DAMAGED) continue;
-      criticalStateBytes[damageCode] = CRITICAL_STATE_DAMAGED;
-      updates.push({ damageCode, damageValue: CRITICAL_STATE_DAMAGED });
+      // A zeroed leg internal section means the leg's actuators are destroyed,
+      // not merely damaged. The retail client only runs actuator side effects
+      // when the critical state increases, so send the terminal state directly.
+      if ((criticalStateBytes[damageCode] ?? 0) >= CRITICAL_STATE_DESTROYED) continue;
+      criticalStateBytes[damageCode] = CRITICAL_STATE_DESTROYED;
+      updates.push({ damageCode, damageValue: CRITICAL_STATE_DESTROYED });
     }
   }
   return updates;
@@ -1974,10 +2000,12 @@ function sendCombatLegLossCollapse(
       ? LEG_LOSS_FALL_THEN_COLLAPSE_TRANSITION
       : transitionMode === 'airborne-collapse-land'
         ? LEG_LOSS_AIRBORNE_COLLAPSE_LAND_TRANSITION
-        : transitionMode === 'fall-airborne-collapse-land'
+      : transitionMode === 'fall-airborne-collapse-land'
           ? LEG_LOSS_FALL_AIRBORNE_COLLAPSE_LAND_TRANSITION
           : transitionMode === 'fall-collapse-recover'
             ? LEG_LOSS_FALL_COLLAPSE_RECOVER_TRANSITION
+            : transitionMode === 'defer-while-airborne'
+              ? LEG_LOSS_DEFER_WHILE_AIRBORNE_TRANSITION
           : LEG_LOSS_COLLAPSE_ONLY_TRANSITION;
 
   connLog.info(
@@ -1991,6 +2019,33 @@ function sendCombatLegLossCollapse(
   const sendStep = (subcommand: number, stepLabel: string): void => {
     if (session.socket.destroyed || !session.socket.writable || session.phase !== 'combat') return;
     if (session.combatResultCode !== undefined) return;
+    const localDeferredCollapseProbe =
+      transitionMode === 'defer-while-airborne' && slot === 0 && subcommand === 8;
+    if (localDeferredCollapseProbe) {
+      if (!session.combatJumpActive) {
+        connLog.info(
+          '[world/combat] leg-loss deferred-collapse probe skipped: slot=0 jump inactive altitude=%d (%s)',
+          session.combatJumpAltitude ?? 0,
+          reason,
+        );
+        return;
+      }
+      connLog.info(
+        '[world/combat] leg-loss deferred-collapse probe: sending local Cmd70/8 while jump/action4 is active altitude=%d fuel=%d (%s)',
+        session.combatJumpAltitude ?? 0,
+        session.combatJumpFuel ?? JUMP_JET_FUEL_MAX,
+        reason,
+      );
+      session.combatDeferredLocalCollapsePending = true;
+    } else if (slot === 0 && subcommand === 8) {
+      session.combatLastLocalCollapseAt = Date.now();
+      session.combatLocalDowned = true;
+      session.combatRecoveryExperimentPending = true;
+    } else if (slot === 0 && subcommand === 0) {
+      session.combatLocalDowned = false;
+      session.combatDeferredLocalCollapsePending = false;
+      session.combatRecoveryExperimentPending = false;
+    }
     const packet = buildCmd70ActorTransitionPacket(slot, subcommand, nextSeq(session));
     if (capture) {
       send(session.socket, packet, capture, stepLabel);
@@ -2520,9 +2575,45 @@ function clearPendingCombatAction0Followup(session: ClientSession): void {
   }
 }
 
+function maybeSendAction0RecoveryAck(
+  session: ClientSession,
+  connLog: Logger,
+  capture: CaptureLogger,
+): void {
+  if (!session.combatRecoveryExperimentPending) {
+    return;
+  }
+  if (!session.combatLocalDowned) {
+    session.combatRecoveryExperimentPending = false;
+    connLog.debug('[world/combat] action0 recovery ack skipped: no pending local downed state');
+    return;
+  }
+  if (session.socket.destroyed || !session.socket.writable || session.phase !== 'combat') {
+    return;
+  }
+  if (session.combatResultCode !== undefined) {
+    session.combatLocalDowned = false;
+    session.combatRecoveryExperimentPending = false;
+    return;
+  }
+
+  session.combatLocalDowned = false;
+  session.combatRecoveryExperimentPending = false;
+  connLog.info(
+    '[world/combat] action0 recovery ack: sending local Cmd70/0 after cmd12/action0 while local actor is downed',
+  );
+  send(
+    session.socket,
+    buildCmd70ActorTransitionPacket(0, 0, nextSeq(session)),
+    capture,
+    'CMD70_ACTION0_RECOVERY_ACK',
+  );
+}
+
 function noteCombatAction0Observed(
   session: ClientSession,
   connLog: Logger,
+  capture: CaptureLogger,
 ): void {
   clearPendingCombatAction0Followup(session);
   const observedAt = Date.now();
@@ -2538,6 +2629,7 @@ function noteCombatAction0Observed(
       '[world/combat] cmd12 action=0 had no cmd10 follow-up within %dms',
       FIRE_ACTION_WINDOW_MS,
     );
+    maybeSendAction0RecoveryAck(session, connLog, capture);
   }, FIRE_ACTION_WINDOW_MS + 25);
   session.combatAction0FollowupTimer = followupTimer;
   followupTimer.unref();
@@ -2840,6 +2932,11 @@ export function resetCombatState(session: ClientSession): void {
   session.combatAction0NoShotCount = undefined;
   session.combatLegLossTransitionMode = undefined;
   session.combatLegLossTransitionTimers = undefined;
+  session.combatLastLocalCollapseAt = undefined;
+  session.combatLocalDowned = undefined;
+  session.combatDeferredLocalCollapsePending = undefined;
+  session.combatSuppressLocalCmd65WhileDowned = undefined;
+  session.combatRecoveryExperimentPending = undefined;
   session.combatWeaponReadyAtBySlot = undefined;
   session.combatWeaponReadyTimerBySlot = undefined;
   session.combatAmmoStateValues = undefined;
@@ -3925,6 +4022,11 @@ function initializeSharedCombatParticipant(
   session.combatShotsAction0Correlated = 0;
   session.combatShotsDirectCmd10 = 0;
   session.combatAction0NoShotCount = 0;
+  session.combatLastLocalCollapseAt = undefined;
+  session.combatLocalDowned = false;
+  session.combatDeferredLocalCollapsePending = false;
+  session.combatSuppressLocalCmd65WhileDowned = false;
+  session.combatRecoveryExperimentPending = false;
   session.duelTermsAvailable = false;
   session.phase = 'combat';
 }
@@ -4243,6 +4345,11 @@ export function tryStartStagedDuelCombat(
     participant.local.combatShotsAction0Correlated = 0;
     participant.local.combatShotsDirectCmd10 = 0;
     participant.local.combatAction0NoShotCount = 0;
+    participant.local.combatLastLocalCollapseAt = undefined;
+    participant.local.combatLocalDowned = false;
+    participant.local.combatDeferredLocalCollapsePending = false;
+    participant.local.combatSuppressLocalCmd65WhileDowned = false;
+    participant.local.combatRecoveryExperimentPending = false;
     participant.local.duelTermsAvailable = false;
     participant.local.phase = 'combat';
   }
@@ -5554,7 +5661,7 @@ export function sendCombatBootstrapSequence(
           hitSection: HEAD_RETALIATION_SECTION,
         },
       );
-    } else if (verificationMode === 'legtest' || verificationMode === 'legseq' || verificationMode === 'legair' || verificationMode === 'legfull' || verificationMode === 'legrecover') {
+    } else if (verificationMode === 'legtest' || verificationMode === 'legseq' || verificationMode === 'legair' || verificationMode === 'legfull' || verificationMode === 'legrecover' || verificationMode === 'legdefer' || verificationMode === 'legdeferquiet') {
       startForcedRetaliationVerification(
         players,
         session,
@@ -5579,6 +5686,8 @@ export function sendCombatBootstrapSequence(
           ? 'fall-airborne-collapse-land'
           : verificationMode === 'legrecover'
             ? 'fall-collapse-recover'
+            : (verificationMode === 'legdefer' || verificationMode === 'legdeferquiet')
+              ? 'defer-while-airborne'
         : 'collapse-only';
     session.combatRequireAction0 = verificationMode === 'strictfire';
     session.combatShotsAccepted = 0;
@@ -5586,6 +5695,11 @@ export function sendCombatBootstrapSequence(
     session.combatShotsAction0Correlated = 0;
     session.combatShotsDirectCmd10 = 0;
     session.combatAction0NoShotCount = 0;
+    session.combatLastLocalCollapseAt = undefined;
+    session.combatLocalDowned = false;
+    session.combatDeferredLocalCollapsePending = false;
+    session.combatSuppressLocalCmd65WhileDowned = verificationMode === 'legdeferquiet';
+    session.combatRecoveryExperimentPending = false;
     if (verificationMode === 'autowin') {
       setTimeout(() => {
         if (session.socket.destroyed || !session.socket.writable) return;
@@ -5699,6 +5813,16 @@ export function sendCombatBootstrapSequence(
       setTimeout(() => {
         if (session.socket.destroyed || !session.socket.writable) return;
         connLog.info('[world/combat] scripted verification: left-leg recovery mode (bot Cmd67 hits forced to left leg until first non-death Cmd70 1->8->0 probe)');
+      }, VERIFY_DELAY_MS).unref();
+    } else if (verificationMode === 'legdefer') {
+      setTimeout(() => {
+        if (session.socket.destroyed || !session.socket.writable) return;
+        connLog.info('[world/combat] scripted verification: left-leg deferred-collapse mode (bot Cmd67 hits forced to left leg until first local-airborne Cmd70/8-only probe)');
+      }, VERIFY_DELAY_MS).unref();
+    } else if (verificationMode === 'legdeferquiet') {
+      setTimeout(() => {
+        if (session.socket.destroyed || !session.socket.writable) return;
+        connLog.info('[world/combat] scripted verification: left-leg deferred-collapse quiet mode (same probe, then suppress local Cmd65 landing/movement echoes after touchdown)');
       }, VERIFY_DELAY_MS).unref();
     }
 
@@ -6592,24 +6716,28 @@ export function handleCombatMovementFrame(
       throttlePct, legVelPct, clientSpeed, throttle, legVel, maxSpeedMag, nextSpeedMag,
     );
 
-    send(
-      session.socket,
-      buildCmd65PositionSyncPacket(
-          {
-            slot:     0,
-            x:        session.combatX,
-            y:        session.combatY,
-            z:        getLocalCmd65Altitude(session),
-            facing:   getCombatCmd65Facing(session),
-            throttle,
-            legVel,
-          speedMag: clientSpeed,
-        },
-        nextSeq(session),
-      ),
-      capture,
-      'CMD65_MOVEMENT',
-    );
+    if (session.combatSuppressLocalCmd65WhileDowned && session.combatLocalDowned) {
+      connLog.debug('[world/combat] cmd9 moving: suppressing local Cmd65 movement echo while local downed verifier is active');
+    } else {
+      send(
+        session.socket,
+        buildCmd65PositionSyncPacket(
+            {
+              slot:     0,
+              x:        session.combatX,
+              y:        session.combatY,
+              z:        getLocalCmd65Altitude(session),
+              facing:   getCombatCmd65Facing(session),
+              throttle,
+              legVel,
+            speedMag: clientSpeed,
+          },
+          nextSeq(session),
+        ),
+        capture,
+        'CMD65_MOVEMENT',
+      );
+    }
     mirrorCombatRemotePosition(players, session, 'CMD65_COMBAT_REMOTE_MOVEMENT');
     maybeLogCollisionProbeCandidate(players, session, connLog, 'CMD9_MOVEMENT');
   }
@@ -7251,9 +7379,9 @@ export function handleCombatActionFrame(
   clearCombatEjectArm(session, connLog, `action ${action.action}`);
 
   if (action.action === 0) {
-    noteCombatAction0Observed(session, connLog);
-    connLog.debug('[world/combat] cmd-12 action=0 (selected-weapon or stand-up trigger)');
-    // Keep the local effects state fresh before a possible selected-weapon cmd10.
+    noteCombatAction0Observed(session, connLog, capture);
+    connLog.debug('[world/combat] cmd-12 action=0 (recovery/stand-up trigger)');
+    // Keep local combat HUD/effects state fresh around the recovery-trigger path.
     send(session.socket, buildCmd71ResetEffectStatePacket(nextSeq(session)), capture, 'CMD71_FIRE_GATE');
     return;
   }
@@ -7345,6 +7473,16 @@ export function handleCombatActionFrame(
     session.combatJumpActive = false;
     session.combatJumpAltitude = 0;
     recordCombatLanding(session, landedFromAltitude);
+    if (session.combatDeferredLocalCollapsePending) {
+      session.combatDeferredLocalCollapsePending = false;
+      session.combatLastLocalCollapseAt = Date.now();
+      session.combatLocalDowned = true;
+      session.combatRecoveryExperimentPending = true;
+      connLog.info(
+        '[world/combat] cmd-12 jump action=6 completed pending local deferred collapse (quietCmd65=%s)',
+        session.combatSuppressLocalCmd65WhileDowned ? 'yes' : 'no',
+      );
+    }
 
     const x = session.combatX ?? 0;
     const y = session.combatY ?? 0;
@@ -7353,24 +7491,28 @@ export function handleCombatActionFrame(
     const speedMag = session.combatSpeedMag ?? 0;
 
     connLog.info('[world/combat] cmd-12 jump action=6 altitude=0 (landing sync)');
-    send(
-      session.socket,
-      buildCmd65PositionSyncPacket(
-        {
-          slot:     0,
-          x,
-          y,
-          z:        0,
-          facing:   getCombatCmd65Facing(session),
-          throttle,
-          legVel,
-          speedMag,
-        },
-        nextSeq(session),
-      ),
-      capture,
-      'CMD65_JUMP_LAND',
-    );
+    if (session.combatSuppressLocalCmd65WhileDowned && session.combatLocalDowned) {
+      connLog.info('[world/combat] cmd-12 jump action=6 suppressing local Cmd65 landing echo while local downed verifier is active');
+    } else {
+      send(
+        session.socket,
+        buildCmd65PositionSyncPacket(
+          {
+            slot:     0,
+            x,
+            y,
+            z:        0,
+            facing:   getCombatCmd65Facing(session),
+            throttle,
+            legVel,
+            speedMag,
+          },
+          nextSeq(session),
+        ),
+        capture,
+        'CMD65_JUMP_LAND',
+      );
+    }
     mirrorCombatRemotePosition(players, session, 'CMD65_COMBAT_JUMP_LAND');
     maybeLogCollisionProbeCandidate(players, session, connLog, 'CMD65_JUMP_LAND');
     return;
