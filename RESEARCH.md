@@ -3806,6 +3806,22 @@ Confirmed call sites:
           - re-audit and opt-in test `Cmd73` around fall/recovery because it is the only currently decoded actor "rate/bias" packet, even though earlier static xrefs did not prove direct reads from actor `+0x2fa/+0x2fe`
           - re-check `Cmd72` combat-bootstrap timing constants only after the controller cadence measurement, because those constants are more strongly tied to movement/physics than animation state so far
         - implementation guardrail: do not "correct" duration by skipping animations with extra `Cmd70` packets or by binary-patching the client; the faithful server-side fix should identify the official packet/timing condition that makes the unmodified client advance the same fall/stand chains at retail speed
+      - Fresh 2026-04-21 non-pausing controller sampler:
+        - capture file: `captures\2026-04-21-56797e07-live-controller-sampler.jsonl` (line-delimited JSON from external `ReadProcessMemory`, no debugger stop/resume and no client patch)
+        - live GUI session: `ccdae052`
+        - server correlation:
+          - `00:16:55.503Z` inbound `cmd12/action4`
+          - `00:16:57.847Z` local `Cmd70/8` sent while jump/action4 active (`altitude=40725`, `fuel=37`)
+          - `00:17:16.404Z` inbound `cmd12/action6` landing, completing pending local deferred collapse
+        - after landing, the sampler held a stable local fall/recovery state:
+          - actor `+0xdc = 0x0011`, `+0x35e = 1`, `+0x476 = 0`
+          - controller rate `0x12c0`, callback `0x0043B3D0`
+          - current state `0x16`, duration `0xa0`; queued state `8`, duration `0xa0`
+        - measured bridge progress after landing:
+          - at `00:17:16.565Z`: progress `42`, `lastTick=30627630`
+          - at `00:18:02.403Z`: progress `46`, `lastTick=30632214`
+          - wall time delta `45.838s`, controller tick delta `4584`, progress delta only `+4`
+        - practical read: the controller is not stopped and fall semantics are present, but animation progress is catastrophically under-scaling while the synthetic `0x16 -> 8` bridge is active. The next faithful server-side target is therefore an official-server rate/bias/timing input, with `Cmd73` now promoted back to the first live test candidate despite weak earlier static xrefs.
   - that shifts the likely blocker away from "just add the right `Cmd70` trio" and toward either:
     - longer / different timing around the same states, or
     - additional recovery-side/local-state work such as `cmd12/action 0x15`, `Cmd73`, or another still-missing local posture/input transition,
