@@ -119,7 +119,7 @@ export interface ClientSession {
   combatInitialized?: boolean;
   /** Repeating setInterval that sends bot position updates during combat. */
   botPositionTimer?: ReturnType<typeof setInterval>;
-  /** Repeating setInterval that sends Cmd67 retaliatory damage to the player during combat. */
+  /** Repeating setInterval that advances the bot's fire / decision loop during combat. */
   botFireTimer?: ReturnType<typeof setInterval>;
   /** One-shot timeout that advances a dead bot from fall animation into wreck state. */
   botDeathTimer?: ReturnType<typeof setTimeout>;
@@ -350,12 +350,62 @@ export interface ClientSession {
   combatBotInternalValues?: number[];
   /**
     * Server-side tracked remote critical/system states for the scripted bot.
-    * Indexes match Cmd66 class-0 damage codes (0x00..), with at least the base
-    * 0x15 critical slots retained so head systems can be updated consistently.
+     * Indexes match Cmd66 class-0 damage codes (0x00..), with at least the base
+     * 0x15 critical slots retained so head systems can be updated consistently.
     */
   combatBotCriticalStateBytes?: number[];
   /** Server-side remaining head armor for the scripted bot (RE-backed hardcoded value 9). */
   combatBotHeadArmor?: number;
+  /** Current remote bot X coordinate mirrored through Cmd65 slot 1 updates. */
+  combatBotX?: number;
+  /** Current remote bot Y coordinate mirrored through Cmd65 slot 1 updates. */
+  combatBotY?: number;
+  /** Current remote bot Z / altitude mirrored through Cmd65 slot 1 updates. */
+  combatBotZ?: number;
+  /** Current remote bot facing accumulator mirrored through Cmd65 slot 1 updates. */
+  combatBotFacing?: number;
+  /** Current remote bot throttle value mirrored through Cmd65 slot 1 updates. */
+  combatBotThrottle?: number;
+  /** Current remote bot leg velocity mirrored through Cmd65 slot 1 updates. */
+  combatBotLegVel?: number;
+  /** Current remote bot speedMag mirrored through Cmd65 slot 1 updates. */
+  combatBotSpeedMag?: number;
+  /** Most recent server-side bot movement delta X, used for evasive to-hit evaluation. */
+  combatBotMoveVectorX?: number;
+  /** Most recent server-side bot movement delta Y, used for evasive to-hit evaluation. */
+  combatBotMoveVectorY?: number;
+  /** Persistent strafe/orbit direction for bot evasive movement (-1 = left, 1 = right). */
+  combatBotStrafeDirection?: -1 | 1;
+  /** Wall-clock timestamp when the bot last committed to a strafe-direction flip. */
+  combatBotLastStrafeFlipAt?: number;
+  /** Per-weapon-slot ready-at wall-clock values for the bot's current mech. */
+  combatBotWeaponReadyAtBySlot?: number[];
+  /** Current remote bot ammo-bin state for the active bot mech. */
+  combatBotAmmoStateValues?: number[];
+  /** Bot-only rolling heat estimate used for TIC / volley selection. */
+  combatBotHeat?: number;
+  /** True while the bot is traversing a jump-jet arc. */
+  combatBotJumpActive?: boolean;
+  /** Current bot jump-jet fuel snapshot (same 0..120 scale as the player mirror). */
+  combatBotJumpFuel?: number;
+  /** Wall-clock timestamp when the current bot jump arc started. */
+  combatBotJumpStartedAt?: number;
+  /** Duration in ms for the current bot jump arc. */
+  combatBotJumpDurationMs?: number;
+  /** Starting fuel value used to decay bot jump fuel across the active arc. */
+  combatBotJumpStartFuel?: number;
+  /** Jump apex in combat-world units for the current bot arc. */
+  combatBotJumpApexUnits?: number;
+  /** Bot jump arc starting X coordinate. */
+  combatBotJumpStartX?: number;
+  /** Bot jump arc starting Y coordinate. */
+  combatBotJumpStartY?: number;
+  /** Bot jump arc landing-target X coordinate. */
+  combatBotJumpTargetX?: number;
+  /** Bot jump arc landing-target Y coordinate. */
+  combatBotJumpTargetY?: number;
+  /** Wall-clock timestamp of the last bot jump start, used to prevent jump spam. */
+  combatBotLastJumpAt?: number;
   /**
    * Server-side remaining local-armor values for the player.
    * Order matches Cmd66/67 class-1 codes 0x15..0x1e.

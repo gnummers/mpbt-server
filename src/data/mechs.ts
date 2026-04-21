@@ -111,6 +111,7 @@ function readMecFields(
 ): {
   mecSpeed: number;
   jumpJetCount: number;
+  heatSinks: number;
   extraCritCount: number;
   tonnage: number;
   armorLikeMaxValues: number[];
@@ -150,6 +151,7 @@ function readMecFields(
   return {
     mecSpeed:       buf.readUInt16LE(0x16),
     tonnage:        buf.readUInt16LE(0x18),
+    heatSinks:      buf.readUInt16LE(0x34),
     jumpJetCount:   buf.readUInt16LE(0x38),
     extraCritCount: buf.readInt16LE(0x3c),
     armorLikeMaxValues: [
@@ -318,6 +320,7 @@ export function loadMechs(): MechEntry[] {
       const {
         mecSpeed,
         jumpJetCount,
+        heatSinks,
         extraCritCount,
         tonnage,
         armorLikeMaxValues,
@@ -339,6 +342,7 @@ export function loadMechs(): MechEntry[] {
         extraCritCount,
         tonnage,
         jumpJetCount,
+        heatSinks,
         armorLikeMaxValues,
         weaponMountInternalIndices,
         weaponTypeIds,

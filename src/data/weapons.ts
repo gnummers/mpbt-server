@@ -11,6 +11,7 @@ export interface WeaponSpec {
   typeId: number;
   name: string;
   damage?: number;
+  heat?: number;
   cooldownMs?: number;
   maxRangeMeters?: number;
 }
@@ -22,23 +23,23 @@ const WEAPON_SPECS: readonly WeaponSpec[] = [
   // table where the non-missile families match direct per-shot damage while the
   // missile rows track average cluster damage. That lifts flamer to direct
   // damage=3 without forcing a broader missile damage reinterpretation here.
-  { typeId: 0, name: 'Flamer', damage: 3, cooldownMs: 3_000, maxRangeMeters: 90 },
-  { typeId: 1, name: 'Machine Gun', damage: 2, cooldownMs: 0, maxRangeMeters: 90 },
-  { typeId: 2, name: 'Small Laser', damage: 3, cooldownMs: 1_000, maxRangeMeters: 90 },
-  { typeId: 3, name: 'Medium Laser', damage: 5, cooldownMs: 3_000, maxRangeMeters: 270 },
-  { typeId: 4, name: 'Large Laser', damage: 8, cooldownMs: 8_000, maxRangeMeters: 450 },
-  { typeId: 5, name: 'Particle Projector Cannon', damage: 10, cooldownMs: 10_000, maxRangeMeters: 540 },
-  { typeId: 6, name: 'Autocannon/2', damage: 2, cooldownMs: 1_000, maxRangeMeters: 720 },
-  { typeId: 7, name: 'Autocannon/5', damage: 5, cooldownMs: 1_000, maxRangeMeters: 540 },
-  { typeId: 8, name: 'Autocannon/10', damage: 10, cooldownMs: 3_000, maxRangeMeters: 450 },
-  { typeId: 9, name: 'Autocannon/20', damage: 20, cooldownMs: 7_000, maxRangeMeters: 270 },
-  { typeId: 10, name: 'SRM-2', damage: 4, cooldownMs: 2_000, maxRangeMeters: 270 },
-  { typeId: 11, name: 'SRM-4', damage: 8, cooldownMs: 3_000, maxRangeMeters: 270 },
-  { typeId: 12, name: 'SRM-6', damage: 12, cooldownMs: 4_000, maxRangeMeters: 270 },
-  { typeId: 13, name: 'LRM-5', damage: 5, cooldownMs: 2_000, maxRangeMeters: 630 },
-  { typeId: 14, name: 'LRM-10', damage: 10, cooldownMs: 4_000, maxRangeMeters: 630 },
-  { typeId: 15, name: 'LRM-15', damage: 15, cooldownMs: 5_000, maxRangeMeters: 630 },
-  { typeId: 16, name: 'LRM-20', damage: 20, cooldownMs: 6_000, maxRangeMeters: 630 },
+  { typeId: 0, name: 'Flamer', damage: 3, heat: 3, cooldownMs: 3_000, maxRangeMeters: 90 },
+  { typeId: 1, name: 'Machine Gun', damage: 2, heat: 0, cooldownMs: 0, maxRangeMeters: 90 },
+  { typeId: 2, name: 'Small Laser', damage: 3, heat: 1, cooldownMs: 1_000, maxRangeMeters: 90 },
+  { typeId: 3, name: 'Medium Laser', damage: 5, heat: 3, cooldownMs: 3_000, maxRangeMeters: 270 },
+  { typeId: 4, name: 'Large Laser', damage: 8, heat: 8, cooldownMs: 8_000, maxRangeMeters: 450 },
+  { typeId: 5, name: 'Particle Projector Cannon', damage: 10, heat: 10, cooldownMs: 10_000, maxRangeMeters: 540 },
+  { typeId: 6, name: 'Autocannon/2', damage: 2, heat: 1, cooldownMs: 1_000, maxRangeMeters: 720 },
+  { typeId: 7, name: 'Autocannon/5', damage: 5, heat: 1, cooldownMs: 1_000, maxRangeMeters: 540 },
+  { typeId: 8, name: 'Autocannon/10', damage: 10, heat: 3, cooldownMs: 3_000, maxRangeMeters: 450 },
+  { typeId: 9, name: 'Autocannon/20', damage: 20, heat: 7, cooldownMs: 7_000, maxRangeMeters: 270 },
+  { typeId: 10, name: 'SRM-2', damage: 4, heat: 2, cooldownMs: 2_000, maxRangeMeters: 270 },
+  { typeId: 11, name: 'SRM-4', damage: 8, heat: 3, cooldownMs: 3_000, maxRangeMeters: 270 },
+  { typeId: 12, name: 'SRM-6', damage: 12, heat: 4, cooldownMs: 4_000, maxRangeMeters: 270 },
+  { typeId: 13, name: 'LRM-5', damage: 5, heat: 2, cooldownMs: 2_000, maxRangeMeters: 630 },
+  { typeId: 14, name: 'LRM-10', damage: 10, heat: 4, cooldownMs: 4_000, maxRangeMeters: 630 },
+  { typeId: 15, name: 'LRM-15', damage: 15, heat: 5, cooldownMs: 5_000, maxRangeMeters: 630 },
+  { typeId: 16, name: 'LRM-20', damage: 20, heat: 6, cooldownMs: 6_000, maxRangeMeters: 630 },
 ] as const;
 
 const WEAPON_SPEC_BY_TYPE_ID = new Map<number, WeaponSpec>(

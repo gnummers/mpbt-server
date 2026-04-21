@@ -347,6 +347,8 @@ export interface MechEntry {
    * (`Combat_JumpJetInputTick_v123` / `Combat_InitActorRuntimeFromMec_v123`).
    */
   jumpJetCount: number;
+  /** Heat sink count from decrypted .MEC offset 0x34. */
+  heatSinks: number;
   /**
    * Armor-like section maxima read from decrypted .MEC offsets 0x1a..0x2c.
    * Order matches Cmd66/67 class-1 codes 0x15..0x1e:
