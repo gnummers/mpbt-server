@@ -59,6 +59,7 @@ import {
   buildCmd68ProjectileSpawnPacket,
   buildCmd70ActorTransitionPacket,
   buildCmd71ResetEffectStatePacket,
+  buildCmd73ActorRatePacket,
   buildCmd75CombatResultPacket,
   COMBAT_RESULT_LOSS,
   COMBAT_RESULT_VICTORY,
@@ -356,7 +357,19 @@ const FORCED_COMBAT_VERIFICATION_MODES = new Set([
   'legrecover',
   'legdefer',
   'legdeferquiet',
+  'legdefercmd73',
 ]);
+
+function parseCmd73ProbeEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const value = Number.parseInt(raw, raw.startsWith('0x') || raw.startsWith('0X') ? 16 : 10);
+  if (!Number.isFinite(value) || value < 0 || value > 84) return fallback;
+  return value;
+}
+
+const CMD73_RATE_PROBE_A = parseCmd73ProbeEnv('MPBT_CMD73_RATE_A', 43);
+const CMD73_RATE_PROBE_B = parseCmd73ProbeEnv('MPBT_CMD73_RATE_B', 43);
 
 type ForcedRetaliationVerification = {
   name: string;
@@ -365,6 +378,31 @@ type ForcedRetaliationVerification = {
   queueLossOnActorDestroyed?: boolean;
 };
 type CombatLegLossTransitionMode = 'collapse-only' | 'fall-then-collapse' | 'airborne-collapse-land' | 'fall-airborne-collapse-land' | 'fall-collapse-recover' | 'defer-while-airborne';
+
+function sendCmd73RateProbe(
+  session: ClientSession,
+  connLog: Logger,
+  capture: CaptureLogger | undefined,
+  reason: string,
+  label: string,
+): void {
+  if (!session.combatCmd73RateProbe) return;
+  if (session.socket.destroyed || !session.socket.writable || session.phase !== 'combat') return;
+  if (session.combatResultCode !== undefined) return;
+
+  connLog.info(
+    '[world/combat] Cmd73 rate probe: slot=0 rateA=%d rateB=%d (%s)',
+    CMD73_RATE_PROBE_A,
+    CMD73_RATE_PROBE_B,
+    reason,
+  );
+  const packet = buildCmd73ActorRatePacket(0, CMD73_RATE_PROBE_A, CMD73_RATE_PROBE_B, nextSeq(session));
+  if (capture) {
+    send(session.socket, packet, capture, label);
+    return;
+  }
+  sendToWorldSession(session, packet, label);
+}
 
 function maybeApplyForcedCombatVerificationMode(
   session: ClientSession,
@@ -466,6 +504,16 @@ function maybeApplyForcedCombatVerificationMode(
       ),
       capture,
       'CMD3_FIGHTLEGDEFERQUIET_ARMED',
+    );
+  } else if (session.combatVerificationMode === 'legdefercmd73') {
+    send(
+      session.socket,
+      buildCmd3BroadcastPacket(
+        `Leg deferred-collapse Cmd73 verifier armed: jump before leg loss; Cmd73 rates ${CMD73_RATE_PROBE_A}/${CMD73_RATE_PROBE_B} will be sent around fall/recovery.`,
+        nextSeq(session),
+      ),
+      capture,
+      'CMD3_FIGHTLEGDEFER73_ARMED',
     );
   }
 }
@@ -2036,8 +2084,22 @@ function sendCombatLegLossCollapse(
         session.combatJumpFuel ?? JUMP_JET_FUEL_MAX,
         reason,
       );
+      sendCmd73RateProbe(
+        session,
+        connLog,
+        capture,
+        `before local Cmd70/8 deferred collapse: ${reason}`,
+        `${stepLabel}_CMD73_BEFORE`,
+      );
       session.combatDeferredLocalCollapsePending = true;
     } else if (slot === 0 && subcommand === 8) {
+      sendCmd73RateProbe(
+        session,
+        connLog,
+        capture,
+        `before local Cmd70/8 collapse: ${reason}`,
+        `${stepLabel}_CMD73_BEFORE`,
+      );
       session.combatLastLocalCollapseAt = Date.now();
       session.combatLocalDowned = true;
       session.combatRecoveryExperimentPending = true;
@@ -2602,6 +2664,13 @@ function maybeSendAction0RecoveryAck(
   connLog.info(
     '[world/combat] action0 recovery ack: sending local Cmd70/0 after cmd12/action0 while local actor is downed',
   );
+  sendCmd73RateProbe(
+    session,
+    connLog,
+    capture,
+    'before local Cmd70/0 recovery ack',
+    'CMD73_RATE_PROBE_RECOVERY_BEFORE_CMD70_0',
+  );
   send(
     session.socket,
     buildCmd70ActorTransitionPacket(0, 0, nextSeq(session)),
@@ -2936,6 +3005,7 @@ export function resetCombatState(session: ClientSession): void {
   session.combatLocalDowned = undefined;
   session.combatDeferredLocalCollapsePending = undefined;
   session.combatSuppressLocalCmd65WhileDowned = undefined;
+  session.combatCmd73RateProbe = undefined;
   session.combatRecoveryExperimentPending = undefined;
   session.combatWeaponReadyAtBySlot = undefined;
   session.combatWeaponReadyTimerBySlot = undefined;
@@ -4026,6 +4096,7 @@ function initializeSharedCombatParticipant(
   session.combatLocalDowned = false;
   session.combatDeferredLocalCollapsePending = false;
   session.combatSuppressLocalCmd65WhileDowned = false;
+  session.combatCmd73RateProbe = false;
   session.combatRecoveryExperimentPending = false;
   session.duelTermsAvailable = false;
   session.phase = 'combat';
@@ -4349,6 +4420,7 @@ export function tryStartStagedDuelCombat(
     participant.local.combatLocalDowned = false;
     participant.local.combatDeferredLocalCollapsePending = false;
     participant.local.combatSuppressLocalCmd65WhileDowned = false;
+    participant.local.combatCmd73RateProbe = false;
     participant.local.combatRecoveryExperimentPending = false;
     participant.local.duelTermsAvailable = false;
     participant.local.phase = 'combat';
@@ -5661,7 +5733,7 @@ export function sendCombatBootstrapSequence(
           hitSection: HEAD_RETALIATION_SECTION,
         },
       );
-    } else if (verificationMode === 'legtest' || verificationMode === 'legseq' || verificationMode === 'legair' || verificationMode === 'legfull' || verificationMode === 'legrecover' || verificationMode === 'legdefer' || verificationMode === 'legdeferquiet') {
+    } else if (verificationMode === 'legtest' || verificationMode === 'legseq' || verificationMode === 'legair' || verificationMode === 'legfull' || verificationMode === 'legrecover' || verificationMode === 'legdefer' || verificationMode === 'legdeferquiet' || verificationMode === 'legdefercmd73') {
       startForcedRetaliationVerification(
         players,
         session,
@@ -5686,7 +5758,7 @@ export function sendCombatBootstrapSequence(
           ? 'fall-airborne-collapse-land'
           : verificationMode === 'legrecover'
             ? 'fall-collapse-recover'
-            : (verificationMode === 'legdefer' || verificationMode === 'legdeferquiet')
+            : (verificationMode === 'legdefer' || verificationMode === 'legdeferquiet' || verificationMode === 'legdefercmd73')
               ? 'defer-while-airborne'
         : 'collapse-only';
     session.combatRequireAction0 = verificationMode === 'strictfire';
@@ -5699,6 +5771,7 @@ export function sendCombatBootstrapSequence(
     session.combatLocalDowned = false;
     session.combatDeferredLocalCollapsePending = false;
     session.combatSuppressLocalCmd65WhileDowned = verificationMode === 'legdeferquiet';
+    session.combatCmd73RateProbe = verificationMode === 'legdefercmd73';
     session.combatRecoveryExperimentPending = false;
     if (verificationMode === 'autowin') {
       setTimeout(() => {
@@ -5823,6 +5896,15 @@ export function sendCombatBootstrapSequence(
       setTimeout(() => {
         if (session.socket.destroyed || !session.socket.writable) return;
         connLog.info('[world/combat] scripted verification: left-leg deferred-collapse quiet mode (same probe, then suppress local Cmd65 landing/movement echoes after touchdown)');
+      }, VERIFY_DELAY_MS).unref();
+    } else if (verificationMode === 'legdefercmd73') {
+      setTimeout(() => {
+        if (session.socket.destroyed || !session.socket.writable) return;
+        connLog.info(
+          '[world/combat] scripted verification: left-leg deferred-collapse Cmd73 mode (rate probe %d/%d before local fall/recovery transitions)',
+          CMD73_RATE_PROBE_A,
+          CMD73_RATE_PROBE_B,
+        );
       }, VERIFY_DELAY_MS).unref();
     }
 

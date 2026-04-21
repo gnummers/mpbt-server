@@ -3822,9 +3822,91 @@ Confirmed call sites:
           - at `00:18:02.403Z`: progress `46`, `lastTick=30632214`
           - wall time delta `45.838s`, controller tick delta `4584`, progress delta only `+4`
         - practical read: the controller is not stopped and fall semantics are present, but animation progress is catastrophically under-scaling while the synthetic `0x16 -> 8` bridge is active. The next faithful server-side target is therefore an official-server rate/bias/timing input, with `Cmd73` now promoted back to the first live test candidate despite weak earlier static xrefs.
-  - that shifts the likely blocker away from "just add the right `Cmd70` trio" and toward either:
-    - longer / different timing around the same states, or
-    - additional recovery-side/local-state work such as `cmd12/action 0x15`, `Cmd73`, or another still-missing local posture/input transition,
+      - Fresh 2026-04-21 `Cmd73` fall-entry rate/bias probe:
+        - added an opt-in `legdefercmd73` verifier and `/fightlegdefer73` command; this sends `Cmd73` immediately before local deferred-collapse `Cmd70/8`, and will also send `Cmd73` before local recovery `Cmd70/0` if a later `cmd12/action0` recovery request occurs
+        - live GUI session: `4f2547c3`
+        - sampler file: `captures\2026-04-21-00691e60-cmd73-live-controller-sampler.jsonl`
+        - setup: `MPBT_CMD73_RATE_A=43`, `MPBT_CMD73_RATE_B=43`, Moose restaged into Ishiyama Ready Room 1 with `WSP-1D`, real Fight-button click, scan-code HOME
+        - server capture:
+          - `00:40:37.848Z` sent `CMD70_LOCAL_LEG_COLLAPSE_CMD73_BEFORE`
+          - `00:40:37.848Z` immediately followed with local `CMD70_LOCAL_LEG_COLLAPSE`
+        - sampler proof:
+          - by `00:40:37.925Z`, while still airborne (`+0xdc=0x09`, `+0x35e=0`, `+0x476=3`), actor Cmd73 fields were set to `actor+0x2fa = 910`, `actor+0x2fe = 910`
+          - controller `+0x0c` still stayed `0x12c0`, current state stayed `0x16`, and state durations stayed `0xa0`
+          - after touchdown/downed latch at `00:40:56.929Z`, the controller was again `current=0x16, queued=8`, `+0xdc=0x11`, `+0x35e=1`
+          - progress still only moved `40 -> 41` across roughly `56.3s` of downed-window wall time
+        - practical read: `Cmd73` reaches the client and mutates the recovered actor fields, but conservative fall-entry values `43/43` do **not** alter local animation controller rate, duration, or progress slope. Recovery-side `Cmd73` remains unmeasured in this run because no `cmd12/action0` recovery request occurred.
+        - next narrowed question: either `Cmd73` is not the animation-rate lever, or useful values/placement differ from `43/43 before Cmd70/8`. The next pass should focus on recovery: wait until the callback-cleared downed state can send F12 recovery, prove `cmd12/action0`, and sample whether the `Cmd73` sent before `Cmd70/0` affects stand-up timing. If unchanged, return to static RE for the controller scale source consumed by the `0x16 -> 8` bridge.
+      - Fresh 2026-04-21 recovery-side `Cmd73` / `Cmd70/0` GUI pass:
+        - live GUI session: `d883bfd8`
+        - packet capture: `captures\1776734605113_d883bfd8-8999-44d8-89e2-a41c5184f90e.txt`
+        - sampler file: `captures\2026-04-20-212322-recovery-cmd73-gui-sampler.jsonl`
+        - setup: same `legdefercmd73` verifier as the fall-entry probe (`MPBT_CMD73_RATE_A=43`, `MPBT_CMD73_RATE_B=43`), Moose restaged into Ishiyama Ready Room 1 with `WSP-1D`, real Fight-button click, scan-code HOME, and F12 sent as both VK and scan code once callback-clear was detected
+        - server/capture correlation:
+          - `01:23:43.819Z` verifier armed the left-leg deferred-collapse `Cmd73` mode for this session
+          - `01:23:45.625Z` sent fall-side `Cmd73` before local deferred-collapse `Cmd70/8`
+          - `01:25:08.830Z` sampler detected callback clear (`+0xdc bit 0x10` cleared while `+0x35e` stayed `1`)
+          - `01:25:11.534Z` first inbound `cmd12/action0` recovery request arrived after F12
+          - `01:25:18.203Z` the server classified `action0` as no-shot, sent `CMD73_RATE_PROBE_RECOVERY_BEFORE_CMD70_0`, and immediately followed it with `CMD70_ACTION0_RECOVERY_ACK`
+        - sampler proof:
+          - immediately before the recovery ack, the local controller was still parked at current state `8`, progress `160/160`, callback cleared, `playbackRate=0x12c0`, state duration `0xa0`, `actor+0x35e = 1`
+          - immediately after the recovery-side `Cmd73 -> Cmd70/0` pair, the client accepted the same stand-up chain seen in the older non-`Cmd73` baseline: current state `0x16`, queued state `0x0c`, callback `0x0043B440`
+          - actor `Cmd73` fields stayed set to `910/910`, but controller-visible cadence fields still stayed `playbackRate=0x12c0` and duration `0xa0`
+          - the controller then promoted into state `0x0c` and progressed normally within that same unchanged rate/duration envelope
+          - `actor+0x35e` first cleared at `01:25:28.886Z`, and the sampler logged `recoveryCleared` at `01:25:29.931Z` (`~10.7s` after the recovery ack)
+        - comparison versus the older non-`Cmd73` recovery baseline (`c4330864`):
+          - the old baseline still had `actor+0x35e = 1` at recovery-ack `+12s` and was only proven cleared by recovery-ack `+37s`
+          - this run is therefore measurably faster on the recovery side, but the visible controller fields did **not** change, so the shorter clear window alone is not enough to claim that `Cmd73` is the missing direct rate/duration lever
+        - practical read: recovery-side `Cmd73` is now proven on the wire immediately before local `Cmd70/0`, and the client accepts that pair end-to-end. But conservative `43/43` values still do **not** change the directly observed controller playback rate, state duration, or the basic `0x16 -> 0x0c` stand-up chain. The next logical step is therefore static RE on what seeds/scales those controller transitions, not more blind `Cmd70`/`Cmd73` guessing.
+      - Fresh 2026-04-21 static RE on the controller clock/cadence path:
+        - `Combat_Cmd70_ActorAnimState_v123` (`0x0040e700`) hardcodes local fall/recovery animation controllers back to `playbackRate = 0x12c0` before dispatching the relevant installers for subcommands `0`, `1`, `6`, and `8`
+        - the fall/recovery installers (`Combat_StartFallDownAnim_SetRecoveryBlock_v123`, `FUN_0043b440`, `FUN_0043b470`, `FUN_0043b400`) all funnel into `FUN_00432950`, which:
+          - installs current state `0x16` plus the queued target state (`8`, `0x0c`, etc.)
+          - resets `lastTick` from `FUN_00435da0()`
+          - seeds the bridge progress from the target state's duration/angle deltas
+        - `FUN_00435da0()` is only `timeGetTime() / 10`
+        - `FUN_00447170` (main combat loop) calls `FUN_00438e90()` every iteration, and that path unconditionally updates the local controller through `FUN_00438cf0() -> FUN_00432010() -> FUN_00432400()`
+        - `FUN_00432400()` writes `lastTick = now` on **every** update, then computes `deltaProgress = (playbackRate * (now - oldLastTick)) / 6000` and truncates the result to an integer before applying it
+        - practical read:
+          - the client is not accumulating fractional progress between updates
+          - if the modern main loop is running quickly enough that many successive calls land in the same or next `timeGetTime()/10` bucket, those updates repeatedly contribute `0` progress and still overwrite `lastTick`
+          - that gives a concrete client-side explanation for why retail-looking `playbackRate=0x12c0` and duration `0xa0` can still produce glacial `0x16 -> 8` / `0x16 -> 0x0c` chains in the current environment
+        - new working hypothesis: the dominant blocker may be **update quantization / frame-rate starvation**, not a still-missing direct `Cmd73`-style rate packet. If a faithful server-side lever still exists, it likely changes the effective cadence indirectly rather than directly overwriting the visible controller rate/duration fields.
+      - Fresh 2026-04-21 main-loop pacing-path audit:
+        - combat mode is driven from `FUN_004350f0`, which enters an active loop:
+          - drain all pending `PeekMessageA(...)`
+          - call `Main_NetQueueTick_v123()`
+          - repeat while the mode/session flags stay active
+        - inside that path:
+          - `Main_NetQueueTick_v123()` dispatches queued network packets, updates sound, and calls `Combat_Tick_v123()` when `DAT_0047d05c == 4`
+          - `Combat_Tick_v123()` does only the CapsLock hygiene helper (`FUN_00436220`) and the main combat frame update `FUN_00447170()`
+          - `FUN_00447170()` then executes the local/remote actor update path every iteration, including the local controller update chain `FUN_00438e90() -> FUN_00438cf0() -> FUN_00432010() -> FUN_00432400()`
+        - no explicit high-level pacing gate was found in this combat loop:
+          - the active combat loop shown above has **no** `Sleep`, `WaitMessage`, or timer-based throttle before `Main_NetQueueTick_v123()`
+          - the window proc still has a `WM_TIMER (0x121)` path that can call `Main_NetQueueTick_v123()`, but the active combat session loop bypasses that and calls it directly as fast as the message pump will allow
+          - the higher-level screen-update wrappers examined so far (`FUN_004304f0`, `FUN_00443b30`, `FUN_00430590`) do not add their own retry/sleep throttles either; they issue immediate surface/blit calls and return
+        - practical read:
+          - the current windowed combat environment appears to run the controller update path as a **busy spin paced only by the message pump and whatever blocking the lower display backend/hardware imposes**
+          - that means the old retail environment may have gained its effective pacing indirectly from slower hardware, full-screen DirectDraw blocking, driver/vsync behavior, or another lower display/backend condition rather than from a combat-logic timer or an explicit packet-driven animation clock
+        - next logical validation step: test the same retail client under a paced runtime condition (for example, full-screen DirectDraw or an external frame limiter) and compare fall/stand-up clearance timing before changing any more server packet semantics
+      - Fresh 2026-04-21 paced-runtime live validation:
+        - launcher/runtime setup: `mpbt-launcher` windowed shim path now supports `fps_limit=60`; the successful manual pass used the launcher-managed paced mode rather than the old uncapped busy-spin windowed path
+        - live GUI session: `e0f18cf9`
+        - new capture file: `captures\1776738633315_e0f18cf9-9016-4cec-a49d-0a4049ac7901.txt`
+        - server log markers for the successful pass:
+          - `02:31:18.349Z` inbound `cmd-12 jump action=4`
+          - `02:31:20.587Z` local deferred-collapse `Cmd70/8`
+          - `02:31:20.587Z` fall-side `Cmd73` probe `43/43`
+          - `02:31:39.537Z` inbound `cmd-12 jump action=6`
+          - `02:31:46.537Z` recovery `cmd12/action0` ack, immediately followed by recovery-side `Cmd73 -> Cmd70/0`
+        - user-observed result: with the 60 FPS cap active, the client finally showed the expected visible fall and F12 stand-up timing, matching late-1990s retail behavior closely enough to call the cadence issue solved for this path
+        - practical read:
+          - the current server-side ownership path (`Cmd70/8`, no-local-echo while downed, default `cmd12/action0 -> Cmd70/0`, and the verifier-only `legdefercmd73` probe) is already sufficient to support a retail-like live run when the client is paced correctly
+          - the dominant blocker was therefore the unpaced modern runtime / display cadence, not another missing fall/recovery packet semantic inside `mpbt-server`
+          - future product work should shift toward launcher/runtime defaults and documentation instead of more blind server-side `Cmd70` / `Cmd73` experimentation
+      - that shifts the likely blocker away from "just add the right `Cmd70` trio" and toward either:
+        - longer / different timing around the same states, or
+        - additional recovery-side/local-state work such as `cmd12/action 0x15`, `Cmd73`, or another still-missing local posture/input transition,
   - `mpbt-server` currently sends Cmd70 only for destruction and still treats all `cmd12/action0` frames as fire triggers,
   - slot-0 `Cmd70/6` is not a viable local stand-up ack candidate because the client ignores that subcommand for the local actor,
   - no live follow-up has yet shown `cmd12/action 0x15` firing from the minimal subset alone, which makes it look more like a later recovery-side piece than the first missing visible-fall trigger,

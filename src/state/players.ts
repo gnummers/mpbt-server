@@ -250,7 +250,7 @@ export interface ClientSession {
   duelTermsAvailable?: boolean;
 
   /** Optional scripted combat verification mode consumed on the next /fight bootstrap. */
-  combatVerificationMode?: 'autowin' | 'autolose' | 'dmglocal' | 'dmgbot' | 'strictfire' | 'headtest' | 'legtest' | 'legseq' | 'legair' | 'legfull' | 'legrecover' | 'legdefer' | 'legdeferquiet';
+  combatVerificationMode?: 'autowin' | 'autolose' | 'dmglocal' | 'dmgbot' | 'strictfire' | 'headtest' | 'legtest' | 'legseq' | 'legair' | 'legfull' | 'legrecover' | 'legdefer' | 'legdeferquiet' | 'legdefercmd73';
 
   /**
    * Pending mech slot chosen in the mech-select dialog, held until the
@@ -316,6 +316,8 @@ export interface ClientSession {
   combatDeferredLocalCollapsePending?: boolean;
   /** Research verifier: suppress local Cmd65 echoes while the local downed latch is active. */
   combatSuppressLocalCmd65WhileDowned?: boolean;
+  /** Research verifier: send opt-in Cmd73 rate/bias probes around local fall and recovery transitions. */
+  combatCmd73RateProbe?: boolean;
   /** True while a no-shot cmd12/action0 may still be acknowledged as local stand-up recovery. */
   combatRecoveryExperimentPending?: boolean;
   /** Per-weapon-slot wall-clock time (Date.now ms) when the slot becomes fireable again. */
