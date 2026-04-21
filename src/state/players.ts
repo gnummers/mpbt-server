@@ -250,7 +250,7 @@ export interface ClientSession {
   duelTermsAvailable?: boolean;
 
   /** Optional scripted combat verification mode consumed on the next /fight bootstrap. */
-  combatVerificationMode?: 'autowin' | 'autolose' | 'dmglocal' | 'dmgbot' | 'strictfire' | 'headtest' | 'legtest' | 'legseq' | 'legair' | 'legfull' | 'legrecover';
+  combatVerificationMode?: 'autowin' | 'autolose' | 'dmglocal' | 'dmgbot' | 'strictfire' | 'headtest' | 'legtest' | 'legseq' | 'legair' | 'legfull' | 'legrecover' | 'legdefer' | 'legdeferquiet' | 'legdefercmd73';
 
   /**
    * Pending mech slot chosen in the mech-select dialog, held until the
@@ -305,9 +305,21 @@ export interface ClientSession {
   /** Count of cmd12/action0 frames that had no cmd10 follow-up inside the normal fire window. */
   combatAction0NoShotCount?: number;
   /** Active non-death leg-loss Cmd70 transition mode for the current combat session. */
-  combatLegLossTransitionMode?: 'collapse-only' | 'fall-then-collapse' | 'airborne-collapse-land' | 'fall-airborne-collapse-land' | 'fall-collapse-recover';
+  combatLegLossTransitionMode?: 'collapse-only' | 'fall-then-collapse' | 'airborne-collapse-land' | 'fall-airborne-collapse-land' | 'fall-collapse-recover' | 'defer-while-airborne';
   /** Delayed Cmd70 timers queued for non-death leg-loss transition probes. */
   combatLegLossTransitionTimers?: Array<ReturnType<typeof setTimeout> | undefined>;
+  /** Timestamp (ms) when the server most recently sent a local non-death collapse Cmd70/8. */
+  combatLastLocalCollapseAt?: number;
+  /** True while the server still considers the local actor downed after a non-death collapse. */
+  combatLocalDowned?: boolean;
+  /** True after an airborne local Cmd70/8 probe, until the client reports action6 landing. */
+  combatDeferredLocalCollapsePending?: boolean;
+  /** Research verifier: suppress local Cmd65 echoes while the local downed latch is active. */
+  combatSuppressLocalCmd65WhileDowned?: boolean;
+  /** Research verifier: send opt-in Cmd73 rate/bias probes around local fall and recovery transitions. */
+  combatCmd73RateProbe?: boolean;
+  /** True while a no-shot cmd12/action0 may still be acknowledged as local stand-up recovery. */
+  combatRecoveryExperimentPending?: boolean;
   /** Per-weapon-slot wall-clock time (Date.now ms) when the slot becomes fireable again. */
   combatWeaponReadyAtBySlot?: number[];
   /** Per-weapon-slot one-shot timer that restores local HUD weapon-ready state after cooldown. */

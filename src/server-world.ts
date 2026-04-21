@@ -452,7 +452,9 @@ function handleWorldGameData(
       textCmd === '/fightlegseq' ||
       textCmd === '/fightlegair' ||
       textCmd === '/fightlegfull' ||
-      textCmd === '/fightlegrecover'
+      textCmd === '/fightlegrecover' ||
+      textCmd === '/fightlegdefer' ||
+      textCmd === '/fightlegdefer73'
     ) {
       const currentRoomId = session.worldMapRoomId ?? DEFAULT_MAP_ROOM_ID;
       const mapRoom = worldMapByRoomId.get(currentRoomId);
@@ -545,6 +547,28 @@ function handleWorldGameData(
           ),
           capture,
           'CMD3_FIGHTLEGRECOVER_ARMED',
+        );
+      } else if (textCmd === '/fightlegdefer') {
+        session.combatVerificationMode = 'legdefer';
+        send(
+          session.socket,
+          buildCmd3BroadcastPacket(
+            'Leg deferred-collapse verifier armed: jump before leg loss so the server can emit local Cmd70/8 only while action4 is active.',
+            nextSeq(session),
+          ),
+          capture,
+          'CMD3_FIGHTLEGDEFER_ARMED',
+        );
+      } else if (textCmd === '/fightlegdefer73') {
+        session.combatVerificationMode = 'legdefercmd73';
+        send(
+          session.socket,
+          buildCmd3BroadcastPacket(
+            'Leg deferred-collapse Cmd73 verifier armed: jump before leg loss; Cmd73 rate probes will be sent around local fall/recovery.',
+            nextSeq(session),
+          ),
+          capture,
+          'CMD3_FIGHTLEGDEFER73_ARMED',
         );
       } else {
         session.combatVerificationMode = undefined;
