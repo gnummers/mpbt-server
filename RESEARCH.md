@@ -4787,6 +4787,19 @@ actorDisplayName = Frame_ReadString();   // max 31 bytes
 
 The static initializer `Combat_InitDamageStateFromMec_v123` copies the `.MEC` maxima into the actor state before those server-supplied bytes arrive: 11 values from `.MEC` offsets `0x1a..0x2e`, one zeroed weapon damage state per weapon, critical-slot defaults from the `.MEC` table at `0xde`, ammo-bin caps from `.MEC` ammo types, and 8 internal-structure maxima from `Combat_GetInternalStructureForSection_v123`. This means a minimal `Cmd72` builder should not omit the variable-length local damage block; it seeds the same state that later `Cmd66`/`Cmd67` mutate.
 
+2026-04-22 ammo-state correction:
+
+- `Combat_InitDamageStateFromMec_v123` does **not** seed runtime ammo state from the raw `.MEC` `ammo_bin_qty[]` values at `0x1ee`.
+- Instead, it looks up each bin's `ammo_bin_type[]` entry at `.MEC + 0x202`, indexes the retail weapon-family table at `DAT_0047b278 + weaponType * 0x5c`, and copies that table's first dword into the runtime ammo-state slot.
+- Recovered retail starting ammo-per-bin values are:
+  - flamer / energy families: `0`
+  - Machine Gun: `200`
+  - AC/2 / AC/5 / AC/10 / AC/20: `45 / 20 / 10 / 5`
+  - SRM-2 / SRM-4 / SRM-6: `50 / 25 / 15`
+  - LRM-5 / LRM-10 / LRM-15 / LRM-20: `24 / 12 / 8 / 6`
+- `FUN_0042c200` decrements the selected ammo-state bin by `1` per accepted shot.
+- `FUN_0042c110` scans for another non-empty bin with the same weapon type and repoints matching weapon slots when the current bin empties.
+
 `FUN_0040d830` field transforms:
 
 ```c

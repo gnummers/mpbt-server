@@ -83,6 +83,7 @@ import { CaptureLogger } from '../util/capture.js';
 import { buildMechExamineText, MECH_STATS } from '../data/mech-stats.js';
 import { mechInternalStateBytes } from '../data/mechs.js';
 import {
+  getWeaponAmmoPerBinByTypeId,
   getWeaponNameByTypeId,
   getWeaponLongRangeMeters,
   getWeaponRangeBandForDistance,
@@ -2521,11 +2522,23 @@ function getAmmoDamageCodeBase(extraCritCount: number | undefined, weaponCount: 
   return 0x28 + weaponCount + normalizeExtraCritCount(extraCritCount);
 }
 
+function weaponTypeUsesAmmo(weaponTypeId: number | undefined): boolean {
+  return (getWeaponAmmoPerBinByTypeId(weaponTypeId) ?? 0) > 0;
+}
+
+function getInitialCombatAmmoStateValues(ammoBinTypeIds: readonly number[] | undefined): number[] {
+  if (!ammoBinTypeIds || ammoBinTypeIds.length === 0) {
+    return [];
+  }
+
+  return ammoBinTypeIds.map(typeId => getWeaponAmmoPerBinByTypeId(typeId) ?? 0);
+}
+
 function getOrCreateAmmoStateValues(
   currentValues: number[] | undefined,
-  ammoBinCapacities: readonly number[],
+  ammoBinTypeIds: readonly number[] | undefined,
 ): number[] {
-  return currentValues ? [...currentValues] : [...ammoBinCapacities];
+  return currentValues ? [...currentValues] : getInitialCombatAmmoStateValues(ammoBinTypeIds);
 }
 
 const INTERNAL_SECTION_LABELS = [
@@ -3334,6 +3347,9 @@ function consumeWeaponAmmo(
   if (!mechEntry || weaponTypeId === undefined) {
     return { allowed: true, weaponName };
   }
+  if (!weaponTypeUsesAmmo(weaponTypeId)) {
+    return { allowed: true, weaponName };
+  }
 
   const matchingAmmoBinIndexes: number[] = [];
   for (let ammoBinIndex = 0; ammoBinIndex < mechEntry.ammoBinTypeIds.length; ammoBinIndex += 1) {
@@ -3342,10 +3358,10 @@ function consumeWeaponAmmo(
     }
   }
   if (matchingAmmoBinIndexes.length === 0) {
-    return { allowed: true, weaponName };
+    return { allowed: false, weaponName };
   }
 
-  const ammoStateValues = getOrCreateAmmoStateValues(session.combatAmmoStateValues, mechEntry.ammoBinCapacities);
+  const ammoStateValues = getOrCreateAmmoStateValues(session.combatAmmoStateValues, mechEntry.ammoBinTypeIds);
   const ammoBinIndex = matchingAmmoBinIndexes.find(index => (ammoStateValues[index] ?? 0) > 0);
   if (ammoBinIndex === undefined) {
     return { allowed: false, weaponName };
@@ -3434,6 +3450,9 @@ function getBotWeaponAmmoGate(
   if (!mechEntry || weaponTypeId === undefined) {
     return { allowed: true, weaponName };
   }
+  if (!weaponTypeUsesAmmo(weaponTypeId)) {
+    return { allowed: true, weaponName };
+  }
 
   const matchingAmmoBinIndexes: number[] = [];
   for (let ammoBinIndex = 0; ammoBinIndex < mechEntry.ammoBinTypeIds.length; ammoBinIndex += 1) {
@@ -3442,12 +3461,12 @@ function getBotWeaponAmmoGate(
     }
   }
   if (matchingAmmoBinIndexes.length === 0) {
-    return { allowed: true, weaponName };
+    return { allowed: false, weaponName };
   }
 
   const ammoStateValues = consume
-    ? getOrCreateAmmoStateValues(session.combatBotAmmoStateValues, mechEntry.ammoBinCapacities)
-    : (session.combatBotAmmoStateValues ?? mechEntry.ammoBinCapacities);
+    ? getOrCreateAmmoStateValues(session.combatBotAmmoStateValues, mechEntry.ammoBinTypeIds)
+    : (session.combatBotAmmoStateValues ?? getInitialCombatAmmoStateValues(mechEntry.ammoBinTypeIds));
   const ammoBinIndex = matchingAmmoBinIndexes.find(index => (ammoStateValues[index] ?? 0) > 0);
   if (ammoBinIndex === undefined) {
     return { allowed: false, weaponName };
@@ -6349,7 +6368,7 @@ function startArenaCombatSession(
       const localExtraCritCount = localMechEntry?.extraCritCount ?? 0;
       const localCritBytes = Math.max(0, localExtraCritCount + 21);
       const localCriticalStateBytes = createCriticalStateBytes(localExtraCritCount);
-      const localAmmoStateValues = [...(localMechEntry?.ammoBinCapacities ?? [])];
+      const localAmmoStateValues = getInitialCombatAmmoStateValues(localMechEntry?.ammoBinTypeIds);
       const localCallsign = getDisplayName(participant);
       participant.combatAmmoStateValues = [...localAmmoStateValues];
 
@@ -6642,7 +6661,7 @@ export function tryStartStagedDuelCombat(
       const localExtraCritCount = localMechEntry?.extraCritCount ?? 0;
       const localCritBytes = Math.max(0, localExtraCritCount + 21);
       const localCriticalStateBytes = createCriticalStateBytes(localExtraCritCount);
-      const localAmmoStateValues = [...(localMechEntry?.ammoBinCapacities ?? [])];
+      const localAmmoStateValues = getInitialCombatAmmoStateValues(localMechEntry?.ammoBinTypeIds);
       const peerMechId = participant.peer.selectedMechId ?? FALLBACK_MECH_ID;
       const peerMechEntry = WORLD_MECH_BY_ID.get(peerMechId);
       const localCallsign = getDisplayName(participant.local);
@@ -7757,7 +7776,8 @@ export function sendCombatBootstrapSequence(
   // Store per-mech speedMag caps so Cmd8/9 handlers can apply them.
   session.combatMaxSpeedMag  = mechEntry?.maxSpeedMag  ?? 0;
   session.combatWalkSpeedMag = mechEntry?.walkSpeedMag ?? 0;
-  session.combatAmmoStateValues = [...(mechEntry?.ammoBinCapacities ?? [])];
+  const localAmmoStateValues = getInitialCombatAmmoStateValues(mechEntry?.ammoBinTypeIds);
+  session.combatAmmoStateValues = [...localAmmoStateValues];
   if (session.combatResultTimer !== undefined) {
     clearTimeout(session.combatResultTimer);
     session.combatResultTimer = undefined;
@@ -7843,7 +7863,7 @@ export function sendCombatBootstrapSequence(
           // Indices 4 and 7 are also required non-zero by the IS gate (FUN_0042bb00).
           // Order: [arm, arm, side, side, CT, leg, leg, head] (§23.8, IS lookup RE).
           internalStateBytes:   mechInternalStateBytes(mechEntry?.tonnage ?? 0),
-          ammoStateValues:      [...(mechEntry?.ammoBinCapacities ?? [])],
+          ammoStateValues:      localAmmoStateValues,
           actorDisplayName:     callsign.substring(0, 31),
         },
       },
@@ -7881,7 +7901,7 @@ export function sendCombatBootstrapSequence(
     session.combatBotMoveVectorX = 0;
     session.combatBotMoveVectorY = 0;
     session.combatBotWeaponReadyAtBySlot = [];
-    session.combatBotAmmoStateValues = [...(botMechEntry?.ammoBinCapacities ?? [])];
+    session.combatBotAmmoStateValues = getInitialCombatAmmoStateValues(botMechEntry?.ammoBinTypeIds);
     session.combatBotHeat = 0;
     session.combatBotJumpActive = false;
     session.combatBotJumpFuel = JUMP_JET_FUEL_MAX;
