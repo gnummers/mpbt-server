@@ -2043,7 +2043,7 @@ All fields are little-endian.  Offsets are from the start of the decrypted buffe
 
 | ID | Weapon | Evidence |
 |----|--------|---------|
-| `0`  | Flamer | Local v1.23 roster fit is strongest on flamer-heavy variants (`FS9-H`, `FLE-4`, `WSP-1D`, `VTR-9A/9D`, `WHM-6L`, etc.); BT-MAN fixes `Dly = 3s` and `Max = 90m`, and `MPBTWIN.EXE.c` helper `FUN_0043b3f0` pins flamer damage to `3` via its 17-entry damage-potential table. `C:\MPBT\tools-local\weapon-range-smoke.mjs` now live-proves both the `100m` range gate (`stub-flamer:WSP-1D:none`) and a close-range hit (`stub-flamer-close:WSP-1D:cmd66:25/3`). |
+| `0`  | Flamer | Local v1.23 roster fit is strongest on flamer-heavy variants (`FS9-H`, `FLE-4`, `WSP-1D`, `VTR-9A/9D`, `WHM-6L`, etc.); BT-MAN fixes `Dly = 3s` and `Max = 90m`, and `MPBTWIN.EXE.c` helper `FUN_0043b3f0` pins flamer damage to `3` via its 17-entry damage-potential table. `C:\MPBT\tools-local\weapon-range-smoke.mjs` now live-proves both the `100m` range gate (`stub-flamer:WSP-1D:none`) and a close-range hit (`stub-flamer-close:WSP-1D:cmd66:25/3`). Current retail-fidelity note: flamer S/M/L caps are now treated the same as Machine Gun (`30/60/90m`) on the server. |
 | `1`  | Machine Gun | Documented multiset fit across BLR-1D, CPLT-K2, LCT-1V, PXH-1, and similar MG-equipped variants. `C:\MPBT\tools-local\weapon-damage-smoke.mjs` now live-proves current server resolution `Machine Gun:2`. |
 | `2`  | Small Laser | Unique all-small-laser fits on CGR-1A1 and WSP-1W; also matches the non-missile energy filler on CPLT-C4 / HBK-4G. `weapon-damage-smoke.mjs` live-proves `Small Laser:3`. |
 | `3`  | Medium Laser | Present in Atlas x4, Blackjack x4, Spider x2/x4; most ubiquitous energy weapon in 3025. `weapon-damage-smoke.mjs` live-proves `Medium Laser:5`. |
@@ -2090,6 +2090,10 @@ Additional client weapon-table follow-up from `MPBTWIN.EXE.c`:
   - that makes flamer `3` safe to promote without forcing a broader missile reinterpretation
 - `FUN_0043b3a0` / the HUD helper at `00436449` confirm `DAT_00477b40` is the weapon max-range field in meters, and `DAT_00477b24` is a minimum-range threshold used by the local combat HUD to mark targets inside minimum range.
 - Current negative result: this pass did **not** find a corresponding client fire-block path on the minimum-range field. The known xrefs only drive range-band / HUD feedback, so server-side min-range rejection would still be speculative.
+- Follow-up implementation note, 2026-04-21:
+  - `mpbt-server` now stores explicit per-weapon `shortRangeMeters` / `mediumRangeMeters` / `longRangeMeters` in `src/data/weapons.ts` and resolves combat range bands from those real S/M/L caps instead of the older generic `90m / 270m` heuristic.
+  - The server range table now follows `screenshots/weapon-ranges.png`, including the corrected `AC/10` long range of `360m`.
+  - This implementation intentionally keeps **no minimum-fire gate**: point-blank overlap / collision-range shots remain legal, matching live player recollection and the lack of a recovered retail fire-block path on `DAT_00477b24`.
 
 Prior notes treated `0x3C+` as the weapon-id array. v1.23 `FUN_00433910` reads weapon ids from `0x3E + slot*2`, and `Combat_ClassifyDamageCode_v123` reads `0x3C` separately as a signed count/bound for damage-state codes. Local decode examples:
 AS7-D `field_0x3c=8`, weapons `[9,16,3,3,3,3,12]`; BJ-1 `field_0x3c=8`, weapons `[6,6,3,3,3,3]`; SDR-5V `field_0x3c=9`, weapons `[3,3]`.
@@ -5626,6 +5630,27 @@ was to suppress Cmd8 movement echoes whenever `clientSpeed != 0` and keep only
 the stopped reset path for `clientSpeed == 0`. The earlier Cmd9-only
 `combatIntentStop` workaround was also removed because TAP mode never enters the
 Cmd9 path.
+
+On 2026-04-21, `mpbt-server` also adopted a bounded server-side reverse-speed
+policy for live combat movement. The new `tools\forward-range-physics.ts` probe
+showed `BJ-1` vs `BJ-1` from `1000m` produces `0 m/s` closure if full reverse is
+treated as symmetric with run speed, but still closes at `6 m/s` when reverse is
+walk-capped. Current combat handling therefore clamps over-cap reverse
+`cmd8/cmd9` position drift and echoed reverse `speedMag` to `walkSpeedMag` while
+leaving airborne movement alone. This is a current server fidelity policy for
+range pressure, not new retail RE proving a separate client-side reverse
+formula.
+
+Subsequent 2026-04-21 combat-bot tuning keeps the server bot inside that same
+movement envelope rather than letting the AI exploit looser prototype rules.
+Current bot retreat pacing also uses walk-capped reverse speed, its reverse
+throttle/leg-velocity echo is scaled from that capped retreat speed, and the
+bot's range/jump planning now scores only the **currently usable** loadout
+(mounted weapon still intact, ammo still available) instead of stale mounted
+range alone. Bot TIC-style volley choice likewise now weighs expected hit chance
+and expected damage from the current movement state. These remain server
+fidelity policies, not new retail RE proving the original client performed the
+same planning internally.
 
 ### §24.3 — Physics Equilibrium and the `globalA` Constant (DAT_004f56b4)
 

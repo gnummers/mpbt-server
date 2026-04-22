@@ -508,6 +508,10 @@ function classifyUnknownAttachment(modelId: number | undefined, attach: number):
   return { armorIndex: 4, internalIndex: 4, label: 'ct-front-fallback' };
 }
 
+function sectionsMatch(a: CombatAttachmentHitSection, b: CombatAttachmentHitSection): boolean {
+  return a.armorIndex === b.armorIndex && a.internalIndex === b.internalIndex;
+}
+
 export function getCombatModelIdForMechId(mechId: number | undefined): number | undefined {
   if (mechId === undefined || mechId < 0 || mechId >= MODEL_SUBTYPE_BY_MECH_ID.length) {
     return undefined;
@@ -536,4 +540,53 @@ export function resolveCombatAttachmentHitSection(
   if (impactZ > 1100) return HEAD;
   if (impactZ > 600) return { armorIndex: 4, internalIndex: 4, label: 'ct-front' };
   return classified;
+}
+
+export function findRepresentativeCombatAttachmentIdForSection(
+  mechId: number | undefined,
+  targetSection: CombatAttachmentHitSection,
+): number | undefined {
+  if (targetSection.internalIndex === 7) {
+    return 37;
+  }
+  if (targetSection.internalIndex === 4) {
+    return 31;
+  }
+  if (targetSection.internalIndex === 2) {
+    return 33;
+  }
+  if (targetSection.internalIndex === 3) {
+    return 32;
+  }
+
+  const modelId = getCombatModelIdForMechId(mechId);
+  const explicitEntries = [...(SECTION_BY_MODEL_AND_ATTACH.get(modelId ?? -1)?.entries() ?? [])]
+    .sort(([attachA], [attachB]) => attachA - attachB);
+  for (const [attachId, section] of explicitEntries) {
+    if (sectionsMatch(section, targetSection)) {
+      return attachId;
+    }
+  }
+
+  const sharedEntries = [...SHARED_SECTION_BY_ATTACH.entries()]
+    .sort(([attachA], [attachB]) => attachA - attachB);
+  for (const [attachId, section] of sharedEntries) {
+    if (sectionsMatch(section, targetSection)) {
+      return attachId;
+    }
+  }
+
+  const modelStats = modelId === undefined ? undefined : loadAttachmentStats().byModel.get(modelId);
+  if (modelStats) {
+    const candidateAttaches = [...modelStats.keys()].sort((a, b) => a - b);
+    for (const attachId of candidateAttaches) {
+      if (attachId === 31 || attachId === 32 || attachId === 33) continue;
+      const resolved = resolveCombatAttachmentHitSection(mechId, attachId, 0);
+      if (sectionsMatch(resolved, targetSection)) {
+        return attachId;
+      }
+    }
+  }
+
+  return undefined;
 }
