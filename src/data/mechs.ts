@@ -117,6 +117,10 @@ function readMecFields(
   armorLikeMaxValues: number[];
   weaponMountInternalIndices: number[];
   weaponTypeIds: number[];
+  /**
+   * Raw ammo-bin quantities from the mech's decrypted .MEC file.
+   * Retail combat does not seed live ammo directly from these values.
+   */
   ammoBinCapacities: number[];
   ammoBinTypeIds: number[];
 } {
