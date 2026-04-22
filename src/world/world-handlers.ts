@@ -2773,7 +2773,7 @@ function getCrossingFactor(
   return Math.abs(Math.sin(delta));
 }
 
-type CombatRangeBand = 'short' | 'medium' | 'long';
+type CombatRangeBand = 'short' | 'medium' | 'long' | 'out-of-range';
 
 interface CombatToHitEstimate {
   chance: number;
@@ -2856,11 +2856,19 @@ function getCombatRangeBandForDistance(
   fallbackMaxRangeMeters: number | undefined,
 ): CombatRangeBand {
   const explicitRangeBand = getWeaponRangeBandForDistance(weaponSpec, distanceMeters);
-  if (explicitRangeBand === 'short' || explicitRangeBand === 'medium' || explicitRangeBand === 'long') {
+  if (
+    explicitRangeBand === 'short'
+    || explicitRangeBand === 'medium'
+    || explicitRangeBand === 'long'
+    || explicitRangeBand === 'out-of-range'
+  ) {
     return explicitRangeBand;
   }
 
-  const { shortRangeCap, mediumRangeCap } = getCombatRangeCaps(weaponSpec, fallbackMaxRangeMeters);
+  const { shortRangeCap, mediumRangeCap, longRangeCap } = getCombatRangeCaps(weaponSpec, fallbackMaxRangeMeters);
+  if (longRangeCap !== undefined && distanceMeters > longRangeCap) {
+    return 'out-of-range';
+  }
   if (distanceMeters <= shortRangeCap) {
     return 'short';
   }
@@ -2873,20 +2881,6 @@ function getCombatRangeBandForDistance(
 function estimateCombatToHit(input: CombatToHitRollInput): CombatToHitEstimate {
   const { shortRangeCap, mediumRangeCap, longRangeCap } = getCombatRangeCaps(input.weaponSpec, input.maxRangeMeters);
   const rangeBand = getCombatRangeBandForDistance(input.weaponSpec, input.distanceMeters, input.maxRangeMeters);
-  let rangeModifier = 0;
-  if (rangeBand === 'short') {
-    rangeModifier = BOT_TO_HIT_SHORT_RANGE_BONUS;
-  } else if (rangeBand === 'medium') {
-    rangeModifier = BOT_TO_HIT_MEDIUM_RANGE_BONUS;
-  } else if (longRangeCap !== undefined && longRangeCap > mediumRangeCap) {
-    const longRangeProgress = clampNumber(
-      (input.distanceMeters - mediumRangeCap) / (longRangeCap - mediumRangeCap),
-      0,
-      1,
-    );
-    rangeModifier = -(BOT_TO_HIT_LONG_RANGE_MAX_PENALTY * longRangeProgress);
-  }
-
   const attackerSpeedRatio = getSpeedRatio(input.attackerSpeedMag, input.attackerMaxSpeedMag);
   const targetSpeedRatio = getSpeedRatio(input.targetSpeedMag, input.targetMaxSpeedMag);
   const explicitCrossingFactor = input.targetMoveVectorX === undefined || input.targetMoveVectorY === undefined
@@ -2907,6 +2901,27 @@ function estimateCombatToHit(input: CombatToHitRollInput): CombatToHitEstimate {
     input.targetFacing,
     input.targetSpeedMag ?? 0,
   );
+  if (rangeBand === 'out-of-range') {
+    return {
+      chance: 0,
+      rangeBand,
+      crossingFactor,
+    };
+  }
+
+  let rangeModifier = 0;
+  if (rangeBand === 'short') {
+    rangeModifier = BOT_TO_HIT_SHORT_RANGE_BONUS;
+  } else if (rangeBand === 'medium') {
+    rangeModifier = BOT_TO_HIT_MEDIUM_RANGE_BONUS;
+  } else if (longRangeCap !== undefined && longRangeCap > mediumRangeCap) {
+    const longRangeProgress = clampNumber(
+      (input.distanceMeters - mediumRangeCap) / (longRangeCap - mediumRangeCap),
+      0,
+      1,
+    );
+    rangeModifier = -(BOT_TO_HIT_LONG_RANGE_MAX_PENALTY * longRangeProgress);
+  }
 
   return {
     chance: clampNumber(
@@ -3635,6 +3650,8 @@ function normalizeFacingAccumulator(value: number): number {
   return normalized < 0 ? normalized + turn : normalized;
 }
 
+const BOT_VISUAL_FACING_OFFSET = 0x8000;
+
 function getBotFacingAccumulatorTowardTarget(
   botX: number,
   botY: number,
@@ -3650,7 +3667,9 @@ function getBotFacingAccumulatorTowardTarget(
   const southFacingRadians = -Math.PI / 2;
   const deltaRadians = Math.atan2(dy, dx) - southFacingRadians;
   const deltaUnits = Math.round(deltaRadians * (0x10000 / (Math.PI * 2)));
-  return normalizeFacingAccumulator(FACING_ACCUMULATOR_NEUTRAL + deltaUnits);
+  // Live single-player validation shows the visually correct remote slot-1 bot
+  // heading is 180 degrees offset from the raw target vector mapping.
+  return normalizeFacingAccumulator(FACING_ACCUMULATOR_NEUTRAL + deltaUnits + BOT_VISUAL_FACING_OFFSET);
 }
 
 function getWeaponRangeProfileForMech(
@@ -4437,10 +4456,22 @@ function stepBotWeaponFire(
   const volley: BotVolleyCandidateShot[] = [];
   let firedHeat = 0;
   for (const shot of selectedPreset.shots) {
+    const rangeGate = getShotMaxRangeGateForMechSlot(
+      botMechId,
+      shot.weaponSlot,
+      botX,
+      botY,
+      targetX,
+      targetY,
+    );
+    if (!rangeGate.allowed) continue;
     const ammoGate = consumeBotWeaponAmmo(session, shot.weaponSlot);
     if (!ammoGate.allowed) continue;
     markBotWeaponSlotFired(session, shot.weaponSlot, shot.cooldownMs, now);
-    volley.push(shot);
+    volley.push({
+      ...shot,
+      maxRangeMeters: rangeGate.maxRangeMeters ?? shot.maxRangeMeters,
+    });
     firedHeat += shot.heat;
   }
 
@@ -6472,6 +6503,16 @@ export function handleComstarTextReply(
   if (session.pendingHandleChangePrompt && dialogId === 0) {
     const accountId = session.accountId;
     const displayName = clean.replace(/[\x00-\x1F\x7F]/g, '').slice(0, 64);
+    if (displayName.length === 0) {
+      session.pendingHandleChangePrompt = false;
+      send(
+        session.socket,
+        buildCmd3BroadcastPacket('Handle change cancelled.', nextSeq(session)),
+        capture,
+        'CMD3_HANDLE_CHANGE_CANCELLED',
+      );
+      return;
+    }
     if (!accountId || !displayName) {
       connLog.warn('[world] invalid handle-change reply');
       send(
@@ -6552,6 +6593,16 @@ export function handleComstarTextReply(
   }
 
   if (session.pendingComstarTargetPrompt && dialogId === 0) {
+    if (clean.length === 0) {
+      session.pendingComstarTargetPrompt = false;
+      send(
+        session.socket,
+        buildCmd3BroadcastPacket('ComStar target entry cancelled.', nextSeq(session)),
+        capture,
+        'CMD3_COMSTAR_TARGET_CANCELLED',
+      );
+      return;
+    }
     if (!/^\d+$/.test(clean)) {
       connLog.warn('[world] invalid direct ComStar target reply: %j', clean);
       send(
@@ -7537,7 +7588,13 @@ export function sendCombatBootstrapSequence(
     session.combatBotX = 0;
     session.combatBotY = BOT_AI_SPAWN_DISTANCE;
     session.combatBotZ = 0;
-    session.combatBotFacing = FACING_ACCUMULATOR_NEUTRAL;
+    session.combatBotFacing = getBotFacingAccumulatorTowardTarget(
+      session.combatBotX,
+      session.combatBotY,
+      session.combatX ?? 0,
+      session.combatY ?? 0,
+      FACING_ACCUMULATOR_NEUTRAL,
+    );
     session.combatBotThrottle = 0;
     session.combatBotLegVel = 0;
     session.combatBotSpeedMag = 0;
@@ -9637,11 +9694,18 @@ export function handleMechPickerCmd7(
   connLog: Logger,
   capture: CaptureLogger,
 ): boolean {
+  const clearMechPickerState = () => {
+    session.mechPickerStep = undefined;
+    session.mechPickerClass = undefined;
+    session.mechPickerChassis = undefined;
+    session.mechPickerChassisPage = undefined;
+  };
   const step = session.mechPickerStep;
 
   if (step === 'class' && listId === MECH_CLASS_LIST_ID) {
-    if (selection === 0) {
-      session.mechPickerStep = undefined;
+    if (selection <= 0) {
+      clearMechPickerState();
+      sendSceneRefresh(players, session, connLog, capture, 'Mech selection cancelled.');
       return true;
     }
     const classIndex = selection - 1;
@@ -9651,7 +9715,7 @@ export function handleMechPickerCmd7(
   }
 
   if (step === 'chassis' && listId === MECH_CHASSIS_LIST_ID) {
-    if (selection === 0) {
+    if (selection <= 0) {
       sendMechClassPicker(session, connLog, capture);
       return true;
     }
@@ -9668,7 +9732,7 @@ export function handleMechPickerCmd7(
   }
 
   if (step === 'variant' && listId === MECH_VARIANT_LIST_ID) {
-    if (selection === 0) {
+    if (selection <= 0) {
       sendMechChassisPicker(session, session.mechPickerClass ?? 0, connLog, capture, session.mechPickerChassisPage ?? 0);
       return true;
     }
@@ -9688,10 +9752,7 @@ export function handleMechPickerCmd7(
 
     session.selectedMechSlot       = chosen.slot;
     session.selectedMechId         = chosen.id;
-    session.mechPickerStep         = undefined;
-    session.mechPickerClass        = undefined;
-    session.mechPickerChassis      = undefined;
-    session.mechPickerChassisPage  = undefined;
+    clearMechPickerState();
     const arenaRoom = isArenaRoom(session);
     const readyCleared = arenaRoom && session.worldArenaReady === true;
     const duelCleared = arenaRoom && hasPendingArenaDuelState(session);
