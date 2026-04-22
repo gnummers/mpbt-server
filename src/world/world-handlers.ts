@@ -192,16 +192,15 @@ import {
   BOT_FIRE_INTERVAL_MS,
   BOT_RETALIATION_DAMAGE,
   BOT_AI_TICK_MS,
+  COMBAT_GLOBAL_A,
+  COMBAT_GLOBAL_B,
+  COMBAT_GLOBAL_C,
   BOT_AI_MIN_PREFERRED_RANGE_METERS,
   BOT_AI_MAX_PREFERRED_RANGE_METERS,
   BOT_AI_RANGE_BUFFER_METERS,
   BOT_AI_JUMP_COOLDOWN_MS,
   BOT_AI_JUMP_RANGE_FIT_GAIN_THRESHOLD,
-  BOT_AI_STRAFE_DIRECTION_HOLD_MS,
-  BOT_AI_STRAFE_FLIP_CHANCE,
   BOT_AI_PLAYER_THREAT_BUFFER_METERS,
-  BOT_AI_EVASIVE_STRAFE_WEIGHT,
-  BOT_AI_APPROACH_STRAFE_WEIGHT,
   BOT_AI_RANGE_FIT_SHORT_WEIGHT,
   BOT_AI_RANGE_FIT_MEDIUM_WEIGHT,
   BOT_AI_RANGE_FIT_LONG_WEIGHT,
@@ -230,7 +229,6 @@ import {
   VERIFY_DELAY_MS,
   VERIFY_SWEEP_STEP_MS,
   VERIFY_DAMAGE_CODES,
-  THROTTLE_RUN_SCALE,
 } from './combat-config.js';
 
 function regenJumpFuelIfGrounded(
@@ -299,7 +297,16 @@ function getSelectedMechJumpMirrorDurationMs(session: ClientSession): number {
 }
 
 function getLocalCmd65Altitude(session: ClientSession): number {
-  return session.combatJumpActive ? 0 : (session.combatJumpAltitude ?? 0);
+  return Math.max(0, session.combatAltitudeRaw ?? session.combatJumpAltitude ?? 0);
+}
+
+function syncCombatAltitudeFromClientFrame(
+  session: ClientSession,
+  altitudeRaw: number,
+): void {
+  const altitude = Math.max(0, altitudeRaw);
+  session.combatAltitudeRaw = altitudeRaw;
+  session.combatJumpAltitude = altitude;
 }
 
 function startPeerOnlyJumpMirror(
@@ -328,10 +335,17 @@ function startPeerOnlyJumpMirror(
 
     const elapsedMs = Date.now() - startedAt;
     const progress = Math.min(1, elapsedMs / Math.max(durationMs, 1));
-    const mirroredAltitude =
+    const fallbackAltitude =
       progress >= 1
         ? COMBAT_WORLD_UNITS_PER_METER
         : Math.max(COMBAT_WORLD_UNITS_PER_METER, Math.round(apexUnits * 4 * progress * (1 - progress)));
+    const useRecentClientAltitude =
+      session.combatLastMoveAt !== undefined
+      && Date.now() - session.combatLastMoveAt <= JUMP_JET_TICK_MS * 2
+      && (session.combatAltitudeRaw ?? 0) > 0;
+    const mirroredAltitude = useRecentClientAltitude
+      ? Math.max(0, session.combatAltitudeRaw ?? 0)
+      : fallbackAltitude;
 
     session.combatJumpAltitude = mirroredAltitude;
     session.combatJumpFuel = Math.max(0, Math.round(startedFuel * (1 - progress)));
@@ -2656,6 +2670,10 @@ function speedMagToMetersPerSecond(speedMag: number): number {
   return Math.abs(speedMag) / 100;
 }
 
+function signedSpeedMagToMetersPerSecond(speedMag: number): number {
+  return speedMag / 100;
+}
+
 function clampAcceptedCombatPosition(
   session: ClientSession,
   nextX: number,
@@ -2990,31 +3008,6 @@ function setBotMoveVector(session: ClientSession, moveVectorX: number, moveVecto
 function setPlayerMoveVector(session: ClientSession, moveVectorX: number, moveVectorY: number): void {
   session.combatMoveVectorX = moveVectorX;
   session.combatMoveVectorY = moveVectorY;
-}
-
-function chooseBotStrafeDirection(
-  session: ClientSession,
-  now: number,
-  evasivePressure: boolean,
-  forceFlip: boolean,
-): -1 | 1 {
-  let direction: -1 | 1 = session.combatBotStrafeDirection === -1 ? -1 : 1;
-  if (session.combatBotStrafeDirection === undefined) {
-    direction = Math.random() < 0.5 ? -1 : 1;
-    session.combatBotStrafeDirection = direction;
-    session.combatBotLastStrafeFlipAt = now;
-    return direction;
-  }
-
-  const holdExpired = session.combatBotLastStrafeFlipAt === undefined
-    || now - session.combatBotLastStrafeFlipAt >= BOT_AI_STRAFE_DIRECTION_HOLD_MS;
-  const shouldFlip = forceFlip || (evasivePressure && Math.random() < BOT_AI_STRAFE_FLIP_CHANCE);
-  if (holdExpired && shouldFlip) {
-    direction = direction === 1 ? -1 : 1;
-    session.combatBotStrafeDirection = direction;
-    session.combatBotLastStrafeFlipAt = now;
-  }
-  return direction;
 }
 
 type BotTicPresetName = 'A' | 'B' | 'C';
@@ -3624,6 +3617,7 @@ function sendBotPositionSync(
   if (session.socket.destroyed || !session.socket.writable || session.phase !== 'combat') {
     return;
   }
+  const { throttle, legVel } = getBotCmd65UpperBodyChannels(session);
   send(
     session.socket,
     buildCmd65PositionSyncPacket(
@@ -3633,8 +3627,8 @@ function sendBotPositionSync(
         y: session.combatBotY ?? BOT_AI_SPAWN_DISTANCE,
         z: session.combatBotZ ?? 0,
         facing: session.combatBotFacing ?? FACING_ACCUMULATOR_NEUTRAL,
-        throttle: session.combatBotThrottle ?? 0,
-        legVel: session.combatBotLegVel ?? 0,
+        throttle,
+        legVel,
         speedMag: session.combatBotSpeedMag ?? 0,
       },
       nextSeq(session),
@@ -3651,6 +3645,18 @@ function normalizeFacingAccumulator(value: number): number {
 }
 
 const BOT_VISUAL_FACING_OFFSET = 0x8000;
+// Ghidra evidence: FUN_0040d270 / FUN_0040d2d0 clamp DAT_004f1f7a / DAT_004f1f7c
+// to +/-0x1ffe, and FUN_00446e40 draws DAT_004f1d5c (chassis) plus DAT_004f1f7a
+// (torso yaw) separately on the heading tape. The client converts those values
+// to tenths of a degree via value * 10 / 0xb6, so +/-0x1ffe is effectively
+// about +/-45 deg
+// torso twist / bend window.
+const BOT_TORSO_AIM_LIMIT_UNITS = 0x1ffe;
+const BOT_FORWARD_ALIGNMENT_LIMIT_UNITS = 0x1000;
+const BOT_AI_AIM_LIMIT_LOG_COOLDOWN_MS = 1000;
+// Ghidra evidence: FUN_00422aa0 drives chassis turning through FUN_0040d050 using
+// a full-input scalar of 0x11c6 units per 100ms.
+const BOT_CLIENT_TURN_RATE_UNITS_PER_100MS = 0x11c6;
 
 function getBotFacingAccumulatorTowardTarget(
   botX: number,
@@ -3670,6 +3676,179 @@ function getBotFacingAccumulatorTowardTarget(
   // Live single-player validation shows the visually correct remote slot-1 bot
   // heading is 180 degrees offset from the raw target vector mapping.
   return normalizeFacingAccumulator(FACING_ACCUMULATOR_NEUTRAL + deltaUnits + BOT_VISUAL_FACING_OFFSET);
+}
+
+function getSignedFacingAccumulatorDelta(current: number, target: number): number {
+  let delta = normalizeFacingAccumulator(target) - normalizeFacingAccumulator(current);
+  if (delta > 0x8000) {
+    delta -= 0x10000;
+  } else if (delta < -0x8000) {
+    delta += 0x10000;
+  }
+  return delta;
+}
+
+function stepFacingAccumulatorToward(current: number, target: number, maxStep: number): number {
+  const delta = getSignedFacingAccumulatorDelta(current, target);
+  if (Math.abs(delta) <= maxStep) {
+    return normalizeFacingAccumulator(target);
+  }
+  return normalizeFacingAccumulator(current + (Math.sign(delta) * maxStep));
+}
+
+function getBotMovementFacingAccumulator(botFacing: number): number {
+  return normalizeFacingAccumulator(botFacing - BOT_VISUAL_FACING_OFFSET);
+}
+
+function getBotForwardUnitVector(botFacing: number): { x: number; y: number } {
+  const movementRadians = facingAccumulatorToRadians(getBotMovementFacingAccumulator(botFacing));
+  return {
+    x: Math.cos(movementRadians),
+    y: Math.sin(movementRadians),
+  };
+}
+
+function getBotAimDeltaToTarget(
+  botX: number,
+  botY: number,
+  targetX: number,
+  targetY: number,
+  botFacing: number,
+): number {
+  const targetFacing = getBotFacingAccumulatorTowardTarget(botX, botY, targetX, targetY, botFacing);
+  return getSignedFacingAccumulatorDelta(botFacing, targetFacing);
+}
+
+function getBotPitchToTargetRaw(
+  botX: number,
+  botY: number,
+  botZ: number,
+  targetX: number,
+  targetY: number,
+  targetZ: number,
+): number {
+  const horizontalDistance = Math.hypot(targetX - botX, targetY - botY);
+  const pitchDegrees = Math.atan2(targetZ - botZ, horizontalDistance) * (180 / Math.PI);
+  return Math.round(pitchDegrees * MOTION_DIV);
+}
+
+function getBotPitchToTarget(
+  botX: number,
+  botY: number,
+  botZ: number,
+  targetX: number,
+  targetY: number,
+  targetZ: number,
+): number {
+  return clampNumber(
+    getBotPitchToTargetRaw(botX, botY, botZ, targetX, targetY, targetZ),
+    -BOT_TORSO_AIM_LIMIT_UNITS,
+    BOT_TORSO_AIM_LIMIT_UNITS,
+  );
+}
+
+function getBotCmd65UpperBodyChannels(session: ClientSession): { throttle: number; legVel: number } {
+  const botX = session.combatBotX ?? 0;
+  const botY = session.combatBotY ?? BOT_AI_SPAWN_DISTANCE;
+  const botZ = session.combatBotZ ?? 0;
+  const targetX = session.combatX ?? 0;
+  const targetY = session.combatY ?? 0;
+  const targetZ = session.combatJumpAltitude ?? 0;
+  const botFacing = session.combatBotFacing ?? FACING_ACCUMULATOR_NEUTRAL;
+  const torsoYaw = clampNumber(
+    getBotAimDeltaToTarget(
+      botX,
+      botY,
+      targetX,
+      targetY,
+      botFacing,
+    ),
+    -BOT_TORSO_AIM_LIMIT_UNITS,
+    BOT_TORSO_AIM_LIMIT_UNITS,
+  );
+  return {
+    throttle: getBotPitchToTarget(botX, botY, botZ, targetX, targetY, targetZ),
+    legVel: torsoYaw,
+  };
+}
+
+function maybeLogBotAimLimit(
+  session: ClientSession,
+  connLog: Logger,
+  botX: number,
+  botY: number,
+  botZ: number,
+  targetX: number,
+  targetY: number,
+  targetZ: number,
+  rawYaw: number,
+  rawPitch: number,
+): void {
+  const now = Date.now();
+  if (
+    session.combatBotLastAimLimitLogAt !== undefined
+    && now - session.combatBotLastAimLimitLogAt < BOT_AI_AIM_LIMIT_LOG_COOLDOWN_MS
+  ) {
+    return;
+  }
+  session.combatBotLastAimLimitLogAt = now;
+  connLog.debug(
+    '[world/combat] bot fire gated by aim: yaw=%d pitch=%d limit=%d bot=(%d,%d,%d) target=(%d,%d,%d)',
+    rawYaw,
+    rawPitch,
+    BOT_TORSO_AIM_LIMIT_UNITS,
+    botX,
+    botY,
+    botZ,
+    targetX,
+    targetY,
+    targetZ,
+  );
+}
+
+function getBotTurnStepUnits(elapsedMs: number): number {
+  return Math.max(1, Math.round((BOT_CLIENT_TURN_RATE_UNITS_PER_100MS * elapsedMs) / 100));
+}
+
+function stepBotGroundedSpeedMagTowardTarget(
+  currentSpeedMag: number,
+  targetSpeedMag: number,
+  speedCap: number,
+  elapsedMs: number,
+): number {
+  const dtSeconds = Math.max(0, elapsedMs) / 1000;
+  if (dtSeconds <= 0) {
+    return currentSpeedMag;
+  }
+
+  let nextSpeedMag = currentSpeedMag;
+  const groundedDragPercent = Math.min(100, COMBAT_GLOBAL_B + (COMBAT_GLOBAL_A / 100));
+  if (nextSpeedMag !== 0) {
+    const dragDelta = Math.abs(nextSpeedMag) * (groundedDragPercent / 100) * dtSeconds;
+    nextSpeedMag = nextSpeedMag < 0
+      ? Math.min(0, nextSpeedMag + dragDelta)
+      : Math.max(0, nextSpeedMag - dragDelta);
+  }
+
+  if (targetSpeedMag !== 0 && speedCap > 0) {
+    const throttlePercent = clampNumber((Math.abs(targetSpeedMag) / speedCap) * 100, 0, 100);
+    const governorFactor = (100 - (throttlePercent / 5)) / 100;
+    const accelPerSecond = (Math.abs(targetSpeedMag) * 980 / COMBAT_GLOBAL_A) * governorFactor;
+    nextSpeedMag += Math.sign(targetSpeedMag) * accelPerSecond * dtSeconds;
+    if (Math.sign(nextSpeedMag) === Math.sign(targetSpeedMag) && Math.abs(nextSpeedMag) > Math.abs(targetSpeedMag)) {
+      nextSpeedMag = targetSpeedMag;
+    }
+  } else if (Math.abs(nextSpeedMag) < 1) {
+    nextSpeedMag = 0;
+  }
+
+  const clampedMagnitude = speedCap > 0
+    ? Math.min(Math.abs(nextSpeedMag), speedCap)
+    : 0;
+  if (clampedMagnitude < 1) {
+    return 0;
+  }
+  return Math.round(Math.sign(nextSpeedMag) * clampedMagnitude);
 }
 
 function getWeaponRangeProfileForMech(
@@ -3990,8 +4169,6 @@ function startBotJump(
   session.combatBotJumpTargetY = landingY;
   session.combatBotLastJumpAt = now;
   session.combatBotZ = 0;
-  session.combatBotThrottle = 0;
-  session.combatBotLegVel = 0;
   session.combatBotSpeedMag = 0;
   setBotMoveVector(session, 0, 0);
   session.combatBotFacing = getBotFacingAccumulatorTowardTarget(
@@ -4047,8 +4224,6 @@ function advanceBotJump(
   session.combatBotZ = progress >= 1
     ? 0
     : Math.max(COMBAT_WORLD_UNITS_PER_METER, Math.round(apexUnits * 4 * progress * (1 - progress)));
-  session.combatBotThrottle = 0;
-  session.combatBotLegVel = 0;
   session.combatBotSpeedMag = 0;
   session.combatBotFacing = getBotFacingAccumulatorTowardTarget(
     session.combatBotX ?? startX,
@@ -4089,11 +4264,18 @@ function stepBotMovement(
   connLog: Logger,
   capture: CaptureLogger,
 ): void {
+  const now = Date.now();
+  const elapsedMs = clampNumber(
+    now - (session.combatBotLastMoveAt ?? (now - BOT_AI_TICK_MS)),
+    1,
+    BOT_AI_TICK_MS * 4,
+  );
+  session.combatBotLastMoveAt = now;
   const botMechEntry = getMechEntryForId(getBotMechId(session));
   coolBotHeat(session, Math.max(1, botMechEntry?.heatSinks ?? 10));
   const fuelRegenAmount = Math.max(
     1,
-    Math.round(JUMP_JET_FUEL_REGEN_PER_TICK * BOT_AI_TICK_MS / JUMP_JET_FUEL_REGEN_INTERVAL_MS),
+    Math.round(JUMP_JET_FUEL_REGEN_PER_TICK * elapsedMs / JUMP_JET_FUEL_REGEN_INTERVAL_MS),
   );
   regenBotJumpFuelIfGrounded(session, fuelRegenAmount);
   if (advanceBotJump(session, connLog, capture)) {
@@ -4159,14 +4341,22 @@ function stepBotMovement(
   );
   const jumpTravelUnits = getBotJumpTravelUnits(session);
   const canConsiderJump = mechSupportsJumpJets(getBotMechId(session)) && distanceUnits > 0;
-  const now = Date.now();
   const insidePlayerThreatRange = playerThreatRangeUnits > 0
     && distanceUnits <= playerThreatRangeUnits + (BOT_AI_PLAYER_THREAT_BUFFER_METERS * COMBAT_WORLD_UNITS_PER_METER);
-  const strafeDirection = chooseBotStrafeDirection(
-    session,
-    now,
-    insidePlayerThreatRange,
-    distanceUnits < minimumRetreatUnits || botBehindOnDurability,
+  const currentFacing = session.combatBotFacing
+    ?? getBotFacingAccumulatorTowardTarget(
+      currentBotX,
+      currentBotY,
+      playerX,
+      playerY,
+      FACING_ACCUMULATOR_NEUTRAL,
+    );
+  const desiredFacing = getBotFacingAccumulatorTowardTarget(
+    currentBotX,
+    currentBotY,
+    playerX,
+    playerY,
+    currentFacing,
   );
 
   if (
@@ -4221,89 +4411,107 @@ function stepBotMovement(
 
   let nextBotX = currentBotX;
   let nextBotY = currentBotY;
-  let nextThrottle = 0;
-  let nextLegVel = 0;
-  let nextSpeedMag = 0;
+  const currentSpeedMag = session.combatBotSpeedMag ?? 0;
+  let nextSpeedMag = currentSpeedMag;
   let moveVectorX = 0;
   let moveVectorY = 0;
+  let desiredMotion: -1 | 0 | 1 = 0;
+  let speedScale = 0;
 
-  if (maxSpeedMag > 0) {
-    const radialUnitX = distanceUnits > 0 ? dx / distanceUnits : 0;
-    const radialUnitY = distanceUnits > 0 ? dy / distanceUnits : 1;
-    const tangentUnitX = distanceUnits > 0 ? (-dy / distanceUnits) * strafeDirection : strafeDirection;
-    const tangentUnitY = distanceUnits > 0 ? (dx / distanceUnits) * strafeDirection : 0;
-    let radialWeight = 0;
-    let tangentialWeight = 0;
-    let speedScale = 0;
-
-    if (distanceUnits > preferredRangeUnits + rangeBufferUnits) {
-      radialWeight = 1;
-      tangentialWeight = insidePlayerThreatRange ? BOT_AI_APPROACH_STRAFE_WEIGHT : 0.25;
-      speedScale = 1;
-    } else if (distanceUnits < minimumRetreatUnits) {
-      radialWeight = -1;
-      tangentialWeight = insidePlayerThreatRange ? BOT_AI_EVASIVE_STRAFE_WEIGHT : BOT_AI_APPROACH_STRAFE_WEIGHT;
-      speedScale = insidePlayerThreatRange ? 1 : 0.8;
-    } else if (insidePlayerThreatRange) {
-      if (botBehindOnDurability || rangeProfile.longestRangeMeters >= playerRangeProfile.longestRangeMeters + 90) {
-        radialWeight = -0.35;
-      } else if (
-        playerHealth <= BOT_AI_FINISHER_PUSH_HEALTH_THRESHOLD
-        && rangeProfile.shortestRangeMeters <= 270
-      ) {
-        radialWeight = 0.3;
-      } else if (rangeProfile.shortestRangeMeters <= 270) {
-        radialWeight = 0.2;
-      } else {
-        radialWeight = -0.1;
-      }
-      tangentialWeight = BOT_AI_EVASIVE_STRAFE_WEIGHT;
-      speedScale = botBehindOnDurability ? 1 : 0.95;
-    } else if (distanceUnits > 0) {
-      radialWeight = rangeProfile.shortestRangeMeters <= 270 ? 0.18 : 0;
-      tangentialWeight = 0.38;
-      speedScale = 0.65;
+  if (distanceUnits > preferredRangeUnits + rangeBufferUnits) {
+    desiredMotion = 1;
+    speedScale = 1;
+  } else if (distanceUnits < minimumRetreatUnits) {
+    desiredMotion = -1;
+    speedScale = insidePlayerThreatRange ? 1 : 0.8;
+  } else if (insidePlayerThreatRange) {
+    if (botBehindOnDurability || rangeProfile.longestRangeMeters >= playerRangeProfile.longestRangeMeters + 90) {
+      desiredMotion = -1;
+      speedScale = botBehindOnDurability ? 1 : 0.85;
+    } else if (
+      playerHealth <= BOT_AI_FINISHER_PUSH_HEALTH_THRESHOLD
+      && rangeProfile.shortestRangeMeters <= 270
+    ) {
+      desiredMotion = 1;
+      speedScale = 0.8;
+    } else if (rangeProfile.shortestRangeMeters <= 270) {
+      desiredMotion = 1;
+      speedScale = 0.55;
+    } else if (!botAheadOnDurability) {
+      desiredMotion = -1;
+      speedScale = 0.45;
     }
+  } else if (distanceUnits > 0 && rangeProfile.shortestRangeMeters <= 270) {
+    desiredMotion = 1;
+    speedScale = 0.45;
+  }
 
-    const desiredMoveX = (radialUnitX * radialWeight) + (tangentUnitX * tangentialWeight);
-    const desiredMoveY = (radialUnitY * radialWeight) + (tangentUnitY * tangentialWeight);
-    const desiredMagnitude = Math.hypot(desiredMoveX, desiredMoveY);
-    if (desiredMagnitude > 0 && speedScale > 0) {
-      const mostlyRetreating = radialWeight < -Math.max(0.3, tangentialWeight * 0.75);
-      const movementSpeedCap = mostlyRetreating
-        ? Math.max(1, Math.abs(walkSpeedMag))
-        : Math.max(1, Math.abs(maxSpeedMag));
-      const intendedSpeedMag = Math.max(
-        COMBAT_WORLD_UNITS_PER_METER / 10,
-        Math.round(movementSpeedCap * speedScale),
-      );
-      const throttleScale = clampNumber(
-        intendedSpeedMag / Math.max(1, Math.abs(maxSpeedMag)),
-        0,
-        1,
-      );
-      const desiredRangeDelta = distanceUnits > preferredRangeUnits + rangeBufferUnits
+  let nextFacing = stepFacingAccumulatorToward(
+    currentFacing,
+    desiredFacing,
+    getBotTurnStepUnits(elapsedMs),
+  );
+  const remainingAimDelta = getBotAimDeltaToTarget(currentBotX, currentBotY, playerX, playerY, nextFacing);
+  const canAdvanceOnHeading = Math.abs(remainingAimDelta) <= BOT_FORWARD_ALIGNMENT_LIMIT_UNITS;
+  const canReverseOnHeading = Math.abs(remainingAimDelta) <= BOT_TORSO_AIM_LIMIT_UNITS;
+  if (
+    (desiredMotion > 0 && !canAdvanceOnHeading)
+    || (desiredMotion < 0 && !canReverseOnHeading)
+  ) {
+    desiredMotion = 0;
+    speedScale = 0;
+    nextFacing = stepFacingAccumulatorToward(currentFacing, desiredFacing, getBotTurnStepUnits(elapsedMs));
+  }
+
+  let targetSpeedMag = 0;
+  let movementSpeedCap = 0;
+  let desiredRangeDelta = Number.POSITIVE_INFINITY;
+  if (maxSpeedMag > 0 && desiredMotion !== 0 && speedScale > 0) {
+    movementSpeedCap = desiredMotion < 0
+      ? Math.max(1, Math.abs(walkSpeedMag))
+      : Math.max(1, Math.abs(maxSpeedMag));
+    targetSpeedMag = Math.max(
+      COMBAT_WORLD_UNITS_PER_METER / 10,
+      Math.round(movementSpeedCap * speedScale),
+    ) * desiredMotion;
+    desiredRangeDelta = desiredMotion > 0
+      ? distanceUnits > preferredRangeUnits + rangeBufferUnits
         ? Math.max(COMBAT_WORLD_UNITS_PER_METER, Math.round(distanceUnits - preferredRangeUnits))
-        : distanceUnits < minimumRetreatUnits
-          ? Math.max(COMBAT_WORLD_UNITS_PER_METER, Math.round(preferredRangeUnits - distanceUnits))
-          : Number.POSITIVE_INFINITY;
+        : Number.POSITIVE_INFINITY
+      : distanceUnits < minimumRetreatUnits
+        ? Math.max(COMBAT_WORLD_UNITS_PER_METER, Math.round(preferredRangeUnits - distanceUnits))
+        : Number.POSITIVE_INFINITY;
+    const throttleScale = clampNumber(
+      Math.abs(targetSpeedMag) / movementSpeedCap,
+      0,
+      1,
+    );
+  }
+
+  nextSpeedMag = stepBotGroundedSpeedMagTowardTarget(
+    currentSpeedMag,
+    targetSpeedMag,
+    Math.max(Math.abs(targetSpeedMag), Math.abs(currentSpeedMag), movementSpeedCap),
+    elapsedMs,
+  );
+  const averageSpeedMag = (currentSpeedMag + nextSpeedMag) / 2;
+  if (nextFacing !== currentFacing || averageSpeedMag !== 0) {
+    const requestedStepUnits = Math.abs(Math.round(
+      signedSpeedMagToMetersPerSecond(averageSpeedMag)
+      * (elapsedMs / 1000)
+      * COMBAT_WORLD_UNITS_PER_METER,
+    ));
+    if (requestedStepUnits > 0) {
       const stepUnits = Math.min(
-        Math.round(intendedSpeedMag * BOT_AI_TICK_MS / 100),
+        requestedStepUnits,
         desiredRangeDelta,
       );
-      moveVectorX = Math.round((desiredMoveX / desiredMagnitude) * stepUnits);
-      moveVectorY = Math.round((desiredMoveY / desiredMagnitude) * stepUnits);
+      const forwardUnit = getBotForwardUnitVector(nextFacing);
+      const motionSign = averageSpeedMag < 0 ? -1 : 1;
+      moveVectorX = Math.round(forwardUnit.x * stepUnits * motionSign);
+      moveVectorY = Math.round(forwardUnit.y * stepUnits * motionSign);
       nextBotX += moveVectorX;
       nextBotY += moveVectorY;
-
-      if (mostlyRetreating) {
-        nextThrottle = Math.round(THROTTLE_RUN_SCALE * MOTION_DIV * throttleScale);
-        nextSpeedMag = -intendedSpeedMag;
-      } else {
-        nextThrottle = -Math.round(THROTTLE_RUN_SCALE * MOTION_DIV * throttleScale);
-        nextSpeedMag = intendedSpeedMag;
-      }
-      nextLegVel = nextThrottle;
     }
   }
 
@@ -4311,15 +4519,7 @@ function stepBotMovement(
   session.combatBotY = nextBotY;
   setBotMoveVector(session, moveVectorX, moveVectorY);
   session.combatBotZ = 0;
-  session.combatBotFacing = getBotFacingAccumulatorTowardTarget(
-    nextBotX,
-    nextBotY,
-    playerX,
-    playerY,
-    session.combatBotFacing ?? FACING_ACCUMULATOR_NEUTRAL,
-  );
-  session.combatBotThrottle = nextThrottle;
-  session.combatBotLegVel = nextLegVel;
+  session.combatBotFacing = nextFacing;
   session.combatBotSpeedMag = nextSpeedMag;
   sendBotPositionSync(session, capture, 'CMD65_BOT_AI_POSITION');
 }
@@ -4362,8 +4562,24 @@ function stepBotWeaponFire(
 
   const botX = session.combatBotX ?? 0;
   const botY = session.combatBotY ?? BOT_AI_SPAWN_DISTANCE;
+  const botZ = session.combatBotZ ?? 0;
   const targetX = session.combatX ?? 0;
   const targetY = session.combatY ?? 0;
+  const targetZ = session.combatJumpAltitude ?? 0;
+  const botFacing = session.combatBotFacing
+    ?? getBotFacingAccumulatorTowardTarget(
+      botX,
+      botY,
+      targetX,
+      targetY,
+      FACING_ACCUMULATOR_NEUTRAL,
+    );
+  const rawYaw = getBotAimDeltaToTarget(botX, botY, targetX, targetY, botFacing);
+  const rawPitch = getBotPitchToTargetRaw(botX, botY, botZ, targetX, targetY, targetZ);
+  if (Math.abs(rawYaw) > BOT_TORSO_AIM_LIMIT_UNITS || Math.abs(rawPitch) > BOT_TORSO_AIM_LIMIT_UNITS) {
+    maybeLogBotAimLimit(session, connLog, botX, botY, botZ, targetX, targetY, targetZ, rawYaw, rawPitch);
+    return;
+  }
   const distanceMeters = Math.hypot(botX - targetX, botY - targetY) / COMBAT_WORLD_UNITS_PER_METER;
   const now = Date.now();
   const currentHeat = session.combatBotHeat ?? 0;
@@ -4401,7 +4617,7 @@ function stepBotWeaponFire(
     const toHitEstimate = estimateCombatToHit({
       attackerX: botX,
       attackerY: botY,
-      attackerFacing: session.combatBotFacing ?? FACING_ACCUMULATOR_NEUTRAL,
+      attackerFacing: botFacing,
       attackerSpeedMag: session.combatBotSpeedMag,
       attackerMaxSpeedMag: botMechEntry.maxSpeedMag,
       attackerAirborne: session.combatBotJumpActive === true,
@@ -4488,7 +4704,7 @@ function stepBotWeaponFire(
     const hitRoll = resolveCombatToHitRoll({
       attackerX: botX,
       attackerY: botY,
-      attackerFacing: session.combatBotFacing ?? FACING_ACCUMULATOR_NEUTRAL,
+      attackerFacing: botFacing,
       attackerSpeedMag: session.combatBotSpeedMag,
       attackerMaxSpeedMag: botMechEntry.maxSpeedMag,
       attackerAirborne: session.combatBotJumpActive === true,
@@ -4865,13 +5081,11 @@ export function resetCombatState(session: ClientSession): void {
   session.combatBotY = undefined;
   session.combatBotZ = undefined;
   session.combatBotFacing = undefined;
-  session.combatBotThrottle = undefined;
-  session.combatBotLegVel = undefined;
   session.combatBotSpeedMag = undefined;
+  session.combatBotLastMoveAt = undefined;
+  session.combatBotLastAimLimitLogAt = undefined;
   session.combatBotMoveVectorX = undefined;
   session.combatBotMoveVectorY = undefined;
-  session.combatBotStrafeDirection = undefined;
-  session.combatBotLastStrafeFlipAt = undefined;
   session.combatBotWeaponReadyAtBySlot = undefined;
   session.combatBotAmmoStateValues = undefined;
   session.combatBotHeat = undefined;
@@ -4892,6 +5106,7 @@ export function resetCombatState(session: ClientSession): void {
   session.combatRetaliationCursor = undefined;
   session.combatJumpActive = undefined;
   session.combatJumpAltitude = undefined;
+  session.combatAltitudeRaw = undefined;
   session.combatJumpFuel = undefined;
   session.combatLastMoveAt = undefined;
   session.combatMoveVectorX = undefined;
@@ -5176,8 +5391,8 @@ function mirrorCombatRemotePosition(
           y:        session.combatY ?? 0,
           z:        session.combatJumpAltitude ?? 0,
           facing:   getCombatCmd65Facing(session),
-          throttle: session.combatThrottle ?? 0,
-          legVel:   session.combatLegVel ?? 0,
+          throttle: session.combatUpperBodyPitch ?? 0,
+          legVel:   session.combatTorsoYaw ?? 0,
           speedMag: session.combatSpeedMag ?? 0,
         },
         nextSeq(viewer),
@@ -5189,9 +5404,9 @@ function mirrorCombatRemotePosition(
 
 function getCombatCmd65Facing(session: ClientSession): number {
   // Ghidra: client cmd8/cmd9 writes the first trailing type1 field from DAT_004f1d5c
-  // ("turn momentum"/positional adjust), not from the absolute type2 heading field.
+  // (the chassis facing accumulator), not from the preceding type2 altitude field.
   return FACING_ACCUMULATOR_NEUTRAL +
-    ((session.combatTurnMomentumRaw ?? MOTION_NEUTRAL) - MOTION_NEUTRAL) * MOTION_DIV;
+    ((session.combatFacingRaw ?? MOTION_NEUTRAL) - MOTION_NEUTRAL) * MOTION_DIV;
 }
 
 function formatProbeAgeMs(ageMs: number | undefined): string {
@@ -5232,7 +5447,7 @@ function maybeLogCombatContactReport(
     peer?.combatLastJumpLandAt === undefined ? undefined : now - peer.combatLastJumpLandAt;
 
   connLog.info(
-    '[world/combat] cmd-13 contact report: source=%s local="%s" peer="%s" actorId=%d response=(%d,%d,%d) local=(%d,%d,%d speed=%d throttle=%d leg=%d) peer=(%d,%d,%d speed=%d throttle=%d leg=%d) localLand=%s/%d peerLand=%s/%d',
+    '[world/combat] cmd-13 contact report: source=%s local="%s" peer="%s" actorId=%d response=(%d,%d,%d) local=(%d,%d,%d speed=%d pitch=%d torsoYaw=%d) peer=(%d,%d,%d speed=%d pitch=%d torsoYaw=%d) localLand=%s/%d peerLand=%s/%d',
     source,
     getDisplayName(session),
     peer ? getDisplayName(peer) : '(none)',
@@ -5244,14 +5459,14 @@ function maybeLogCombatContactReport(
     session.combatY ?? 0,
     session.combatJumpAltitude ?? 0,
     session.combatSpeedMag ?? 0,
-    session.combatThrottle ?? 0,
-    session.combatLegVel ?? 0,
+    session.combatUpperBodyPitch ?? 0,
+    session.combatTorsoYaw ?? 0,
     peer?.combatX ?? 0,
     peer?.combatY ?? 0,
     peer?.combatJumpAltitude ?? 0,
     peer?.combatSpeedMag ?? 0,
-    peer?.combatThrottle ?? 0,
-    peer?.combatLegVel ?? 0,
+    peer?.combatUpperBodyPitch ?? 0,
+    peer?.combatTorsoYaw ?? 0,
     formatProbeAgeMs(localLandingAgeMs),
     session.combatLastJumpLandAltitude ?? 0,
     formatProbeAgeMs(peerLandingAgeMs),
@@ -5324,7 +5539,7 @@ function maybeLogCollisionProbeCandidate(
   peer.combatLastCollisionProbeAt = now;
 
   connLog.info(
-    '[world/combat] collision probe candidate: source=%s local="%s" peer="%s" horiz=%d vert=%d local=(%d,%d,%d speed=%d throttle=%d leg=%d) peer=(%d,%d,%d speed=%d throttle=%d leg=%d) landingWindow=%s localLand=%s/%d peerLand=%s/%d',
+    '[world/combat] collision probe candidate: source=%s local="%s" peer="%s" horiz=%d vert=%d local=(%d,%d,%d speed=%d pitch=%d torsoYaw=%d) peer=(%d,%d,%d speed=%d pitch=%d torsoYaw=%d) landingWindow=%s localLand=%s/%d peerLand=%s/%d',
     source,
     getDisplayName(session),
     getDisplayName(peer),
@@ -5334,14 +5549,14 @@ function maybeLogCollisionProbeCandidate(
     localY,
     localZ,
     session.combatSpeedMag ?? 0,
-    session.combatThrottle ?? 0,
-    session.combatLegVel ?? 0,
+    session.combatUpperBodyPitch ?? 0,
+    session.combatTorsoYaw ?? 0,
     peerX,
     peerY,
     peerZ,
     peer.combatSpeedMag ?? 0,
-    peer.combatThrottle ?? 0,
-    peer.combatLegVel ?? 0,
+    peer.combatUpperBodyPitch ?? 0,
+    peer.combatTorsoYaw ?? 0,
     landingWindowActive ? 'yes' : 'no',
     formatProbeAgeMs(localLandingAgeMs),
     session.combatLastJumpLandAltitude ?? 0,
@@ -5977,10 +6192,10 @@ function initializeSharedCombatParticipant(
   session.combatWalkSpeedMag = mechEntry?.walkSpeedMag ?? 0;
   session.combatX = spawnX;
   session.combatY = spawnY;
-  session.combatHeadingRaw = MOTION_NEUTRAL;
-  session.combatTurnMomentumRaw = MOTION_NEUTRAL;
-  session.combatThrottle = 0;
-  session.combatLegVel = 0;
+  session.combatAltitudeRaw = 0;
+  session.combatFacingRaw = MOTION_NEUTRAL;
+  session.combatUpperBodyPitch = 0;
+  session.combatTorsoYaw = 0;
   session.combatSpeedMag = 0;
   session.combatLastMoveAt = undefined;
   session.combatMoveVectorX = 0;
@@ -6093,9 +6308,9 @@ function startArenaCombatSession(
             terrainResourceId:   0,
             terrainPoints:       [],
             arenaPoints:         [],
-            globalA:             1462,
-            globalB:             39,
-            globalC:             0,
+            globalA:             COMBAT_GLOBAL_A,
+            globalB:             COMBAT_GLOBAL_B,
+            globalC:             COMBAT_GLOBAL_C,
             headingBias:         0,
             identity0:           localCallsign.substring(0, 11),
             identity1:           localCallsign.substring(0, 31),
@@ -6181,8 +6396,8 @@ function startArenaCombatSession(
               y:        remote.combatY ?? 0,
               z:        remote.combatJumpAltitude ?? 0,
               facing:   getCombatCmd65Facing(remote),
-              throttle: remote.combatThrottle ?? 0,
-              legVel:   remote.combatLegVel ?? 0,
+              throttle: remote.combatUpperBodyPitch ?? 0,
+              legVel:   remote.combatTorsoYaw ?? 0,
               speedMag: remote.combatSpeedMag ?? 0,
             },
             nextSeq(participant),
@@ -6305,10 +6520,10 @@ export function tryStartStagedDuelCombat(
     participant.local.combatWalkSpeedMag = mechEntry?.walkSpeedMag ?? 0;
     participant.local.combatX = participant.localX;
     participant.local.combatY = participant.localY;
-    participant.local.combatHeadingRaw = MOTION_NEUTRAL;
-    participant.local.combatTurnMomentumRaw = MOTION_NEUTRAL;
-    participant.local.combatThrottle = 0;
-    participant.local.combatLegVel = 0;
+    participant.local.combatAltitudeRaw = 0;
+    participant.local.combatFacingRaw = MOTION_NEUTRAL;
+    participant.local.combatUpperBodyPitch = 0;
+    participant.local.combatTorsoYaw = 0;
     participant.local.combatSpeedMag = 0;
     participant.local.combatLastMoveAt = undefined;
     participant.local.combatMoveVectorX = 0;
@@ -6389,9 +6604,9 @@ export function tryStartStagedDuelCombat(
             terrainResourceId:  0,
             terrainPoints:      [],
             arenaPoints:        [],
-            globalA:            1462,
-            globalB:            39, // RE: preserves grounded top speed while adding ~50% more jump height than 1600/33
-            globalC:            0,
+            globalA:            COMBAT_GLOBAL_A,
+            globalB:            COMBAT_GLOBAL_B, // RE: preserves grounded top speed while adding ~50% more jump height than 1600/33
+            globalC:            COMBAT_GLOBAL_C,
             headingBias:        0, // RE: Cmd72 type1 seeds DAT_004f4210 (heat path), not jump height
             identity0:          localCallsign.substring(0, 11),
             identity1:          localCallsign.substring(0, 31),
@@ -7455,7 +7670,8 @@ export function handleRoomMenuSelection(
  * Unresolved assumptions (safe defaults used):
  *   • terrainId / terrainResourceId — 1/0 chosen; live capture needed.
  *   • headingBias  — 0 (MOTION_NEUTRAL added by encoder); live capture needed.
- *   • globalA/B/C  — globalA=2800 confirmed (D²=7840000 → eq. v = speed_target); B/C = 0.
+ *   • globalA/B/C  — current RE-backed pair is `1462 / 39 / 0`, matching the
+ *     grounded accel/drag model recovered from `FUN_0042c830` / `FUN_0042cd20`.
  *   • identity2/3  — populated with mech typeString and house allegiance (assumption; live capture needed).
  *   • identity4    — empty; unknown purpose.
  */
@@ -7537,9 +7753,9 @@ export function sendCombatBootstrapSequence(
         terrainResourceId:  0,      // ASSUMPTION: no additional resource
         terrainPoints:      [],
         arenaPoints:        [],
-        globalA:            1462,   // RE: tuned for ~+50% Jenner jump apex while keeping grounded top speed near speed_target
-        globalB:            39,     // RE: ground-only drag offset in FUN_0042cd20; decouples grounded throttle from jump gravity
-        globalC:            0,
+        globalA:            COMBAT_GLOBAL_A,
+        globalB:            COMBAT_GLOBAL_B,
+        globalC:            COMBAT_GLOBAL_C,
         headingBias:        0,      // RE: Cmd72 type1 seeds DAT_004f4210 (heat path), not jump height
         identity0:          callsign.substring(0, 11),
         identity1:          callsign.substring(0, 31),
@@ -7595,13 +7811,11 @@ export function sendCombatBootstrapSequence(
       session.combatY ?? 0,
       FACING_ACCUMULATOR_NEUTRAL,
     );
-    session.combatBotThrottle = 0;
-    session.combatBotLegVel = 0;
     session.combatBotSpeedMag = 0;
+    session.combatBotLastMoveAt = undefined;
+    session.combatBotLastAimLimitLogAt = undefined;
     session.combatBotMoveVectorX = 0;
     session.combatBotMoveVectorY = 0;
-    session.combatBotStrafeDirection = Math.random() < 0.5 ? -1 : 1;
-    session.combatBotLastStrafeFlipAt = undefined;
     session.combatBotWeaponReadyAtBySlot = [];
     session.combatBotAmmoStateValues = [...(botMechEntry?.ammoBinCapacities ?? [])];
     session.combatBotHeat = 0;
@@ -8688,7 +8902,7 @@ export function handleCombatMovementFrame(
     const frame = parseClientCmd8Coasting(payload);
     if (!frame) return;
     const now = Date.now();
-    const clientSpeed = frame.rotationRaw - MOTION_NEUTRAL;
+    const clientSpeed = frame.speedRaw - MOTION_NEUTRAL;
     const previousX = session.combatX ?? (frame.xRaw - COORD_BIAS);
     const previousY = session.combatY ?? (frame.yRaw - COORD_BIAS);
     const nextPosition = clampAcceptedCombatPosition(
@@ -8701,8 +8915,8 @@ export function handleCombatMovementFrame(
     session.combatX          = nextPosition.x;
     session.combatY          = nextPosition.y;
     setPlayerMoveVector(session, nextPosition.x - previousX, nextPosition.y - previousY);
-    session.combatHeadingRaw = frame.headingRaw;
-    session.combatTurnMomentumRaw = frame.turnMomRaw;
+    syncCombatAltitudeFromClientFrame(session, frame.altitudeRaw);
+    session.combatFacingRaw = frame.facingRaw;
     session.combatLastMoveAt = now;
 
     if (clientSpeed !== 0) {
@@ -8717,8 +8931,8 @@ export function handleCombatMovementFrame(
               y:        session.combatY,
               z:        getLocalCmd65Altitude(session),
               facing:   getCombatCmd65Facing(session),
-              throttle: session.combatThrottle ?? 0,
-              legVel:   session.combatLegVel ?? 0,
+              throttle: session.combatUpperBodyPitch ?? 0,
+              legVel:   session.combatTorsoYaw ?? 0,
               speedMag: session.combatSpeedMag ?? 0,
             },
             nextSeq(session),
@@ -8738,10 +8952,11 @@ export function handleCombatMovementFrame(
       mirrorCombatRemotePosition(players, session, 'CMD65_COMBAT_REMOTE_COAST');
       maybeLogCollisionProbeCandidate(players, session, connLog, 'CMD8_COAST');
       connLog.debug(
-        '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=%d effectiveSpeed=%d%s',
+        '[world/combat] cmd8 coasting: x=%d y=%d altitude=%d facingRaw=%d clientSpeed=%d effectiveSpeed=%d%s',
         session.combatX,
         session.combatY,
-        frame.headingRaw,
+        frame.altitudeRaw,
+        frame.facingRaw,
         clientSpeed,
         nextPosition.speedMag,
         nextPosition.clamped ? ' -> reverse clamp correction sent' : ' -> no echo (trust local key events)',
@@ -8756,8 +8971,8 @@ export function handleCombatMovementFrame(
     mirrorCombatRemotePosition(players, session, 'CMD65_COMBAT_REMOTE_STOP');
     maybeLogCollisionProbeCandidate(players, session, connLog, 'CMD8_STOP');
     connLog.debug(
-      '[world/combat] cmd8 coasting: x=%d y=%d heading=%d clientSpeed=0 suppressing echo (stopped)',
-      session.combatX, session.combatY, frame.headingRaw,
+      '[world/combat] cmd8 coasting: x=%d y=%d altitude=%d facingRaw=%d clientSpeed=0 suppressing echo (stopped)',
+      session.combatX, session.combatY, frame.altitudeRaw, frame.facingRaw,
     );
     return;
   }
@@ -8765,18 +8980,11 @@ export function handleCombatMovementFrame(
   if (cmd === 9) {
     const frame = parseClientCmd9Moving(payload);
     if (!frame) return;
-    const maxSpeedMag    = session.combatMaxSpeedMag ?? 0;
-    const throttlePct    = frame.throttleRaw - MOTION_NEUTRAL; // negative = forward
-    const legVelPct      = frame.legVelRaw   - MOTION_NEUTRAL;
-
-    // Scale sVar2 (max=45 from KP8, Ghidra-confirmed) to maxSpeedMag so full-throttle
-    // input produces run speed rather than capping at walk speed.
-    const nextSpeedMag = maxSpeedMag > 0
-      ? Math.max(-maxSpeedMag, Math.min(maxSpeedMag, Math.round(-throttlePct * maxSpeedMag / THROTTLE_RUN_SCALE)))
-      : 0;
+    const upperBodyPitch = (frame.upperBodyPitchRaw - MOTION_NEUTRAL) * MOTION_DIV;
+    const torsoYaw = (frame.torsoYawRaw - MOTION_NEUTRAL) * MOTION_DIV;
 
     // iVar5 from FUN_0042c7a0: actual physics speed (+ve=forward, -ve=reverse).
-    const clientSpeed = frame.rotationRaw - MOTION_NEUTRAL;
+    const clientSpeed = frame.speedRaw - MOTION_NEUTRAL;
     const now = Date.now();
     const previousX = session.combatX ?? (frame.xRaw - COORD_BIAS);
     const previousY = session.combatY ?? (frame.yRaw - COORD_BIAS);
@@ -8790,29 +8998,28 @@ export function handleCombatMovementFrame(
     session.combatX          = nextPosition.x;
     session.combatY          = nextPosition.y;
     setPlayerMoveVector(session, nextPosition.x - previousX, nextPosition.y - previousY);
-    session.combatHeadingRaw = frame.headingRaw;
-    session.combatTurnMomentumRaw = frame.turnMomRaw;
+    syncCombatAltitudeFromClientFrame(session, frame.altitudeRaw);
+    session.combatFacingRaw = frame.facingRaw;
     session.combatLastMoveAt = now;
 
-    // throttle: preserve DAT_004f1f7c as-is (no sign flip).
-    // Ghidra: encodeThrottle(V) → client reads back V; -throttle was wrong and
-    // caused DAT_004f1f7c oscillation limiting top speed to walk (~21 kph).
-    const throttle = throttlePct * MOTION_DIV;
-    const legVel   = legVelPct   * MOTION_DIV;
-    session.combatThrottle = throttle;
-    session.combatLegVel   = legVel;
+    // Ghidra: Cmd9 writes the two post-neutral type1 fields straight into
+    // DAT_004f1f7c / DAT_004f1f7a, so keep them in Cmd65 units with no sign flip.
+    const throttle = upperBodyPitch;
+    const legVel   = torsoYaw;
+    session.combatUpperBodyPitch = throttle;
+    session.combatTorsoYaw = legVel;
     session.combatSpeedMag = nextPosition.speedMag;
 
     connLog.debug(
-      '[world/combat] cmd9 moving: throttlePct=%d legVelPct=%d clientSpeed=%d effectiveSpeed=%d throttle=%d legVel=%d maxSpeedMag=%d nextSpeedMag=%d%s',
-      throttlePct,
-      legVelPct,
+      '[world/combat] cmd9 moving: altitude=%d facingRaw=%d pitchRaw=%d torsoYawRaw=%d clientSpeed=%d effectiveSpeed=%d pitch=%d torsoYaw=%d%s',
+      frame.altitudeRaw,
+      frame.facingRaw,
+      frame.upperBodyPitchRaw,
+      frame.torsoYawRaw,
       clientSpeed,
       nextPosition.speedMag,
       throttle,
       legVel,
-      maxSpeedMag,
-      nextSpeedMag,
       nextPosition.clamped
         ? ` reverseClamp elapsed=${nextPosition.elapsedMs ?? 0}ms submitted=${nextPosition.submittedDistanceUnits ?? 0} allowed=${nextPosition.maxDistanceUnits ?? 0}`
         : '',
@@ -9567,8 +9774,9 @@ export function handleCombatActionFrame(
     const mirrorDurationMs = getSelectedMechJumpMirrorDurationMs(session);
     session.combatJumpActive = true;
     session.combatJumpAltitude = 0;
-    session.combatThrottle = 0;
-    session.combatLegVel = 0;
+    session.combatAltitudeRaw = 0;
+    session.combatUpperBodyPitch = 0;
+    session.combatTorsoYaw = 0;
     session.combatSpeedMag = 0;
     setPlayerMoveVector(session, 0, 0);
     session.combatJumpFuel = fuel;
@@ -9607,6 +9815,7 @@ export function handleCombatActionFrame(
     }
     session.combatJumpActive = false;
     session.combatJumpAltitude = 0;
+    session.combatAltitudeRaw = 0;
     recordCombatLanding(session, landedFromAltitude);
     if (session.combatDeferredLocalCollapsePending) {
       session.combatDeferredLocalCollapsePending = false;
@@ -9621,8 +9830,8 @@ export function handleCombatActionFrame(
 
     const x = session.combatX ?? 0;
     const y = session.combatY ?? 0;
-    const throttle = session.combatThrottle ?? 0;
-    const legVel = session.combatLegVel ?? 0;
+    const throttle = session.combatUpperBodyPitch ?? 0;
+    const legVel = session.combatTorsoYaw ?? 0;
     const speedMag = session.combatSpeedMag ?? 0;
 
     connLog.info('[world/combat] cmd-12 jump action=6 altitude=0 (landing sync)');
@@ -9655,8 +9864,8 @@ export function handleCombatActionFrame(
 
   // Ghidra confirmed: action 0x34 (THROTTLE_UP) calls FUN_004229a0 locally
   // but does NOT call Combat_SendCmd12Action_v123 — so these packets never
-  // arrive from the client.  Speed is driven entirely by the Cmd9
-  // throttleRaw → THROTTLE_RUN_SCALE path; no server response is needed here.
+  // arrive from the client. Local motion stays driven by the cmd8/cmd9 movement
+  // frames, especially the final speedRaw field from FUN_0042c7a0.
   connLog.debug('[world/combat] cmd-12 combat action=%d — no response', action.action);
 }
 
