@@ -40,6 +40,7 @@ import { loadMechs } from './data/mechs.js';
 import { buildMechExamineText } from './data/mech-stats.js';
 import { PlayerRegistry, ClientSession } from './state/players.js';
 import { launchRegistry } from './state/launch.js';
+import { replaceSessionForReconnect } from './state/session-replacement.js';
 import { startWorldServer } from './server-world.js';
 import { Logger } from './util/logger.js';
 import { CaptureLogger } from './util/capture.js';
@@ -194,7 +195,16 @@ function handleConnection(socket: net.Socket): void {
   });
 
   socket.on('close', () => {
-    connLog.info('Client disconnected (phase=%s, bytes=%d)', session.phase, session.bytesReceived);
+    if (session.replacedBySessionId) {
+      connLog.info(
+        'Client disconnected (phase=%s, bytes=%d, replacedBy=%s)',
+        session.phase,
+        session.bytesReceived,
+        session.replacedBySessionId.slice(0, 8),
+      );
+    } else {
+      connLog.info('Client disconnected (phase=%s, bytes=%d)', session.phase, session.bytesReceived);
+    }
     players.remove(session.id);
     if (keepaliveTimer !== undefined) {
       clearInterval(keepaliveTimer);
@@ -279,19 +289,19 @@ function handleLogin(
     }
 
     const accountId = authResult.account.id;
+    session.accountId = accountId;
     const existingSession = players.findActiveSessionByAccountId(accountId, session.id);
     if (existingSession) {
-      connLog.warn(
-        '[login] rejected duplicate session for accountId=%d (existingSession=%s phase=%s)',
+      connLog.info(
+        '[login] replacing existing session for accountId=%d (existingSession=%s phase=%s -> replacement=%s)',
         accountId,
         existingSession.id.slice(0, 8),
         existingSession.phase,
+        session.id.slice(0, 8),
       );
-      session.socket.destroy();
-      return;
+      replaceSessionForReconnect(existingSession, session.id);
     }
 
-    session.accountId = accountId;
     session.phase = 'lobby';
 
     if (authResult.created) {
