@@ -325,7 +325,7 @@ function handleWorldGameData(
   }
 
   const cmdIdx = payload[2] - 0x21;
-  connLog.info('[world] client seq=%d cmd=%d', seq, cmdIdx);
+  connLog.debug('[world] client seq=%d cmd=%d', seq, cmdIdx);
 
   if (cmdIdx === 3) {
     if (session.worldInitialized) {
@@ -1172,6 +1172,7 @@ function handleWorldConnection(socket: net.Socket, players: PlayerRegistry, log:
     capture.close();
   });
 
+  socket.setNoDelay(true);
   socket.setKeepAlive(true, 15_000);
   if (SOCKET_IDLE_TIMEOUT_MS > 0) {
     socket.setTimeout(SOCKET_IDLE_TIMEOUT_MS);
