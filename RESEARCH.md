@@ -1182,9 +1182,8 @@ Combat-only entries (cmd 62–79, only non-null in combat table):
 > client. The later `v1.29` client now targeted by `mpbt-server` diverges
 > materially in world slots `39`, `44`, `46`, and `57`, and also preserves a
 > Solaris mech-management family at `Cmd30` / `Cmd31` that is not reflected in
-> the older display-family summary below. See §19.4 and
-> `docs/v1.23-to-1.29-migration.md` before reusing these mappings for `v1.29`
-> server work.
+> the older display-family summary below. See §19.4 before reusing these
+> mappings for `v1.29` server work.
 
 Not every RPS/world dispatch address is a real function start. Several entries
 (`17`, `21`–`24`, `44`, `46`–`47`, `50`–`51`, `61`) jump into interior labels of
@@ -5782,20 +5781,36 @@ equilibrium depends on the `globalA/globalB` pair rather than `globalA` alone.
 
 ### §19.4 — v1.29 client migration deltas (2026-04-23)
 
-Primary reference: `docs/v1.23-to-1.29-migration.md`.
-
 This is the part of the migration story that currently matters most for
 `mpbt-server`: **the transport/launcher side is largely unchanged, while the
 world/Solaris UI routing is not.**
 
 #### High-confidence baseline
 
+- Baseline binaries compared:
+  - `v1.23`: `C:\MPBT\Mpbtwin.exe` (`FileVersion 1.23`, `621,568` bytes)
+  - `v1.29`: `C:\MPBT-v1.29\mpbtwin.exe` (`FileVersion 1.29`, `629,248` bytes)
+  - `v1.23` `mpbtwin.exe` SHA-256: `DDB766C5F5092EF814ABC5E2D5331E86E3076832CF67A45881CD04A30F15FC5A`
+  - `v1.29` `mpbtwin.exe` SHA-256: `F9ACDA6290F820D0BD632E791CAB1CB8324A7D4145FA8E163BAEC0BC30196D68`
 - `COMMEG32.DLL` is byte-identical between the local retail `v1.23` install and
   `C:\MPBT-v1.29`.
+  - SHA-256: `683A2424B5C57BF6B07E7429087797FA2EEFD3EB408A064C03CEB34B25AAE82A`
 - `INITAR.DLL` is also byte-identical between those installs.
+  - SHA-256: `7BD4C51D4C45091A62B8493EB02B05EB45D8B7D68CE5EB946EEC08E718345640`
 - Practical implication: moving `mpbt-server` to a `v1.29` client does **not**
   require a new ARIES transport interpretation or a new launcher/`play.pcgi`
   contract just because of the version bump.
+
+#### Release-history clues from `v1.29` client text
+
+- `v1.29` notes (24 Jun 1999): fixed bugs introduced by `1.28` anti-hacking code,
+  fixed target-info HUD color, restored missile-impact sounds on the player's
+  mech, restored fall-impact sound.
+- `v1.28` notes (27 May 1999): added client hacking-prevention code.
+- `v1.27` notes (16 Oct 1998): jump-jet fix for mechs with fewer than 4 jets
+  and Team Sanctioned Battles support.
+- Practical implication: migration risk is concentrated in anti-tamper checks,
+  world/Solaris UI flow, low-jet jump behavior, and combat event hooks.
 
 #### Combat-side migration read
 
@@ -5869,8 +5884,8 @@ The highest-risk `v1.23` carry-forward mistakes are now known:
 
 - When `mpbt-server` is paired with the `v1.29` client, **do not assume the old
   `v1.23` world-slot meanings for `Cmd39`, `Cmd44`, or `Cmd46`**.
-- Solaris/world work should treat `docs/v1.23-to-1.29-migration.md` as the
-  current compatibility note for the repurposed world slots.
+- Solaris/world work should treat this section as the current compatibility note
+  for repurposed `v1.29` world slots.
 - The most important `v1.29` world-side surfaces to align in code are now:
   - chooser/menu flows that likely need `Cmd57` rather than old `Cmd44`
   - Solaris mech-management flows built around `Cmd26` / `Cmd30` / `Cmd31` /
