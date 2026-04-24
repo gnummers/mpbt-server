@@ -2060,16 +2060,16 @@ export function savePendingIncomingComstarPrompt(
 type CombatResultCode = 0 | 1;
 
 const LOCAL_RETALIATION_SECTIONS: readonly CombatAttachmentHitSection[] = [
-  { armorIndex: 0, internalIndex: 0, label: 'left-arm' },
-  { armorIndex: 5, internalIndex: 2, label: 'left-torso-front' },
-  { armorIndex: 8, internalIndex: 2, label: 'left-torso-rear' },
-  { armorIndex: 4, internalIndex: 4, label: 'center-torso-front' },
-  { armorIndex: 7, internalIndex: 4, label: 'center-torso-rear' },
-  { armorIndex: 6, internalIndex: 3, label: 'right-torso-front' },
-  { armorIndex: 9, internalIndex: 3, label: 'right-torso-rear' },
-  { armorIndex: 1, internalIndex: 1, label: 'right-arm' },
-  { armorIndex: 2, internalIndex: 5, label: 'left-leg' },
-  { armorIndex: 3, internalIndex: 6, label: 'right-leg' },
+  LEFT_ARM_RETALIATION_SECTION,
+  LEFT_TORSO_FRONT_RETALIATION_SECTION,
+  LEFT_TORSO_REAR_RETALIATION_SECTION,
+  CENTER_TORSO_FRONT_RETALIATION_SECTION,
+  CENTER_TORSO_REAR_RETALIATION_SECTION,
+  RIGHT_TORSO_FRONT_RETALIATION_SECTION,
+  RIGHT_TORSO_REAR_RETALIATION_SECTION,
+  RIGHT_ARM_RETALIATION_SECTION,
+  LEFT_LEG_RETALIATION_SECTION,
+  RIGHT_LEG_RETALIATION_SECTION,
   HEAD_RETALIATION_SECTION,
 ] as const;
 
@@ -2652,19 +2652,17 @@ function getWeaponSectionLossUpdates(
 function getShotDamageForMechSlot(
   mechId: number | undefined,
   weaponSlot: number,
-): { damage: number; weaponName?: string; weaponSpec?: WeaponDataSpec; weaponTypeId?: number } {
+): { damage: number; weaponName?: string; weaponSpec?: WeaponDataSpec } {
   const weaponName = getWeaponNameForMechSlot(mechId, weaponSlot);
-  const weaponTypeId = getWeaponTypeIdForMechSlot(mechId, weaponSlot);
   const weaponSpec = getWeaponSpecForMechSlot(mechId, weaponSlot);
   return {
     damage: weaponSpec?.damage ?? BOT_FALLBACK_WEAPON_DAMAGE,
     weaponName,
     weaponSpec,
-    weaponTypeId,
   };
 }
 
-function getShotDamage(session: ClientSession, weaponSlot: number): { damage: number; weaponName?: string; weaponSpec?: WeaponDataSpec; weaponTypeId?: number } {
+function getShotDamage(session: ClientSession, weaponSlot: number): { damage: number; weaponName?: string; weaponSpec?: WeaponDataSpec } {
   return getShotDamageForMechSlot(session.selectedMechId ?? FALLBACK_MECH_ID, weaponSlot);
 }
 
