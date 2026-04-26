@@ -42,6 +42,7 @@ import {
   parseClientCmd15DuelTerms,
   parseClientCmd21TextReply,
   parseClientCmd23LocationAction,
+  parseClientCmd29ControlFrame,
   parseClientCmd7,
   splitInboundGameFrames,
   verifyInboundGameCRC,
@@ -91,6 +92,7 @@ import {
   SOLARIS_TRAVEL_CONTEXT_ID,
   getSolarisSceneHeaderDetail,
   getSolarisRoomName,
+  getSolarisSceneRoomId,
   setSessionRoomPosition,
   worldMapByRoomId,
 } from './world/world-data.js';
@@ -107,6 +109,7 @@ import {
   sendPersonnelRecord,
   buildSceneInitForSession,
   sendSceneRefresh,
+  sendWorldUiRestore,
   sendAllRosterList,
   sendArenaSideMenu,
   sendArenaStatusList,
@@ -123,8 +126,8 @@ import {
   handleMatchResultsSelection,
   handleNewsCategorySelection,
   handleNewsgridArticleSelection,
-  handleTierRankingChooserSelection,
-  handleClassRankingChooserSelection,
+  handleTierRankingMenuSelection,
+  handleClassRankingMenuSelection,
   handleRankingResultsSelection,
   handleRoomMenuSelection,
   handleMapTravelReply,
@@ -154,6 +157,7 @@ import {
   handleArenaReadyToggle,
   handleArenaReadyRoomSelection,
   handleArenaSideSelection,
+  completePendingWorldReadySceneRefresh,
   flushPendingDuelSettlementNotice,
 } from './world/world-handlers.js';
 
@@ -278,7 +282,164 @@ async function handleWorldLogin(
 //   cmd  1 — PingAck  (client acknowledging a server ping request)
 //   cmd  2 — PingRequest (client requesting ack from server — echo reply needed)
 //   cmd  3 — client capabilities / ready signal (initial trigger; also sent on reconnect)
-//   cmd 29 — FUN_00427710 (unknown; observed in some sessions)
+//   cmd 29 — control frame (retail v1.29 uses subtype 2 for world-menu replies on
+//            later client UI surfaces, including Cmd7 compatibility menus)
+
+function dispatchWorldMenuSelection(
+  players: PlayerRegistry,
+  session: ClientSession,
+  listId: number,
+  selection: number,
+  connLog: Logger,
+  capture: CaptureLogger,
+): boolean {
+  // Keep world menu routing transport-neutral. The v1.29 client can submit the
+  // same logical listId/selection pair through plain cmd-7 or through world
+  // cmd-29 subtype 2, so the remaining late-client Cmd57 gap is the outbound
+  // menu packet surface rather than this selection dispatcher.
+  if (handleMechPickerCmd7(players, session, listId, selection, connLog, capture)) {
+    return true;
+  }
+
+  if (
+    listId === COMSTAR_INCOMING_DIALOG_ID
+    && handleComstarIncomingPromptCmd7(session, selection, connLog, capture)
+  ) {
+    return true;
+  }
+
+  if (listId === 3) {
+    handleRoomMenuSelection(players, session, selection, connLog, capture);
+    return true;
+  }
+
+  if (listId === ALL_ROSTER_LIST_ID && selection === 0) {
+    connLog.info('[world] all-roster cancel -> restoring world UI');
+    sendWorldUiRestore(players, session, connLog, capture, 'all-roster cancel');
+    return true;
+  }
+
+  if (listId === ALL_ROSTER_LIST_ID && selection > 0) {
+    const target = findWorldTargetBySelectionId(players, selection - 1);
+    if (!target) {
+      connLog.warn('[world] all-roster selection target not found: selection=%d', selection);
+      return true;
+    }
+    sendInquiryMenu(session, target, connLog, capture);
+    return true;
+  }
+
+  if (listId === INQUIRY_MENU_ID && selection > 0) {
+    const targetId = session.worldInquiryTargetId;
+    if (targetId === undefined) {
+      connLog.warn('[world] inquiry submenu reply with no active target');
+      return true;
+    }
+
+    const target = findWorldTargetBySelectionId(players, targetId);
+    if (!target) {
+      connLog.warn('[world] inquiry submenu target unavailable: target=%d', targetId);
+      return true;
+    }
+
+    if (selection === 1) {
+      connLog.info(
+        '[world] inquiry submenu: sending Cmd37 open-compose for target=%d',
+        targetId,
+      );
+      send(
+        session.socket,
+        buildCmd37OpenComposePacket(targetId, nextSeq(session)),
+        capture,
+        'CMD37_OPEN_COMPOSE',
+      );
+      return true;
+    }
+
+    if (selection === 2) {
+      connLog.info('[world] inquiry submenu: personnel data for target=%d', targetId);
+      sendPersonnelRecord(players, session, targetId, 1, connLog, capture);
+      return true;
+    }
+
+    connLog.warn('[world] inquiry submenu: unsupported selection=%d', selection);
+    return true;
+  }
+
+  if (listId === ARENA_SIDE_MENU_ID) {
+    handleArenaSideSelection(players, session, selection, connLog, capture);
+    return true;
+  }
+
+  if (listId === ARENA_READY_ROOM_MENU_ID) {
+    handleArenaReadyRoomSelection(players, session, selection, connLog, capture);
+    return true;
+  }
+
+  if (listId === ARENA_STATUS_LIST_ID && selection > 0) {
+    sendPersonnelRecord(players, session, selection - 1, 1, connLog, capture);
+    return true;
+  }
+
+  if (listId === COMSTAR_SEND_TARGET_MENU_ID) {
+    handleComstarSendTargetSelection(players, session, selection, connLog, capture);
+    return true;
+  }
+
+  if (listId === NEWS_CATEGORY_MENU_ID) {
+    handleNewsCategorySelection(session, selection, connLog, capture);
+    return true;
+  }
+
+  if (listId === NEWSGRID_ARTICLE_LIST_ID) {
+    handleNewsgridArticleSelection(session, selection, connLog, capture);
+    return true;
+  }
+
+  if (listId === MATCH_RESULTS_MENU_LIST_ID) {
+    handleMatchResultsSelection(session, selection, connLog, capture);
+    return true;
+  }
+
+  if (listId === TIER_RANKING_CHOOSER_LIST_ID) {
+    handleTierRankingMenuSelection(session, selection, connLog, capture);
+    return true;
+  }
+
+  if (listId === CLASS_RANKING_CHOOSER_LIST_ID) {
+    handleClassRankingMenuSelection(session, selection, connLog, capture);
+    return true;
+  }
+
+  if (
+    listId === TIER_RANKING_RESULTS_LIST_ID
+    || listId === CLASS_RANKING_RESULTS_LIST_ID
+  ) {
+    handleRankingResultsSelection(session, selection, connLog, capture);
+    return true;
+  }
+
+  if (listId === PERSONNEL_LIST_ID && selection > 0) {
+    sendPersonnelRecord(players, session, selection - 1, 1, connLog, capture);
+    return true;
+  }
+
+  if (listId === PERSONNEL_MORE_ID && selection === 2) {
+    if (session.worldInquiryTargetId === undefined) {
+      connLog.warn('[world] personnel more with no active record target');
+      return true;
+    }
+    sendPersonnelRecord(players, session, session.worldInquiryTargetId, 2, connLog, capture);
+    return true;
+  }
+
+  if (listId === COMSTAR_ACCESS_MENU_ID) {
+    handleComstarAccessSelection(players, session, selection, connLog, capture);
+    return true;
+  }
+
+  return false;
+}
 
 function handleWorldGameData(
   players: PlayerRegistry,
@@ -335,9 +496,13 @@ function handleWorldGameData(
     // Cmd-3: client capabilities / ready signal (RPS mode).
     // Called by FUN_0040d3c0 immediately after the world-MMW welcome is received.
     // Respond with the world initialization sequence exactly once.
+    if (session.pendingWorldReadySceneRefresh) {
+      completePendingWorldReadySceneRefresh(players, session, connLog, capture, 'client-ready');
+      return;
+    }
+    session.worldInitialized = true;
     connLog.info('[world] cmd-3 (client-ready) → sending world init sequence');
     sendWorldInitSequence(players, session, connLog, capture);
-    session.worldInitialized = true;
     notifyRoomArrival(players, session, connLog);
 
     // Notify about unread ComStar messages that are waiting in the Postgres-backed inbox.
@@ -772,6 +937,48 @@ function handleWorldGameData(
     connLog.info('[world] cmd-28 MORE');
     handleActiveScrollListMore(session, connLog, capture);
 
+  } else if (cmdIdx === 29) {
+    const parsed = parseClientCmd29ControlFrame(payload);
+    if (!parsed) {
+      connLog.warn('[world] cmd-29 parse failed');
+      return;
+    }
+
+    connLog.info(
+      '[world] cmd-29 control frame: subtype=%d controlId=%d value=%d',
+      parsed.subtype,
+      parsed.controlId,
+      parsed.value,
+    );
+
+    if (parsed.subtype === 2) {
+      connLog.info(
+        '[world] cmd-29 menu reply: listId=%d selection=%d',
+        parsed.controlId,
+        parsed.value,
+      );
+      if (!dispatchWorldMenuSelection(
+        players,
+        session,
+        parsed.controlId,
+        parsed.value,
+        connLog,
+        capture,
+      )) {
+        connLog.debug(
+          '[world] cmd-29 subtype-2 ignored: unsupported listId=%d',
+          parsed.controlId,
+        );
+      }
+      return;
+    }
+
+    connLog.debug(
+      '[world] cmd-29 ignored: unsupported subtype=%d controlId=%d value=%d',
+      parsed.subtype,
+      parsed.controlId,
+      parsed.value,
+    );
   } else if (cmdIdx === 7) {
     const parsed = parseClientCmd7(payload);
     if (!parsed) {
@@ -779,144 +986,21 @@ function handleWorldGameData(
       return;
     }
 
-    connLog.info('[world] cmd-7 menu reply: listId=%d selection=%d', parsed.listId, parsed.selection);
-
-    if (handleMechPickerCmd7(players, session, parsed.listId, parsed.selection, connLog, capture)) {
-      return;
+    connLog.info(
+      '[world] world menu reply (cmd-7): listId=%d selection=%d',
+      parsed.listId,
+      parsed.selection,
+    );
+    if (!dispatchWorldMenuSelection(
+      players,
+      session,
+      parsed.listId,
+      parsed.selection,
+      connLog,
+      capture,
+    )) {
+      connLog.debug('[world] cmd-7 ignored: unsupported listId=%d', parsed.listId);
     }
-
-    if (
-      parsed.listId === COMSTAR_INCOMING_DIALOG_ID
-      && handleComstarIncomingPromptCmd7(session, parsed.selection, connLog, capture)
-    ) {
-      return;
-    }
-
-    if (parsed.listId === 3) {
-      handleRoomMenuSelection(players, session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === ALL_ROSTER_LIST_ID && parsed.selection > 0) {
-      const target = findWorldTargetBySelectionId(players, parsed.selection - 1);
-      if (!target) {
-        connLog.warn('[world] all-roster selection target not found: selection=%d', parsed.selection);
-        return;
-      }
-      sendInquiryMenu(session, target, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === INQUIRY_MENU_ID && parsed.selection > 0) {
-      const targetId = session.worldInquiryTargetId;
-      if (targetId === undefined) {
-        connLog.warn('[world] inquiry submenu reply with no active target');
-        return;
-      }
-
-      const target = findWorldTargetBySelectionId(players, targetId);
-      if (!target) {
-        connLog.warn('[world] inquiry submenu target unavailable: target=%d', targetId);
-        return;
-      }
-
-      if (parsed.selection === 1) {
-        connLog.info(
-          '[world] inquiry submenu: sending Cmd37 open-compose for target=%d',
-          targetId,
-        );
-        send(
-          session.socket,
-          buildCmd37OpenComposePacket(targetId, nextSeq(session)),
-          capture,
-          'CMD37_OPEN_COMPOSE',
-        );
-        return;
-      }
-
-      if (parsed.selection === 2) {
-        connLog.info('[world] inquiry submenu: personnel data for target=%d', targetId);
-        sendPersonnelRecord(players, session, targetId, 1, connLog, capture);
-        return;
-      }
-
-      connLog.warn('[world] inquiry submenu: unsupported selection=%d', parsed.selection);
-      return;
-    }
-
-    if (parsed.listId === ARENA_SIDE_MENU_ID) {
-      handleArenaSideSelection(players, session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === ARENA_READY_ROOM_MENU_ID) {
-      handleArenaReadyRoomSelection(players, session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === ARENA_STATUS_LIST_ID && parsed.selection > 0) {
-      sendPersonnelRecord(players, session, parsed.selection - 1, 1, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === COMSTAR_SEND_TARGET_MENU_ID) {
-      handleComstarSendTargetSelection(players, session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === NEWS_CATEGORY_MENU_ID) {
-      handleNewsCategorySelection(session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === NEWSGRID_ARTICLE_LIST_ID) {
-      handleNewsgridArticleSelection(session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === MATCH_RESULTS_MENU_LIST_ID) {
-      handleMatchResultsSelection(session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === TIER_RANKING_CHOOSER_LIST_ID) {
-      handleTierRankingChooserSelection(session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === CLASS_RANKING_CHOOSER_LIST_ID) {
-      handleClassRankingChooserSelection(session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (
-      parsed.listId === TIER_RANKING_RESULTS_LIST_ID
-      || parsed.listId === CLASS_RANKING_RESULTS_LIST_ID
-    ) {
-      handleRankingResultsSelection(session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === PERSONNEL_LIST_ID && parsed.selection > 0) {
-      sendPersonnelRecord(players, session, parsed.selection - 1, 1, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === PERSONNEL_MORE_ID && parsed.selection === 2) {
-      if (session.worldInquiryTargetId === undefined) {
-        connLog.warn('[world] cmd-7 personnel more with no active record target');
-        return;
-      }
-      sendPersonnelRecord(players, session, session.worldInquiryTargetId, 2, connLog, capture);
-      return;
-    }
-
-    if (parsed.listId === COMSTAR_ACCESS_MENU_ID) {
-      handleComstarAccessSelection(players, session, parsed.selection, connLog, capture);
-      return;
-    }
-
-    connLog.debug('[world] cmd-7 ignored: unsupported listId=%d', parsed.listId);
   } else if (session.phase === 'combat') {
     if (!session.combatInitialized) {
       connLog.debug('[world/combat] inbound combat cmd=%d ignored during DROP delay', cmdIdx);
@@ -973,9 +1057,11 @@ function sendWorldInitSequence(
   // Cmd4 — SceneInit: create the world scene, chat window, scene action
   // buttons, and up to four adjacent location icons.
   const roomId = session.worldMapRoomId ?? DEFAULT_MAP_ROOM_ID;
+  const sceneRoomId = getSolarisSceneRoomId(roomId);
   connLog.info(
-    '[world] sending Cmd4 SceneInit (room=%d header="%s" detail="%s")',
+    '[world] sending Cmd4 SceneInit (logicalRoom=%d sceneRoom=%d header="%s" detail="%s")',
     roomId,
+    sceneRoomId,
     getSolarisRoomName(roomId),
     getSolarisSceneHeaderDetail(roomId),
   );
