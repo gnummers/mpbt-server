@@ -5355,7 +5355,7 @@ destinations.  Issue #70 is resolved.
   - `getSolarisSceneRoomId(...)` therefore maps many logical rooms back to a
     nearby retail `SOLARIS.MAP` room before sending `Cmd4`/`Cmd43`.
   - `getSolarisRoomSlottedExits(...)` injects a dedicated tram room
-    (`SOLARIS_TRAM_ROOM_ID = 2002`) and also blocks direct inter-sector road exits.
+    (`SOLARIS_TRAM_ROOM_ID = 9000`) and also blocks direct inter-sector road exits.
 - `src/world/world-handlers.ts` still drives ordinary Solaris movement through the
   provisional `world-map.json` graph:
   - `handleLocationAction(...)` resolves `cmd23` compass clicks through the
