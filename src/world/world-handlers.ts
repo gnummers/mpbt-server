@@ -3763,7 +3763,7 @@ function applyDamageToSection(
 }
 
 function chooseRetaliationHitSection(
-  session: ClientSession | undefined,
+  session: { combatRetaliationCursor?: number } | undefined,
   armorValues: readonly number[],
   internalValues: readonly number[],
   headArmor: number,
@@ -4539,11 +4539,12 @@ function sendBotPositionSync(
   bot: SoloCombatBotActorState,
   capture: CaptureLogger,
   label: string,
+  target?: SoloCombatBotTargetState,
 ): void {
   if (session.socket.destroyed || !session.socket.writable || session.phase !== 'combat') {
     return;
   }
-  const { throttle, legVel } = getBotCmd65UpperBodyChannels(session, bot);
+  const { throttle, legVel } = getBotCmd65UpperBodyChannels(session, bot, target);
   send(
     session.socket,
     buildCmd65PositionSyncPacket(
@@ -4676,13 +4677,15 @@ function getBotPitchToTarget(
 function getBotCmd65UpperBodyChannels(
   session: ClientSession,
   bot: SoloCombatBotActorState,
+  preferredTarget?: SoloCombatBotTargetState,
 ): { throttle: number; legVel: number } {
   const botX = bot.x;
   const botY = bot.y;
   const botZ = bot.z;
-  const targetX = session.combatX ?? 0;
-  const targetY = session.combatY ?? 0;
-  const targetZ = session.combatJumpAltitude ?? 0;
+  const target = preferredTarget ?? getPreferredSoloCombatTarget(session, bot);
+  const targetX = target?.x ?? (session.combatX ?? 0);
+  const targetY = target?.y ?? (session.combatY ?? 0);
+  const targetZ = target?.z ?? (session.combatJumpAltitude ?? 0);
   const botFacing = bot.facing;
   const torsoYaw = clampNumber(
     getBotAimDeltaToTarget(
@@ -5052,7 +5055,7 @@ function chooseBotAttackSection(
     return weakestArm;
   }
 
-  return chooseRetaliationHitSection(undefined, armorValues, internalValues, headArmor);
+  return chooseRetaliationHitSection(bot, armorValues, internalValues, headArmor);
 }
 
 function getBotJumpTravelUnits(bot: SoloCombatBotActorState): number {
@@ -5125,7 +5128,7 @@ function startBotJump(
     jumpArc.apexUnits,
     reason,
   );
-  sendBotPositionSync(session, bot, capture, 'CMD65_BOT_JUMP_START');
+  sendBotPositionSync(session, bot, capture, 'CMD65_BOT_JUMP_START', combatTarget);
   return true;
 }
 
@@ -5184,7 +5187,7 @@ function advanceBotJump(
     bot.jumpStartY = undefined;
     bot.jumpTargetX = undefined;
     bot.jumpTargetY = undefined;
-    sendBotPositionSync(session, bot, capture, 'CMD65_BOT_JUMP_LAND');
+    sendBotPositionSync(session, bot, capture, 'CMD65_BOT_JUMP_LAND', combatTarget);
     connLog.info(
       '[world/combat] bot jump land: slot=%d mechId=%d fuel=%d at=(%d,%d)',
       bot.slot,
@@ -5196,7 +5199,7 @@ function advanceBotJump(
     return true;
   }
 
-  sendBotPositionSync(session, bot, capture, 'CMD65_BOT_JUMP_MIRROR');
+  sendBotPositionSync(session, bot, capture, 'CMD65_BOT_JUMP_MIRROR', combatTarget);
   return true;
 }
 
@@ -5466,7 +5469,7 @@ function stepBotMovement(
     bot.z = 0;
     bot.facing = nextFacing;
     bot.speedMag = nextSpeedMag;
-    sendBotPositionSync(session, bot, capture, 'CMD65_BOT_AI_POSITION');
+    sendBotPositionSync(session, bot, capture, 'CMD65_BOT_AI_POSITION', target);
   }
 
   syncLegacySoloCombatBotState(session);
@@ -8901,7 +8904,16 @@ export function sendCombatBootstrapSequence(
     }
 
     const cmd65 = buildCmd65PositionSyncPacket(
-      { slot: 0, x: 0, y: 0, z: 0, facing: 0, throttle: 0, legVel: 0, speedMag: 0 },
+      {
+        slot: 0,
+        x: session.combatX ?? 0,
+        y: session.combatY ?? 0,
+        z: session.combatJumpAltitude ?? 0,
+        facing: getCombatCmd65Facing(session),
+        throttle: session.combatUpperBodyPitch ?? 0,
+        legVel: session.combatTorsoYaw ?? 0,
+        speedMag: session.combatSpeedMag ?? 0,
+      },
       nextSeq(session),
     );
     send(socket, cmd65, capture, 'CMD65_INITIAL_POSITION');
