@@ -1,0 +1,1728 @@
+2026-04-27T09:46:00.836Z INFO  [server] Loaded 161 mechs from mechdata/
+2026-04-27T09:46:00.840Z INFO  [server] [world] ══════════════════════════════════════════════
+2026-04-27T09:46:00.841Z INFO  [server] [world]   Game World Server (M3)
+2026-04-27T09:46:00.841Z INFO  [server] [world]   Listening on 0.0.0.0:2001
+2026-04-27T09:46:00.841Z INFO  [server] [world]   CRC seed: 0x0A5C25 (RPS / MMW path)
+2026-04-27T09:46:00.842Z INFO  [server] [world] ══════════════════════════════════════════════
+2026-04-27T09:46:00.842Z INFO  [server] ═══════════════════════════════════════════════════════
+2026-04-27T09:46:00.842Z INFO  [server]   MPBT ARIES Server Emulator
+2026-04-27T09:46:00.842Z INFO  [server]   Listening on 0.0.0.0:2000
+2026-04-27T09:46:00.844Z INFO  [server]   Hostname: Moozeo
+2026-04-27T09:46:00.845Z INFO  [server]   Protocol: ARIES binary (12-byte header, confirmed by RE)
+2026-04-27T09:46:00.845Z INFO  [server]     play.pcgi server=127.0.0.1:2000
+2026-04-27T09:46:00.845Z INFO  [server]   Log level: DEBUG → logs/server.log
+2026-04-27T09:46:00.845Z INFO  [server]   Packet captures: enabled → captures/
+2026-04-27T09:46:00.846Z INFO  [server] ═══════════════════════════════════════════════════════
+2026-04-27T09:46:20.218Z INFO  [server:fdbf716d] Client connected from 192.168.1.109:62916 (session fdbf716d-c4e4-4f0a-8e73-242c1907ee6c)
+2026-04-27T09:46:20.219Z INFO  [server:fdbf716d] Sending LOGIN_REQUEST (0x16) — 12 bytes
+2026-04-27T09:46:20.222Z DEBUG [server:fdbf716d] recv 346 bytes (total=346, phase=auth)
+2026-04-27T09:46:20.222Z DEBUG [server:fdbf716d] pkt type=0x15 tag=0x0 payloadLen=334
+2026-04-27T09:46:20.223Z DEBUG [server:fdbf716d] [rx]
+00000000  4d 6f 6f 73 65 00 00 00 00 00 00 00 00 00 00 00  |Moose...........|
+00000010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000060  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000070  4b 65 73 6d 61 69 20 43 6f 6d 6d 45 6e 67 69 6e  |Kesmai CommEngin|
+00000080  65 20 33 2e 32 39 00 00 00 00 00 00 00 00 00 00  |e 3.29..........|
+00000090  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000a0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000b0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000c0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000d0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000e0  00 00 00 00 00 00 00 00 67 00 00 00 00 00 00 00  |........g.......|
+000000f0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000100  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000110  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000120  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000130  00 00 00 00 00 00 00 00 00 00 00 00 07 d0 39 42  |..............9B|
+00000140  00 00 00 09 31 32 4d 50 42 54 34 75 2e 00        |....12MPBT4u..|
+2026-04-27T09:46:20.224Z DEBUG [server:fdbf716d] [auth] login payload len=334
+00000000  4d 6f 6f 73 65 00 00 00 00 00 00 00 00 00 00 00  |Moose...........|
+00000010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000060  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000070  4b 65 73 6d 61 69 20 43 6f 6d 6d 45 6e 67 69 6e  |Kesmai CommEngin|
+00000080  65 20 33 2e 32 39 00 00 00 00 00 00 00 00 00 00  |e 3.29..........|
+00000090  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000a0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000b0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000c0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000d0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000e0  00 00 00 00 00 00 00 00 67 00 00 00 00 00 00 00  |........g.......|
+000000f0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000100  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000110  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000120  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000130  00 00 00 00 00 00 00 00 00 00 00 00 07 d0 39 42  |..............9B|
+00000140  00 00 00 09 31 32 4d 50 42 54 34 75 2e 00        |....12MPBT4u..|
+2026-04-27T09:46:20.225Z INFO  [server:fdbf716d] [auth] login from "Moose" ver="Kesmai CommEngine 3.29" service="g" pwLen=9
+2026-04-27T09:46:20.226Z INFO  [server:fdbf716d] [login] credentials received: user="Moose" service="g" clientVer="Kesmai CommEngine 3.29"
+2026-04-27T09:46:20.564Z INFO  [server:fdbf716d] [login] authenticated: user="Moose" (id=15)
+2026-04-27T09:46:20.565Z INFO  [server:fdbf716d] [login] sending SYNC ack — 12 bytes
+2026-04-27T09:46:20.565Z INFO  [server:fdbf716d] [login] sending WELCOME escape — 45 bytes
+2026-04-27T09:46:20.575Z DEBUG [server:fdbf716d] recv 23 bytes (total=369, phase=lobby)
+2026-04-27T09:46:20.576Z DEBUG [server:fdbf716d] pkt type=0x00 tag=0x0 payloadLen=11
+2026-04-27T09:46:20.576Z DEBUG [server:fdbf716d] [rx]
+00000000  1b 21 24 22 3e 24 22 37 3e 22 1b                 |.!$">$"7>".|
+2026-04-27T09:46:20.577Z DEBUG [server:fdbf716d] [game] rx type-0 len=11
+00000000  1b 21 24 22 3e 24 22 37 3e 22 1b                 |.!$">$"7>".|
+2026-04-27T09:46:20.578Z DEBUG [server:fdbf716d] [game] client seq=0 cmd=3 phase=lobby
+2026-04-27T09:46:20.583Z INFO  [server:fdbf716d] [game] character found: displayName="Moose" allegiance=Marik mech_id=98 mech_slot=36 → REDIRECT to world
+2026-04-27T09:46:20.583Z INFO  [server:fdbf716d] [game] recorded world launch: displayName="Moose" allegiance=Marik mech=CPLT-C1 (id=98)
+2026-04-27T09:46:20.584Z INFO  [server:fdbf716d] [game] sending REDIRECT → 192.168.1.109:2001
+2026-04-27T09:46:20.585Z INFO  [server:fdbf716d] Client disconnected (phase=closing, bytes=369)
+2026-04-27T09:46:20.591Z INFO  [server:f38959b6] [world] client connected from 192.168.1.109:62918 (session f38959b6-6677-4338-b7ea-b9602eb33eb0)
+2026-04-27T09:46:20.591Z INFO  [server:f38959b6] [world] sending LOGIN_REQUEST (12 bytes)
+2026-04-27T09:46:20.592Z DEBUG [server:f38959b6] [world] recv 337 bytes (total=337, phase=auth)
+2026-04-27T09:46:20.593Z DEBUG [server:f38959b6] [world] pkt type=0x15 tag=0x0 payloadLen=325
+2026-04-27T09:46:20.593Z DEBUG [server:f38959b6] [world][rx]
+00000000  4d 6f 6f 73 65 00 00 00 00 00 00 00 00 00 00 00  |Moose...........|
+00000010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000060  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000070  4b 65 73 6d 61 69 20 43 6f 6d 6d 45 6e 67 69 6e  |Kesmai CommEngin|
+00000080  65 20 33 2e 32 39 00 00 00 00 00 00 00 00 00 00  |e 3.29..........|
+00000090  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000a0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000b0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000c0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000d0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000e0  00 00 00 00 00 00 00 00 31 39 32 2e 31 36 38 2e  |........192.168.|
+000000f0  31 2e 31 30 39 3a 32 30 30 31 00 00 00 00 00 00  |1.109:2001......|
+00000100  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000110  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000120  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000130  00 00 00 00 00 00 00 00 00 00 00 00 07 d0 39 42  |..............9B|
+00000140  00 00 00 00 00                                   |.....|
+2026-04-27T09:46:20.594Z DEBUG [server:f38959b6] [auth] login payload len=325
+00000000  4d 6f 6f 73 65 00 00 00 00 00 00 00 00 00 00 00  |Moose...........|
+00000010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000060  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000070  4b 65 73 6d 61 69 20 43 6f 6d 6d 45 6e 67 69 6e  |Kesmai CommEngin|
+00000080  65 20 33 2e 32 39 00 00 00 00 00 00 00 00 00 00  |e 3.29..........|
+00000090  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000a0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000b0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000c0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000d0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000e0  00 00 00 00 00 00 00 00 31 39 32 2e 31 36 38 2e  |........192.168.|
+000000f0  31 2e 31 30 39 3a 32 30 30 31 00 00 00 00 00 00  |1.109:2001......|
+00000100  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000110  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000120  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000130  00 00 00 00 00 00 00 00 00 00 00 00 07 d0 39 42  |..............9B|
+00000140  00 00 00 00 00                                   |.....|
+2026-04-27T09:46:20.595Z INFO  [server:f38959b6] [auth] login from "Moose" ver="Kesmai CommEngine 3.29" service="192.168.1.109:2001" pwLen=0
+2026-04-27T09:46:20.595Z INFO  [server:f38959b6] [world-login] launch record found: displayName="Moose" allegiance=Marik mech=CPLT-C1 (id=98 slot=36 rosterId=100015 room=146)
+2026-04-27T09:46:20.595Z INFO  [server:f38959b6] [world-login] accepted: user="Moose" displayName="Moose" allegiance=Marik service="192.168.1.109:2001"
+2026-04-27T09:46:20.596Z INFO  [server:f38959b6] [world-login] sending SYNC ack
+2026-04-27T09:46:20.596Z INFO  [server:f38959b6] [world-login] sending WELCOME escape (45 bytes)
+2026-04-27T09:46:20.598Z DEBUG [server:f38959b6] [world] recv 23 bytes (total=360, phase=world)
+2026-04-27T09:46:20.598Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=11
+2026-04-27T09:46:20.598Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 24 22 3e 24 22 37 3e 22 1b                 |.!$">$"7>".|
+2026-04-27T09:46:20.599Z DEBUG [server:f38959b6] [world] rx type-0 len=11
+00000000  1b 21 24 22 3e 24 22 37 3e 22 1b                 |.!$">$"7>".|
+2026-04-27T09:46:20.599Z DEBUG [server:f38959b6] [world] client seq=0 cmd=3
+2026-04-27T09:46:20.600Z INFO  [server:f38959b6] [world] cmd-3 (client-ready) → sending world init sequence
+2026-04-27T09:46:20.600Z INFO  [server:f38959b6] [world] sending Cmd4 SceneInit (logicalRoom=146 sceneRoom=146 header="Solaris Starport" detail="Click on the stone arch icon to the east for a tutorial if you are new to Solaris City and need help. Click on the tram icon to the south if you know your way around and you're ready to go find a fight. Remember players with [MPBT] in front of their names are the game staff. They will help to teach you the game. Other players that want to train you or that want you to join their group may not have the best intentions.")
+2026-04-27T09:46:20.601Z INFO  [server:f38959b6] [world] sending Cmd10 RoomPresenceSync (1 entries)
+2026-04-27T09:46:20.602Z INFO  [server:f38959b6] [world] world init sequence complete
+2026-04-27T09:46:20.603Z INFO  [server:f38959b6] [world] notified room of arrival: rosterId=100015 callsign="Moose"
+2026-04-27T09:46:29.537Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=380, phase=world)
+2026-04-27T09:46:29.537Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:46:29.537Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 26 2c 2c 65 4c 1b                          |.!&,,eL.|
+2026-04-27T09:46:29.537Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 26 2c 2c 65 4c 1b                          |.!&,,eL.|
+2026-04-27T09:46:29.538Z DEBUG [server:f38959b6] [world] client seq=0 cmd=5
+2026-04-27T09:46:29.538Z INFO  [server:f38959b6] [world] cmd-5 scene action: type=11
+2026-04-27T09:46:29.538Z INFO  [server:f38959b6] [world] sending Cmd43 Solaris travel map: logicalRoomId=146 sceneRoomId=146
+2026-04-27T09:46:30.480Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=406, phase=world)
+2026-04-27T09:46:30.480Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:46:30.481Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2b 23 3d 21 21 21 22 74 41 5f 45 1b        |.!+#=!!!"tA_E.|
+2026-04-27T09:46:30.481Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 2b 23 3d 21 21 21 22 74 41 5f 45 1b        |.!+#=!!!"tA_E.|
+2026-04-27T09:46:30.481Z DEBUG [server:f38959b6] [world] client seq=0 cmd=10
+2026-04-27T09:46:30.482Z INFO  [server:f38959b6] [world] cmd-10 map reply: context=198 selection=168 selectedRoomId=167
+2026-04-27T09:46:30.482Z INFO  [server:f38959b6] [world] sending arena ready-room menu: arena=167 options=1
+2026-04-27T09:46:32.609Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=432, phase=world)
+2026-04-27T09:46:32.701Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:46:32.701Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 28 2c 71 21 21 21 21 22 43 31 4b 1b        |.!(,q!!!!"C1K.|
+2026-04-27T09:46:32.701Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 28 2c 71 21 21 21 21 22 43 31 4b 1b        |.!(,q!!!!"C1K.|
+2026-04-27T09:46:32.701Z DEBUG [server:f38959b6] [world] client seq=0 cmd=7
+2026-04-27T09:46:32.702Z INFO  [server:f38959b6] [world] world menu reply (cmd-7): listId=1015 selection=1
+2026-04-27T09:46:32.703Z INFO  [server:f38959b6] [world] notified room of departure: rosterId=100015 callsign="Moose"
+2026-04-27T09:46:32.703Z INFO  [server:f38959b6] [world] scene refresh: logicalRoomId=167 sceneRoomId=167 header="Davion Arena"
+2026-04-27T09:46:32.704Z INFO  [server:f38959b6] [world] sending Cmd10 RoomPresenceSync (1 entries)
+2026-04-27T09:46:32.704Z INFO  [server:f38959b6] [world] notified room of arrival: rosterId=100015 callsign="Moose"
+2026-04-27T09:46:40.170Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=458, phase=world)
+2026-04-27T09:46:40.170Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:46:40.170Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 26 2f 68 65 6c 70 42 2b 4a 1b        |.!%!&/helpB+J.|
+2026-04-27T09:46:40.171Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 25 21 26 2f 68 65 6c 70 42 2b 4a 1b        |.!%!&/helpB+J.|
+2026-04-27T09:46:40.171Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:46:50.597Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:46:50.598Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=470, phase=world)
+2026-04-27T09:46:50.599Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:46:50.599Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:46:54.593Z DEBUG [server:f38959b6] [world] recv 31 bytes (total=501, phase=world)
+2026-04-27T09:46:54.593Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=19
+2026-04-27T09:46:54.594Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2b 2f 62 6f 74 64 69 66 66 20 33 51  |.!%!+/botdiff 3Q|
+00000010  54 50 1b                                         |TP.|
+2026-04-27T09:46:54.594Z DEBUG [server:f38959b6] [world] rx type-0 len=19
+00000000  1b 21 25 21 2b 2f 62 6f 74 64 69 66 66 20 33 51  |.!%!+/botdiff 3Q|
+00000010  54 50 1b                                         |TP.|
+2026-04-27T09:46:54.594Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:46:54.595Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botdiff 3
+2026-04-27T09:46:54.596Z INFO  [server:f38959b6] [world] /botdifficulty: configured bot difficulty=3
+2026-04-27T09:47:02.713Z DEBUG [server:f38959b6] [world] recv 32 bytes (total=533, phase=world)
+2026-04-27T09:47:02.713Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=20
+2026-04-27T09:47:02.714Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2c 2f 62 6f 74 63 6f 75 6e 74 20 37  |.!%!,/botcount 7|
+00000010  40 56 4f 1b                                      |@VO.|
+2026-04-27T09:47:02.714Z DEBUG [server:f38959b6] [world] rx type-0 len=20
+00000000  1b 21 25 21 2c 2f 62 6f 74 63 6f 75 6e 74 20 37  |.!%!,/botcount 7|
+00000010  40 56 4f 1b                                      |@VO.|
+2026-04-27T09:47:02.714Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:47:02.715Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botcount 7
+2026-04-27T09:47:02.715Z INFO  [server:f38959b6] [world] /botcount: configured 7 bot opponents
+2026-04-27T09:47:20.599Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:47:20.600Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=545, phase=world)
+2026-04-27T09:47:20.600Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:47:20.601Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:47:23.368Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=565, phase=world)
+2026-04-27T09:47:23.368Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:47:23.369Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 26 2b 2c 65 30 1b                          |.!&+,e0.|
+2026-04-27T09:47:23.369Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 26 2b 2c 65 30 1b                          |.!&+,e0.|
+2026-04-27T09:47:23.369Z DEBUG [server:f38959b6] [world] client seq=0 cmd=5
+2026-04-27T09:47:23.369Z INFO  [server:f38959b6] [world] cmd-5 scene action: type=10
+2026-04-27T09:47:23.370Z INFO  [server:f38959b6] [world] sending arena status list (1 entries)
+2026-04-27T09:47:27.057Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=591, phase=world)
+2026-04-27T09:47:27.058Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:47:27.058Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:47:27.058Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:47:27.059Z DEBUG [server:f38959b6] [world] client seq=0 cmd=7
+2026-04-27T09:47:27.059Z INFO  [server:f38959b6] [world] world menu reply (cmd-7): listId=1013 selection=0
+2026-04-27T09:47:27.059Z DEBUG [server:f38959b6] [world] cmd-7 ignored: unsupported listId=1013
+2026-04-27T09:47:28.240Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=611, phase=world)
+2026-04-27T09:47:28.240Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:47:28.241Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 26 2a 2c 65 34 1b                          |.!&*,e4.|
+2026-04-27T09:47:28.241Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 26 2a 2c 65 34 1b                          |.!&*,e4.|
+2026-04-27T09:47:28.241Z DEBUG [server:f38959b6] [world] client seq=0 cmd=5
+2026-04-27T09:47:28.242Z INFO  [server:f38959b6] [world] cmd-5 scene action: type=9
+2026-04-27T09:47:28.242Z INFO  [server:f38959b6] [world] sending arena side menu
+2026-04-27T09:47:30.922Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=637, phase=world)
+2026-04-27T09:47:30.922Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:47:30.923Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 28 2c 70 21 21 21 21 22 43 2f 75 1b        |.!(,p!!!!"C/u.|
+2026-04-27T09:47:30.923Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 28 2c 70 21 21 21 21 22 43 2f 75 1b        |.!(,p!!!!"C/u.|
+2026-04-27T09:47:30.923Z DEBUG [server:f38959b6] [world] client seq=0 cmd=7
+2026-04-27T09:47:30.923Z INFO  [server:f38959b6] [world] world menu reply (cmd-7): listId=1014 selection=1
+2026-04-27T09:47:30.924Z INFO  [server:f38959b6] [world] scene refresh: logicalRoomId=167 sceneRoomId=167 header="Davion Arena"
+2026-04-27T09:47:30.924Z INFO  [server:f38959b6] [world] sending Cmd10 RoomPresenceSync (1 entries)
+2026-04-27T09:47:30.925Z INFO  [server:f38959b6] [world] sending arena status list (1 entries)
+2026-04-27T09:47:30.926Z INFO  [server:f38959b6] [world] arena side selected: callsign="Moose" side=1 room=167
+2026-04-27T09:47:34.970Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=663, phase=world)
+2026-04-27T09:47:34.970Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:47:34.970Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:47:34.971Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:47:34.971Z DEBUG [server:f38959b6] [world] client seq=0 cmd=7
+2026-04-27T09:47:34.971Z INFO  [server:f38959b6] [world] world menu reply (cmd-7): listId=1013 selection=0
+2026-04-27T09:47:34.971Z DEBUG [server:f38959b6] [world] cmd-7 ignored: unsupported listId=1013
+2026-04-27T09:47:38.304Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=689, phase=world)
+2026-04-27T09:47:38.305Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:47:38.305Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 26 2f 68 65 6c 70 42 2b 4a 1b        |.!%!&/helpB+J.|
+2026-04-27T09:47:38.306Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 25 21 26 2f 68 65 6c 70 42 2b 4a 1b        |.!%!&/helpB+J.|
+2026-04-27T09:47:38.306Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:47:50.601Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:47:50.602Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=701, phase=world)
+2026-04-27T09:47:50.603Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:47:50.603Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:48:13.385Z DEBUG [server:f38959b6] [world] recv 33 bytes (total=734, phase=world)
+2026-04-27T09:48:13.385Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=21
+2026-04-27T09:48:13.385Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 31 20  |.!%!-/botside 1 |
+00000010  31 59 30 42 1b                                   |1Y0B.|
+2026-04-27T09:48:13.386Z DEBUG [server:f38959b6] [world] rx type-0 len=21
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 31 20  |.!%!-/botside 1 |
+00000010  31 59 30 42 1b                                   |1Y0B.|
+2026-04-27T09:48:13.386Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:48:13.386Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botside 1 1
+2026-04-27T09:48:13.387Z INFO  [server:f38959b6] [world] /botside: slot=1 configured side=1
+2026-04-27T09:48:20.607Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:48:20.608Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=746, phase=world)
+2026-04-27T09:48:20.609Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:48:20.609Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:48:22.855Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=766, phase=world)
+2026-04-27T09:48:22.856Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:48:22.857Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 38 23 2c 63 2a 1b                          |.!8#,c*.|
+2026-04-27T09:48:22.857Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 38 23 2c 63 2a 1b                          |.!8#,c*.|
+2026-04-27T09:48:22.857Z DEBUG [server:f38959b6] [world] client seq=0 cmd=23
+2026-04-27T09:48:22.858Z INFO  [server:f38959b6] [world] cmd-23 location action: room=167 slot=2 cached=true -> room=2138
+2026-04-27T09:48:22.858Z INFO  [server:f38959b6] [world] notified room of departure: rosterId=100015 callsign="Moose"
+2026-04-27T09:48:22.858Z INFO  [server:f38959b6] [world] scene refresh: logicalRoomId=2138 sceneRoomId=169 header="Halloran St"
+2026-04-27T09:48:22.859Z INFO  [server:f38959b6] [world] sending Cmd10 RoomPresenceSync (1 entries)
+2026-04-27T09:48:22.859Z INFO  [server:f38959b6] [world] notified room of arrival: rosterId=100015 callsign="Moose"
+2026-04-27T09:48:23.701Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=786, phase=world)
+2026-04-27T09:48:23.701Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:48:23.702Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 38 28 2c 62 2b 1b                          |.!8(,b+.|
+2026-04-27T09:48:23.702Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 38 28 2c 62 2b 1b                          |.!8(,b+.|
+2026-04-27T09:48:23.702Z DEBUG [server:f38959b6] [world] client seq=0 cmd=23
+2026-04-27T09:48:23.703Z INFO  [server:f38959b6] [world] cmd-23 location action: room=2138 slot=3 cached=false -> room=167
+2026-04-27T09:48:23.703Z INFO  [server:f38959b6] [world] sending arena ready-room menu: arena=167 options=1
+2026-04-27T09:48:25.641Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=812, phase=world)
+2026-04-27T09:48:25.642Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:48:25.642Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 28 2c 71 21 21 21 21 22 43 31 4b 1b        |.!(,q!!!!"C1K.|
+2026-04-27T09:48:25.642Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 28 2c 71 21 21 21 21 22 43 31 4b 1b        |.!(,q!!!!"C1K.|
+2026-04-27T09:48:25.643Z DEBUG [server:f38959b6] [world] client seq=0 cmd=7
+2026-04-27T09:48:25.643Z INFO  [server:f38959b6] [world] world menu reply (cmd-7): listId=1015 selection=1
+2026-04-27T09:48:25.643Z INFO  [server:f38959b6] [world] notified room of departure: rosterId=100015 callsign="Moose"
+2026-04-27T09:48:25.643Z INFO  [server:f38959b6] [world] scene refresh: logicalRoomId=167 sceneRoomId=167 header="Davion Arena"
+2026-04-27T09:48:25.644Z INFO  [server:f38959b6] [world] sending Cmd10 RoomPresenceSync (1 entries)
+2026-04-27T09:48:25.644Z INFO  [server:f38959b6] [world] notified room of arrival: rosterId=100015 callsign="Moose"
+2026-04-27T09:48:28.465Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=838, phase=world)
+2026-04-27T09:48:28.465Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:48:28.466Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 26 2f 68 65 6c 70 42 2b 4a 1b        |.!%!&/helpB+J.|
+2026-04-27T09:48:28.466Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 25 21 26 2f 68 65 6c 70 42 2b 4a 1b        |.!%!&/helpB+J.|
+2026-04-27T09:48:28.466Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:48:31.208Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=858, phase=world)
+2026-04-27T09:48:31.209Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:48:31.209Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 26 2b 2c 65 30 1b                          |.!&+,e0.|
+2026-04-27T09:48:31.209Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 26 2b 2c 65 30 1b                          |.!&+,e0.|
+2026-04-27T09:48:31.210Z DEBUG [server:f38959b6] [world] client seq=0 cmd=5
+2026-04-27T09:48:31.210Z INFO  [server:f38959b6] [world] cmd-5 scene action: type=10
+2026-04-27T09:48:31.210Z INFO  [server:f38959b6] [world] sending arena status list (1 entries)
+2026-04-27T09:48:35.945Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=884, phase=world)
+2026-04-27T09:48:35.945Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:48:35.946Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:48:35.946Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:48:35.946Z DEBUG [server:f38959b6] [world] client seq=0 cmd=7
+2026-04-27T09:48:35.947Z INFO  [server:f38959b6] [world] world menu reply (cmd-7): listId=1013 selection=0
+2026-04-27T09:48:35.947Z DEBUG [server:f38959b6] [world] cmd-7 ignored: unsupported listId=1013
+2026-04-27T09:48:37.408Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=904, phase=world)
+2026-04-27T09:48:37.408Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:48:37.408Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 26 2a 2c 65 34 1b                          |.!&*,e4.|
+2026-04-27T09:48:37.409Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 26 2a 2c 65 34 1b                          |.!&*,e4.|
+2026-04-27T09:48:37.409Z DEBUG [server:f38959b6] [world] client seq=0 cmd=5
+2026-04-27T09:48:37.409Z INFO  [server:f38959b6] [world] cmd-5 scene action: type=9
+2026-04-27T09:48:37.409Z INFO  [server:f38959b6] [world] sending arena side menu
+2026-04-27T09:48:38.778Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=930, phase=world)
+2026-04-27T09:48:38.778Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:48:38.778Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 28 2c 70 21 21 21 21 22 43 2f 75 1b        |.!(,p!!!!"C/u.|
+2026-04-27T09:48:38.779Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 28 2c 70 21 21 21 21 22 43 2f 75 1b        |.!(,p!!!!"C/u.|
+2026-04-27T09:48:38.779Z DEBUG [server:f38959b6] [world] client seq=0 cmd=7
+2026-04-27T09:48:38.779Z INFO  [server:f38959b6] [world] world menu reply (cmd-7): listId=1014 selection=1
+2026-04-27T09:48:38.779Z INFO  [server:f38959b6] [world] scene refresh: logicalRoomId=167 sceneRoomId=167 header="Davion Arena"
+2026-04-27T09:48:38.780Z INFO  [server:f38959b6] [world] sending Cmd10 RoomPresenceSync (1 entries)
+2026-04-27T09:48:38.780Z INFO  [server:f38959b6] [world] sending arena status list (1 entries)
+2026-04-27T09:48:38.780Z INFO  [server:f38959b6] [world] arena side selected: callsign="Moose" side=1 room=167
+2026-04-27T09:48:40.904Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=950, phase=world)
+2026-04-27T09:48:40.904Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:48:40.905Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 26 2b 2c 65 30 1b                          |.!&+,e0.|
+2026-04-27T09:48:40.905Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 26 2b 2c 65 30 1b                          |.!&+,e0.|
+2026-04-27T09:48:40.905Z DEBUG [server:f38959b6] [world] client seq=0 cmd=5
+2026-04-27T09:48:40.905Z INFO  [server:f38959b6] [world] cmd-5 scene action: type=10
+2026-04-27T09:48:40.906Z INFO  [server:f38959b6] [world] sending arena status list (1 entries)
+2026-04-27T09:48:42.969Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=976, phase=world)
+2026-04-27T09:48:42.970Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:48:42.970Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:48:42.970Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:48:42.971Z DEBUG [server:f38959b6] [world] client seq=0 cmd=7
+2026-04-27T09:48:42.971Z INFO  [server:f38959b6] [world] world menu reply (cmd-7): listId=1013 selection=0
+2026-04-27T09:48:42.971Z DEBUG [server:f38959b6] [world] cmd-7 ignored: unsupported listId=1013
+2026-04-27T09:48:45.440Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=1002, phase=world)
+2026-04-27T09:48:45.441Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:48:45.441Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 26 2f 68 65 6c 70 42 2b 4a 1b        |.!%!&/helpB+J.|
+2026-04-27T09:48:45.442Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 25 21 26 2f 68 65 6c 70 42 2b 4a 1b        |.!%!&/helpB+J.|
+2026-04-27T09:48:45.442Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:48:47.744Z DEBUG [server:f38959b6] [world] recv 31 bytes (total=1033, phase=world)
+2026-04-27T09:48:47.745Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=19
+2026-04-27T09:48:47.745Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2b 2f 62 6f 74 64 69 66 66 20 33 51  |.!%!+/botdiff 3Q|
+00000010  54 50 1b                                         |TP.|
+2026-04-27T09:48:47.745Z DEBUG [server:f38959b6] [world] rx type-0 len=19
+00000000  1b 21 25 21 2b 2f 62 6f 74 64 69 66 66 20 33 51  |.!%!+/botdiff 3Q|
+00000010  54 50 1b                                         |TP.|
+2026-04-27T09:48:47.745Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:48:47.746Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botdiff 3
+2026-04-27T09:48:47.746Z INFO  [server:f38959b6] [world] /botdifficulty: configured bot difficulty=3
+2026-04-27T09:48:50.614Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:48:50.615Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=1045, phase=world)
+2026-04-27T09:48:50.615Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:48:50.615Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:48:56.874Z DEBUG [server:f38959b6] [world] recv 33 bytes (total=1078, phase=world)
+2026-04-27T09:48:56.874Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=21
+2026-04-27T09:48:56.875Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 31 20  |.!%!-/botside 1 |
+00000010  31 59 30 42 1b                                   |1Y0B.|
+2026-04-27T09:48:56.875Z DEBUG [server:f38959b6] [world] rx type-0 len=21
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 31 20  |.!%!-/botside 1 |
+00000010  31 59 30 42 1b                                   |1Y0B.|
+2026-04-27T09:48:56.875Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:48:56.875Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botside 1 1
+2026-04-27T09:48:56.876Z INFO  [server:f38959b6] [world] /botside: slot=1 configured side=1
+2026-04-27T09:48:58.921Z DEBUG [server:f38959b6] [world] recv 33 bytes (total=1111, phase=world)
+2026-04-27T09:48:58.921Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=21
+2026-04-27T09:48:58.921Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 32 20  |.!%!-/botside 2 |
+00000010  31 59 30 72 1b                                   |1Y0r.|
+2026-04-27T09:48:58.922Z DEBUG [server:f38959b6] [world] rx type-0 len=21
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 32 20  |.!%!-/botside 2 |
+00000010  31 59 30 72 1b                                   |1Y0r.|
+2026-04-27T09:48:58.922Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:48:58.922Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botside 2 1
+2026-04-27T09:48:58.922Z INFO  [server:f38959b6] [world] /botside: slot=2 configured side=1
+2026-04-27T09:49:01.384Z DEBUG [server:f38959b6] [world] recv 33 bytes (total=1144, phase=world)
+2026-04-27T09:49:01.385Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=21
+2026-04-27T09:49:01.385Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 33 20  |.!%!-/botside 3 |
+00000010  31 59 31 4d 1b                                   |1Y1M.|
+2026-04-27T09:49:01.386Z DEBUG [server:f38959b6] [world] rx type-0 len=21
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 33 20  |.!%!-/botside 3 |
+00000010  31 59 31 4d 1b                                   |1Y1M.|
+2026-04-27T09:49:01.386Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:49:01.386Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botside 3 1
+2026-04-27T09:49:01.387Z INFO  [server:f38959b6] [world] /botside: slot=3 configured side=1
+2026-04-27T09:49:05.224Z DEBUG [server:f38959b6] [world] recv 33 bytes (total=1177, phase=world)
+2026-04-27T09:49:05.225Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=21
+2026-04-27T09:49:05.225Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 34 20  |.!%!-/botside 4 |
+00000010  31 59 2f 67 1b                                   |1Y/g.|
+2026-04-27T09:49:05.225Z DEBUG [server:f38959b6] [world] rx type-0 len=21
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 34 20  |.!%!-/botside 4 |
+00000010  31 59 2f 67 1b                                   |1Y/g.|
+2026-04-27T09:49:05.225Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:49:05.226Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botside 4 1
+2026-04-27T09:49:05.226Z INFO  [server:f38959b6] [world] /botside: slot=4 configured side=1
+2026-04-27T09:49:09.544Z DEBUG [server:f38959b6] [world] recv 33 bytes (total=1210, phase=world)
+2026-04-27T09:49:09.545Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=21
+2026-04-27T09:49:09.545Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 34 20  |.!%!-/botside 4 |
+00000010  32 59 2f 73 1b                                   |2Y/s.|
+2026-04-27T09:49:09.546Z DEBUG [server:f38959b6] [world] rx type-0 len=21
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 34 20  |.!%!-/botside 4 |
+00000010  32 59 2f 73 1b                                   |2Y/s.|
+2026-04-27T09:49:09.546Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:49:09.546Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botside 4 2
+2026-04-27T09:49:09.546Z INFO  [server:f38959b6] [world] /botside: slot=4 configured side=2
+2026-04-27T09:49:12.953Z DEBUG [server:f38959b6] [world] recv 33 bytes (total=1243, phase=world)
+2026-04-27T09:49:12.954Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=21
+2026-04-27T09:49:12.954Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 35 20  |.!%!-/botside 5 |
+00000010  32 59 2f 43 1b                                   |2Y/C.|
+2026-04-27T09:49:12.954Z DEBUG [server:f38959b6] [world] rx type-0 len=21
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 35 20  |.!%!-/botside 5 |
+00000010  32 59 2f 43 1b                                   |2Y/C.|
+2026-04-27T09:49:12.954Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:49:12.955Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botside 5 2
+2026-04-27T09:49:12.955Z INFO  [server:f38959b6] [world] /botside: slot=5 configured side=2
+2026-04-27T09:49:16.128Z DEBUG [server:f38959b6] [world] recv 33 bytes (total=1276, phase=world)
+2026-04-27T09:49:16.129Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=21
+2026-04-27T09:49:16.129Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 36 20  |.!%!-/botside 6 |
+00000010  32 59 2e 68 1b                                   |2Y.h.|
+2026-04-27T09:49:16.129Z DEBUG [server:f38959b6] [world] rx type-0 len=21
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 36 20  |.!%!-/botside 6 |
+00000010  32 59 2e 68 1b                                   |2Y.h.|
+2026-04-27T09:49:16.129Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:49:16.130Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botside 6 2
+2026-04-27T09:49:16.130Z INFO  [server:f38959b6] [world] /botside: slot=6 configured side=2
+2026-04-27T09:49:18.280Z DEBUG [server:f38959b6] [world] recv 33 bytes (total=1309, phase=world)
+2026-04-27T09:49:18.281Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=21
+2026-04-27T09:49:18.281Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 37 20  |.!%!-/botside 7 |
+00000010  32 59 2f 23 1b                                   |2Y/#.|
+2026-04-27T09:49:18.281Z DEBUG [server:f38959b6] [world] rx type-0 len=21
+00000000  1b 21 25 21 2d 2f 62 6f 74 73 69 64 65 20 37 20  |.!%!-/botside 7 |
+00000010  32 59 2f 23 1b                                   |2Y/#.|
+2026-04-27T09:49:18.281Z DEBUG [server:f38959b6] [world] client seq=0 cmd=4
+2026-04-27T09:49:18.282Z INFO  [server:f38959b6] [world] cmd-4 text: Moose: /botside 7 2
+2026-04-27T09:49:18.282Z INFO  [server:f38959b6] [world] /botside: slot=7 configured side=2
+2026-04-27T09:49:20.007Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=1329, phase=world)
+2026-04-27T09:49:20.008Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:49:20.008Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 26 2b 2c 65 30 1b                          |.!&+,e0.|
+2026-04-27T09:49:20.008Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 26 2b 2c 65 30 1b                          |.!&+,e0.|
+2026-04-27T09:49:20.009Z DEBUG [server:f38959b6] [world] client seq=0 cmd=5
+2026-04-27T09:49:20.009Z INFO  [server:f38959b6] [world] cmd-5 scene action: type=10
+2026-04-27T09:49:20.009Z INFO  [server:f38959b6] [world] sending arena status list (1 entries)
+2026-04-27T09:49:20.627Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:49:20.628Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=1341, phase=world)
+2026-04-27T09:49:20.628Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:49:20.628Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:49:39.050Z DEBUG [server:f38959b6] [world] recv 26 bytes (total=1367, phase=world)
+2026-04-27T09:49:39.050Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=14
+2026-04-27T09:49:39.051Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:49:39.051Z DEBUG [server:f38959b6] [world] rx type-0 len=14
+00000000  1b 21 28 2c 6f 21 21 21 21 21 43 6a 70 1b        |.!(,o!!!!!Cjp.|
+2026-04-27T09:49:39.051Z DEBUG [server:f38959b6] [world] client seq=0 cmd=7
+2026-04-27T09:49:39.051Z INFO  [server:f38959b6] [world] world menu reply (cmd-7): listId=1013 selection=0
+2026-04-27T09:49:39.051Z DEBUG [server:f38959b6] [world] cmd-7 ignored: unsupported listId=1013
+2026-04-27T09:49:43.183Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=1387, phase=world)
+2026-04-27T09:49:43.184Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T09:49:43.184Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 26 26 2c 65 64 1b                          |.!&&,ed.|
+2026-04-27T09:49:43.184Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 26 26 2c 65 64 1b                          |.!&&,ed.|
+2026-04-27T09:49:43.185Z DEBUG [server:f38959b6] [world] client seq=0 cmd=5
+2026-04-27T09:49:43.185Z INFO  [server:f38959b6] [world] cmd-5 scene action: type=5
+2026-04-27T09:49:43.185Z INFO  [server:f38959b6] [world] cmd-5 Fight button: triggering combat bootstrap room=167
+2026-04-27T09:49:43.186Z INFO  [server:f38959b6] [world] notified room of departure: rosterId=100015 callsign="Moose"
+2026-04-27T09:49:43.187Z INFO  [server:f38959b6] [world] delaying combat bootstrap by 4000ms so DROP can display
+2026-04-27T09:49:43.212Z DEBUG [server:f38959b6] [world] recv 23 bytes (total=1410, phase=combat)
+2026-04-27T09:49:43.213Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=11
+2026-04-27T09:49:43.213Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 24 22 3e 24 22 39 55 31 1b                 |.!$">$"9U1.|
+2026-04-27T09:49:43.213Z DEBUG [server:f38959b6] [world] rx type-0 len=11
+00000000  1b 21 24 22 3e 24 22 39 55 31 1b                 |.!$">$"9U1.|
+2026-04-27T09:49:43.214Z DEBUG [server:f38959b6] [world] client seq=0 cmd=3
+2026-04-27T09:49:43.214Z DEBUG [server:f38959b6] [world] duplicate cmd-3 after initialization — ignoring
+2026-04-27T09:49:47.198Z INFO  [server:f38959b6] [world] sending Cmd72 combat bootstrap (mech_id=98 callsign="Moose" type=CPLT-C1 allegiance=Marik)
+2026-04-27T09:49:47.200Z INFO  [server:f38959b6] [world] bot actor: slot=1 side=1 mech_id=98 type=CPLT-C1 x=-149400 y=-258768
+2026-04-27T09:49:47.200Z INFO  [server:f38959b6] [world] bot actor: slot=2 side=1 mech_id=98 type=CPLT-C1 x=0 y=-298800
+2026-04-27T09:49:47.201Z INFO  [server:f38959b6] [world] bot actor: slot=3 side=1 mech_id=98 type=CPLT-C1 x=149400 y=-258768
+2026-04-27T09:49:47.201Z INFO  [server:f38959b6] [world] bot actor: slot=4 side=2 mech_id=98 type=CPLT-C1 x=166671 y=249441
+2026-04-27T09:49:47.202Z INFO  [server:f38959b6] [world] bot actor: slot=5 side=2 mech_id=98 type=CPLT-C1 x=58527 y=294236
+2026-04-27T09:49:47.202Z INFO  [server:f38959b6] [world] bot actor: slot=6 side=2 mech_id=98 type=CPLT-C1 x=-58527 y=294236
+2026-04-27T09:49:47.202Z INFO  [server:f38959b6] [world] bot actor: slot=7 side=2 mech_id=98 type=CPLT-C1 x=-166671 y=249441
+2026-04-27T09:49:47.204Z INFO  [server:f38959b6] [world] combat entry complete for "Moose"
+2026-04-27T09:49:47.246Z DEBUG [server:f38959b6] [world] recv 19 bytes (total=1429, phase=combat)
+2026-04-27T09:49:47.247Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=7
+2026-04-27T09:49:47.247Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 34 27 25 21 1b                             |.!4'%!.|
+2026-04-27T09:49:47.247Z DEBUG [server:f38959b6] [world] rx type-0 len=7
+00000000  1b 21 34 27 25 21 1b                             |.!4'%!.|
+2026-04-27T09:49:47.248Z DEBUG [server:f38959b6] [world] client seq=0 cmd=19
+2026-04-27T09:49:47.248Z DEBUG [server:f38959b6] [world/combat] inbound combat cmd=19 len=7 — not yet handled
+2026-04-27T09:49:47.248Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1463, phase=combat)
+2026-04-27T09:49:47.248Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:47.248Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4c 50  |.!)KKKKKKKK!!!LP|
+00000010  4b 4b 21 2c 26 1b                                |KK!,&.|
+2026-04-27T09:49:47.249Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4c 50  |.!)KKKKKKKK!!!LP|
+00000010  4b 4b 21 2c 26 1b                                |KK!,&.|
+2026-04-27T09:49:47.249Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:47.250Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3702 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:48.241Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1497, phase=combat)
+2026-04-27T09:49:48.241Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:48.241Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:48.242Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:48.242Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:48.242Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:49.249Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1531, phase=combat)
+2026-04-27T09:49:49.250Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:49.250Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:49.251Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:49.251Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:49.251Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:50.256Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1565, phase=combat)
+2026-04-27T09:49:50.257Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:50.257Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:50.257Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:50.257Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:50.258Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:51.267Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1599, phase=combat)
+2026-04-27T09:49:51.267Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:51.267Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:51.268Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:51.268Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:51.268Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:52.267Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1633, phase=combat)
+2026-04-27T09:49:52.267Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:52.268Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:52.268Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:52.268Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:52.268Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:53.266Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1667, phase=combat)
+2026-04-27T09:49:53.266Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:53.267Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:53.267Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:53.268Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:53.268Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:54.265Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1701, phase=combat)
+2026-04-27T09:49:54.266Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:54.266Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:54.266Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:54.266Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:54.267Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:55.266Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1735, phase=combat)
+2026-04-27T09:49:55.267Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:55.267Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:55.267Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:55.268Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:55.268Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:56.268Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1769, phase=combat)
+2026-04-27T09:49:56.268Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:56.269Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:56.269Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:56.269Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:56.270Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:57.281Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1803, phase=combat)
+2026-04-27T09:49:57.282Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:57.282Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:57.282Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:57.282Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:57.283Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:58.294Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1837, phase=combat)
+2026-04-27T09:49:58.294Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:58.294Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:58.295Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 4b 4b 4b 4b 4b 21 21 21 4a 46  |.!)KKKKKKKK!!!JF|
+00000010  4b 4b 21 24 6e 1b                                |KK!$n.|
+2026-04-27T09:49:58.295Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:58.295Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=0 y=0 altitude=0 facingRaw=3522 clientSpeed=0 suppressing echo (stopped)
+2026-04-27T09:49:59.302Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1871, phase=combat)
+2026-04-27T09:49:59.302Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:49:59.303Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 4b 62 4b 4b 4b 4b 21 21 21 4a 4e  |.!)KKKbKKKK!!!JN|
+00000010  4d 72 35 47 2f 1b                                |Mr5G/.|
+2026-04-27T09:49:59.303Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 4b 62 4b 4b 4b 4b 21 21 21 4a 4e  |.!)KKKbKKKK!!!JN|
+00000010  4d 72 35 47 2f 1b                                |Mr5G/.|
+2026-04-27T09:49:59.303Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:49:59.304Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=23 y=0 altitude=0 facingRaw=3530 clientSpeed=209 effectiveSpeed=209 -> no echo (trust local key events)
+2026-04-27T09:50:00.310Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1905, phase=combat)
+2026-04-27T09:50:00.311Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:00.311Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 51 21 4b 4b 4c 4c 21 21 21 4a 67  |.!)KKQ!KKLL!!!Jg|
+00000010  53 72 66 31 6c 1b                                |Srf1l.|
+2026-04-27T09:50:00.312Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 51 21 4b 4b 4c 4c 21 21 21 4a 67  |.!)KKQ!KKLL!!!Jg|
+00000010  53 72 66 31 6c 1b                                |Srf1l.|
+2026-04-27T09:50:00.312Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:00.312Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=468 y=86 altitude=0 facingRaw=3555 clientSpeed=719 effectiveSpeed=719 -> no echo (trust local key events)
+2026-04-27T09:50:01.307Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1939, phase=combat)
+2026-04-27T09:50:01.307Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:01.307Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 5c 33 4b 4b 52 61 21 21 21 4b 2b  |.!)KK\3KKRa!!!K+|
+00000010  5a 21 56 5e 59 1b                                |Z!V^Y.|
+2026-04-27T09:50:01.308Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 5c 33 4b 4b 52 61 21 21 21 4b 2b  |.!)KK\3KKRa!!!K+|
+00000010  5a 21 56 5e 59 1b                                |Z!V^Y.|
+2026-04-27T09:50:01.308Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:01.308Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=1421 y=617 altitude=0 facingRaw=3580 clientSpeed=1233 effectiveSpeed=1233 -> no echo (trust local key events)
+2026-04-27T09:50:02.315Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=1973, phase=combat)
+2026-04-27T09:50:02.316Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:02.316Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 67 6d 4b 4b 5f 22 21 21 21 4b 3f  |.!)KKgmKK_"!!!K?|
+00000010  5c 3e 5c 3a 3b 1b                                |\>\:;.|
+2026-04-27T09:50:02.316Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 67 6d 4b 4b 5f 22 21 21 21 4b 3f  |.!)KKgmKK_"!!!K?|
+00000010  5c 3e 5c 3a 3b 1b                                |\>\:;.|
+2026-04-27T09:50:02.317Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:02.317Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=2414 y=1659 altitude=0 facingRaw=3600 clientSpeed=1432 effectiveSpeed=1432 -> no echo (trust local key events)
+2026-04-27T09:50:03.316Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2007, phase=combat)
+2026-04-27T09:50:03.316Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:03.317Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4b 70 5e 4b 4b 6f 53 21 21 21 4b 3f  |.!)KKp^KKoS!!!K?|
+00000010  5f 26 2f 2b 73 1b                                |_&/+s.|
+2026-04-27T09:50:03.317Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4b 70 5e 4b 4b 6f 53 21 21 21 4b 3f  |.!)KKp^KKoS!!!K?|
+00000010  5f 26 2f 2b 73 1b                                |_&/+s.|
+2026-04-27T09:50:03.317Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:03.317Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=3164 y=3068 altitude=0 facingRaw=3600 clientSpeed=1663 effectiveSpeed=1663 -> no echo (trust local key events)
+2026-04-27T09:50:04.315Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2041, phase=combat)
+2026-04-27T09:50:04.316Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:04.316Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 22 61 4b 4c 2d 4f 21 21 21 4b 42  |.!)KL"aKL-O!!!KB|
+00000010  60 3a 36 21 50 1b                                |`:6!P.|
+2026-04-27T09:50:04.316Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 22 61 4b 4c 2d 4f 21 21 21 4b 42  |.!)KL"aKL-O!!!KB|
+00000010  60 3a 36 21 50 1b                                |`:6!P.|
+2026-04-27T09:50:04.317Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:04.317Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=3762 y=4679 altitude=0 facingRaw=3603 clientSpeed=1768 effectiveSpeed=1768 -> no echo (trust local key events)
+2026-04-27T09:50:05.326Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2075, phase=combat)
+2026-04-27T09:50:05.326Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:05.326Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 28 25 4b 4c 42 21 21 21 21 4b 48  |.!)KL(%KLB!!!!KH|
+00000010  60 53 4a 48 6d 1b                                |`SJHm.|
+2026-04-27T09:50:05.327Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 28 25 4b 4c 42 21 21 21 21 4b 48  |.!)KL(%KLB!!!!KH|
+00000010  60 53 4a 48 6d 1b                                |`SJHm.|
+2026-04-27T09:50:05.327Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:05.327Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=4212 y=6418 altitude=0 facingRaw=3609 clientSpeed=1793 effectiveSpeed=1793 -> no echo (trust local key events)
+2026-04-27T09:50:06.326Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2109, phase=combat)
+2026-04-27T09:50:06.327Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:06.327Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 2b 57 4b 4c 57 22 21 21 21 4b 48  |.!)KL+WKLW"!!!KH|
+00000010  61 28 2c 23 28 1b                                |a(,#(.|
+2026-04-27T09:50:06.328Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 2b 57 4b 4c 57 22 21 21 21 4b 48  |.!)KL+WKLW"!!!KH|
+00000010  61 28 2c 23 28 1b                                |a(,#(.|
+2026-04-27T09:50:06.328Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:06.328Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=4517 y=8204 altitude=0 facingRaw=3609 clientSpeed=1835 effectiveSpeed=1835 -> no echo (trust local key events)
+2026-04-27T09:50:07.334Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2143, phase=combat)
+2026-04-27T09:50:07.334Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:07.335Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 2e 35 4b 4c 6c 52 21 21 21 4b 48  |.!)KL.5KLlR!!!KH|
+00000010  61 41 3d 66 4a 1b                                |aA=fJ.|
+2026-04-27T09:50:07.335Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 2e 35 4b 4c 6c 52 21 21 21 4b 48  |.!)KL.5KLlR!!!KH|
+00000010  61 41 3d 66 4a 1b                                |aA=fJ.|
+2026-04-27T09:50:07.335Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:07.335Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=4738 y=10037 altitude=0 facingRaw=3609 clientSpeed=1860 effectiveSpeed=1860 -> no echo (trust local key events)
+2026-04-27T09:50:08.333Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2177, phase=combat)
+2026-04-27T09:50:08.333Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:08.334Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 30 2d 4b 4d 2d 31 21 21 21 4b 48  |.!)KL0-KM-1!!!KH|
+00000010  61 4d 30 5e 43 1b                                |aM0^C.|
+2026-04-27T09:50:08.334Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 30 2d 4b 4d 2d 31 21 21 21 4b 48  |.!)KL0-KM-1!!!KH|
+00000010  61 4d 30 5e 43 1b                                |aM0^C.|
+2026-04-27T09:50:08.335Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:08.335Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=4900 y=11874 altitude=0 facingRaw=3609 clientSpeed=1872 effectiveSpeed=1872 -> no echo (trust local key events)
+2026-04-27T09:50:09.348Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2211, phase=combat)
+2026-04-27T09:50:09.349Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:09.349Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 31 6a 4b 4d 43 30 21 21 21 4b 48  |.!)KL1jKMC0!!!KH|
+00000010  61 53 41 34 70 1b                                |aSA4p.|
+2026-04-27T09:50:09.349Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 31 6a 4b 4d 43 30 21 21 21 4b 48  |.!)KL1jKMC0!!!KH|
+00000010  61 53 41 34 70 1b                                |aSA4p.|
+2026-04-27T09:50:09.349Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:09.350Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=5046 y=13743 altitude=0 facingRaw=3609 clientSpeed=1878 effectiveSpeed=1878 -> no echo (trust local key events)
+2026-04-27T09:50:10.341Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2245, phase=combat)
+2026-04-27T09:50:10.342Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:10.342Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 33 3b 4b 4d 58 73 21 21 21 4b 48  |.!)KL3;KMXs!!!KH|
+00000010  61 51 61 45 6f 1b                                |aQaEo.|
+2026-04-27T09:50:10.342Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 33 3b 4b 4d 58 73 21 21 21 4b 48  |.!)KL3;KMXs!!!KH|
+00000010  61 51 61 45 6f 1b                                |aQaEo.|
+2026-04-27T09:50:10.343Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:10.343Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=5169 y=15595 altitude=0 facingRaw=3609 clientSpeed=1876 effectiveSpeed=1876 -> no echo (trust local key events)
+2026-04-27T09:50:11.351Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2279, phase=combat)
+2026-04-27T09:50:11.351Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:11.352Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 34 59 4b 4d 6e 74 21 21 21 4b 48  |.!)KL4YKMnt!!!KH|
+00000010  61 53 54 5f 60 1b                                |aST_`.|
+2026-04-27T09:50:11.352Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 34 59 4b 4d 6e 74 21 21 21 4b 48  |.!)KL4YKMnt!!!KH|
+00000010  61 53 54 5f 60 1b                                |aST_`.|
+2026-04-27T09:50:11.353Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:11.353Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=5284 y=17466 altitude=0 facingRaw=3609 clientSpeed=1878 effectiveSpeed=1878 -> no echo (trust local key events)
+2026-04-27T09:50:12.353Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2313, phase=combat)
+2026-04-27T09:50:12.354Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:12.354Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 36 23 4b 4e 2f 61 21 21 21 4b 40  |.!)KL6#KN/a!!!K@|
+00000010  61 47 24 31 60 1b                                |aG$1`.|
+2026-04-27T09:50:12.354Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 36 23 4b 4e 2f 61 21 21 21 4b 40  |.!)KL6#KN/a!!!K@|
+00000010  61 47 24 31 60 1b                                |aG$1`.|
+2026-04-27T09:50:12.355Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:12.355Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=5400 y=19317 altitude=0 facingRaw=3601 clientSpeed=1866 effectiveSpeed=1866 -> no echo (trust local key events)
+2026-04-27T09:50:13.361Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2347, phase=combat)
+2026-04-27T09:50:13.362Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:13.362Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 38 35 4b 4e 45 5d 21 21 21 4b 40  |.!)KL85KNE]!!!K@|
+00000010  61 51 2e 44 37 1b                                |aQ.D7.|
+2026-04-27T09:50:13.362Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 38 35 4b 4e 45 5d 21 21 21 4b 40  |.!)KL85KNE]!!!K@|
+00000010  61 51 2e 44 37 1b                                |aQ.D7.|
+2026-04-27T09:50:13.363Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:13.363Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=5588 y=21183 altitude=0 facingRaw=3601 clientSpeed=1876 effectiveSpeed=1876 -> no echo (trust local key events)
+2026-04-27T09:50:14.366Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2381, phase=combat)
+2026-04-27T09:50:14.366Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:14.367Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 3b 3d 4b 4e 5b 3b 21 21 21 4b 3f  |.!)KL;=KN[;!!!K?|
+00000010  61 54 41 66 26 1b                                |aTAf&.|
+2026-04-27T09:50:14.367Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 3b 3d 4b 4e 5b 3b 21 21 21 4b 3f  |.!)KL;=KN[;!!!K?|
+00000010  61 54 41 66 26 1b                                |aTAf&.|
+2026-04-27T09:50:14.367Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:14.368Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=5851 y=23019 altitude=0 facingRaw=3600 clientSpeed=1879 effectiveSpeed=1879 -> no echo (trust local key events)
+2026-04-27T09:50:15.366Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2415, phase=combat)
+2026-04-27T09:50:15.366Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:15.367Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 3e 75 4b 4e 70 6e 21 21 21 4b 3f  |.!)KL>uKNpn!!!K?|
+00000010  61 57 3c 63 6c 1b                                |aW<cl.|
+2026-04-27T09:50:15.367Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 3e 75 4b 4e 70 6e 21 21 21 4b 3f  |.!)KL>uKNpn!!!K?|
+00000010  61 57 3c 63 6c 1b                                |aW<cl.|
+2026-04-27T09:50:15.367Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:15.368Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=6162 y=24855 altitude=0 facingRaw=3600 clientSpeed=1882 effectiveSpeed=1882 -> no echo (trust local key events)
+2026-04-27T09:50:16.376Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2449, phase=combat)
+2026-04-27T09:50:16.377Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:16.377Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 43 24 4b 4f 31 47 21 21 21 4b 44  |.!)KLC$KO1G!!!KD|
+00000010  61 50 3f 5d 57 1b                                |aP?]W.|
+2026-04-27T09:50:16.378Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 43 24 4b 4f 31 47 21 21 21 4b 44  |.!)KLC$KO1G!!!KD|
+00000010  61 50 3f 5d 57 1b                                |aP?]W.|
+2026-04-27T09:50:16.378Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:16.378Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=6506 y=26686 altitude=0 facingRaw=3605 clientSpeed=1875 effectiveSpeed=1875 -> no echo (trust local key events)
+2026-04-27T09:50:17.376Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2483, phase=combat)
+2026-04-27T09:50:17.377Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:17.377Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 46 57 4b 4f 46 74 21 21 21 4b 44  |.!)KLFWKOFt!!!KD|
+00000010  61 53 5a 47 5a 1b                                |aSZGZ.|
+2026-04-27T09:50:17.377Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 46 57 4b 4f 46 74 21 21 21 4b 44  |.!)KLFWKOFt!!!KD|
+00000010  61 53 5a 47 5a 1b                                |aSZGZ.|
+2026-04-27T09:50:17.378Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:17.378Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=6812 y=28516 altitude=0 facingRaw=3605 clientSpeed=1878 effectiveSpeed=1878 -> no echo (trust local key events)
+2026-04-27T09:50:18.375Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2517, phase=combat)
+2026-04-27T09:50:18.375Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:18.375Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 49 6c 4b 4f 5c 51 21 21 21 4b 42  |.!)KLIlKO\Q!!!KB|
+00000010  61 52 63 47 35 1b                                |aRcG5.|
+2026-04-27T09:50:18.376Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 49 6c 4b 4f 5c 51 21 21 21 4b 42  |.!)KLIlKO\Q!!!KB|
+00000010  61 52 63 47 35 1b                                |aRcG5.|
+2026-04-27T09:50:18.376Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:18.376Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=7088 y=30351 altitude=0 facingRaw=3603 clientSpeed=1877 effectiveSpeed=1877 -> no echo (trust local key events)
+2026-04-27T09:50:19.374Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2551, phase=combat)
+2026-04-27T09:50:19.374Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:19.375Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 4d 45 4b 4f 72 24 21 21 21 4b 3c  |.!)KLMEKOr$!!!K<|
+00000010  61 4e 67 28 26 1b                                |aNg(&.|
+2026-04-27T09:50:19.375Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 4d 45 4b 4f 72 24 21 21 21 4b 3c  |.!)KLMEKOr$!!!K<|
+00000010  61 4e 67 28 26 1b                                |aNg(&.|
+2026-04-27T09:50:19.376Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:19.376Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=7389 y=32176 altitude=0 facingRaw=3597 clientSpeed=1873 effectiveSpeed=1873 -> no echo (trust local key events)
+2026-04-27T09:50:20.373Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2585, phase=combat)
+2026-04-27T09:50:20.374Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:20.374Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 51 74 4b 50 32 3a 21 21 21 4b 3c  |.!)KLQtKP2:!!!K<|
+00000010  61 55 5b 45 6b 1b                                |aU[Ek.|
+2026-04-27T09:50:20.375Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 51 74 4b 50 32 3a 21 21 21 4b 3c  |.!)KLQtKP2:!!!K<|
+00000010  61 55 5b 45 6b 1b                                |aU[Ek.|
+2026-04-27T09:50:20.375Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:20.375Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=7776 y=33983 altitude=0 facingRaw=3597 clientSpeed=1880 effectiveSpeed=1880 -> no echo (trust local key events)
+2026-04-27T09:50:21.395Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2619, phase=combat)
+2026-04-27T09:50:21.395Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:21.396Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 57 32 4b 50 47 6d 21 21 21 4b 33  |.!)KLW2KPGm!!!K3|
+00000010  61 39 57 53 75 1b                                |a9WSu.|
+2026-04-27T09:50:21.396Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 57 32 4b 50 47 6d 21 21 21 4b 33  |.!)KLW2KPGm!!!K3|
+00000010  61 39 57 53 75 1b                                |a9WSu.|
+2026-04-27T09:50:21.396Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:21.396Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=8220 y=35819 altitude=0 facingRaw=3588 clientSpeed=1852 effectiveSpeed=1852 -> no echo (trust local key events)
+2026-04-27T09:50:22.404Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2653, phase=combat)
+2026-04-27T09:50:22.404Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:22.405Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 5e 3a 4b 50 5c 53 21 21 21 4b 2e  |.!)KL^:KP\S!!!K.|
+00000010  61 38 26 6f 3e 1b                                |a8&o>.|
+2026-04-27T09:50:22.405Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 5e 3a 4b 50 5c 53 21 21 21 4b 2e  |.!)KL^:KP\S!!!K.|
+00000010  61 38 26 6f 3e 1b                                |a8&o>.|
+2026-04-27T09:50:22.405Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:22.406Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=8823 y=37578 altitude=0 facingRaw=3583 clientSpeed=1851 effectiveSpeed=1851 -> no echo (trust local key events)
+2026-04-27T09:50:23.406Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2687, phase=combat)
+2026-04-27T09:50:23.407Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:23.407Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 66 55 4b 50 70 54 21 21 21 4b 3a  |.!)KLfUKPpT!!!K:|
+00000010  61 47 58 3c 35 1b                                |aGX<5.|
+2026-04-27T09:50:23.408Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 66 55 4b 50 70 54 21 21 21 4b 3a  |.!)KLfUKPpT!!!K:|
+00000010  61 47 58 3c 35 1b                                |aGX<5.|
+2026-04-27T09:50:23.408Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:23.408Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=9530 y=39279 altitude=0 facingRaw=3595 clientSpeed=1866 effectiveSpeed=1866 -> no echo (trust local key events)
+2026-04-27T09:50:24.419Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2721, phase=combat)
+2026-04-27T09:50:24.420Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:24.420Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 6e 34 4b 51 30 29 21 21 21 4b 3a  |.!)KLn4KQ0)!!!K:|
+00000010  61 4f 30 67 4e 1b                                |aO0gN.|
+2026-04-27T09:50:24.420Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 6e 34 4b 51 30 29 21 21 21 4b 3a  |.!)KLn4KQ0)!!!K:|
+00000010  61 4f 30 67 4e 1b                                |aO0gN.|
+2026-04-27T09:50:24.421Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:24.421Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=10177 y=41021 altitude=0 facingRaw=3595 clientSpeed=1874 effectiveSpeed=1874 -> no echo (trust local key events)
+2026-04-27T09:50:25.416Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2755, phase=combat)
+2026-04-27T09:50:25.416Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:25.416Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4c 75 3c 4b 51 44 5c 21 21 21 4b 41  |.!)KLu<KQD\!!!KA|
+00000010  61 43 47 5f 51 1b                                |aCG_Q.|
+2026-04-27T09:50:25.417Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4c 75 3c 4b 51 44 5c 21 21 21 4b 41  |.!)KLu<KQD\!!!KA|
+00000010  61 43 47 5f 51 1b                                |aCG_Q.|
+2026-04-27T09:50:25.417Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:25.417Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=10780 y=42772 altitude=0 facingRaw=3602 clientSpeed=1862 effectiveSpeed=1862 -> no echo (trust local key events)
+2026-04-27T09:50:26.425Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2789, phase=combat)
+2026-04-27T09:50:26.425Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:26.426Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 25 71 4b 51 59 6c 21 21 21 4b 47  |.!)KM%qKQYl!!!KG|
+00000010  61 38 59 29 33 1b                                |a8Y)3.|
+2026-04-27T09:50:26.426Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 25 71 4b 51 59 6c 21 21 21 4b 47  |.!)KM%qKQYl!!!KG|
+00000010  61 38 59 29 33 1b                                |a8Y)3.|
+2026-04-27T09:50:26.426Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:26.427Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=11258 y=44573 altitude=0 facingRaw=3608 clientSpeed=1851 effectiveSpeed=1851 -> no echo (trust local key events)
+2026-04-27T09:50:27.427Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2823, phase=combat)
+2026-04-27T09:50:27.427Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:27.427Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 29 67 4b 51 6f 31 21 21 21 4b 47  |.!)KM)gKQo1!!!KG|
+00000010  61 49 52 2f 40 1b                                |aIR/@.|
+2026-04-27T09:50:27.428Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 29 67 4b 51 6f 31 21 21 21 4b 47  |.!)KM)gKQo1!!!KG|
+00000010  61 49 52 2f 40 1b                                |aIR/@.|
+2026-04-27T09:50:27.428Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:27.428Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=11588 y=46384 altitude=0 facingRaw=3608 clientSpeed=1868 effectiveSpeed=1868 -> no echo (trust local key events)
+2026-04-27T09:50:28.432Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2857, phase=combat)
+2026-04-27T09:50:28.433Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:28.433Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 2c 4c 4b 52 30 24 21 21 21 4b 47  |.!)KM,LKR0$!!!KG|
+00000010  61 50 66 70 3d 1b                                |aPfp=.|
+2026-04-27T09:50:28.433Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 2c 4c 4b 52 30 24 21 21 21 4b 47  |.!)KM,LKR0$!!!KG|
+00000010  61 50 66 70 3d 1b                                |aPfp=.|
+2026-04-27T09:50:28.433Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:28.434Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=11816 y=48241 altitude=0 facingRaw=3608 clientSpeed=1875 effectiveSpeed=1875 -> no echo (trust local key events)
+2026-04-27T09:50:29.447Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2891, phase=combat)
+2026-04-27T09:50:29.447Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:29.448Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 2e 61 4b 52 46 24 21 21 21 4b 47  |.!)KM.aKRF$!!!KG|
+00000010  61 52 59 6d 3d 1b                                |aRYm=.|
+2026-04-27T09:50:29.448Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 2e 61 4b 52 46 24 21 21 21 4b 47  |.!)KM.aKRF$!!!KG|
+00000010  61 52 59 6d 3d 1b                                |aRYm=.|
+2026-04-27T09:50:29.448Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:29.448Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12007 y=50111 altitude=0 facingRaw=3608 clientSpeed=1877 effectiveSpeed=1877 -> no echo (trust local key events)
+2026-04-27T09:50:30.450Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2925, phase=combat)
+2026-04-27T09:50:30.450Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:30.450Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 30 4f 4b 52 5b 66 21 21 21 4b 47  |.!)KM0OKR[f!!!KG|
+00000010  61 54 3d 4c 3e 1b                                |aT=L>.|
+2026-04-27T09:50:30.451Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 30 4f 4b 52 5b 66 21 21 21 4b 47  |.!)KM0OKR[f!!!KG|
+00000010  61 54 3d 4c 3e 1b                                |aT=L>.|
+2026-04-27T09:50:30.451Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:30.451Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12159 y=51962 altitude=0 facingRaw=3608 clientSpeed=1879 effectiveSpeed=1879 -> no echo (trust local key events)
+2026-04-27T09:50:31.443Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2959, phase=combat)
+2026-04-27T09:50:31.443Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:31.444Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 32 30 4b 52 71 56 21 21 21 4b 47  |.!)KM20KRqV!!!KG|
+00000010  61 54 49 46 64 1b                                |aTIFd.|
+2026-04-27T09:50:31.444Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 32 30 4b 52 71 56 21 21 21 4b 47  |.!)KM20KRqV!!!KG|
+00000010  61 54 49 46 64 1b                                |aTIFd.|
+2026-04-27T09:50:31.444Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:31.445Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12298 y=53816 altitude=0 facingRaw=3608 clientSpeed=1879 effectiveSpeed=1879 -> no echo (trust local key events)
+2026-04-27T09:50:32.448Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=2993, phase=combat)
+2026-04-27T09:50:32.449Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:32.449Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 33 67 4b 53 32 44 21 21 21 4b 47  |.!)KM3gKS2D!!!KG|
+00000010  61 57 40 3e 39 1b                                |aW@>9.|
+2026-04-27T09:50:32.450Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 33 67 4b 53 32 44 21 21 21 4b 47  |.!)KM3gKS2D!!!KG|
+00000010  61 57 40 3e 39 1b                                |aW@>9.|
+2026-04-27T09:50:32.450Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:32.450Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12438 y=55668 altitude=0 facingRaw=3608 clientSpeed=1882 effectiveSpeed=1882 -> no echo (trust local key events)
+2026-04-27T09:50:33.452Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3027, phase=combat)
+2026-04-27T09:50:33.452Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:33.452Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 35 46 4b 53 48 44 21 21 21 4b 47  |.!)KM5FKSHD!!!KG|
+00000010  61 57 44 3b 38 1b                                |aWD;8.|
+2026-04-27T09:50:33.453Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 35 46 4b 53 48 44 21 21 21 4b 47  |.!)KM5FKSHD!!!KG|
+00000010  61 57 44 3b 38 1b                                |aWD;8.|
+2026-04-27T09:50:33.453Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:33.453Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12575 y=57538 altitude=0 facingRaw=3608 clientSpeed=1882 effectiveSpeed=1882 -> no echo (trust local key events)
+2026-04-27T09:50:34.452Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3061, phase=combat)
+2026-04-27T09:50:34.452Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:34.452Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 36 61 4b 53 5e 31 21 21 21 4b 47  |.!)KM6aKS^1!!!KG|
+00000010  61 57 3a 24 5d 1b                                |aW:$].|
+2026-04-27T09:50:34.453Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 36 61 4b 53 5e 31 21 21 21 4b 47  |.!)KM6aKS^1!!!KG|
+00000010  61 57 3a 24 5d 1b                                |aW:$].|
+2026-04-27T09:50:34.453Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:34.453Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12687 y=59389 altitude=0 facingRaw=3608 clientSpeed=1882 effectiveSpeed=1882 -> no echo (trust local key events)
+2026-04-27T09:50:35.468Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3095, phase=combat)
+2026-04-27T09:50:35.469Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:35.469Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 38 22 4b 53 74 2e 21 21 21 4b 51  |.!)KM8"KSt.!!!KQ|
+00000010  61 39 46 68 6f 1b                                |a9Fho.|
+2026-04-27T09:50:35.469Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 38 22 4b 53 74 2e 21 21 21 4b 51  |.!)KM8"KSt.!!!KQ|
+00000010  61 39 46 68 6f 1b                                |a9Fho.|
+2026-04-27T09:50:35.470Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:35.470Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12794 y=61256 altitude=0 facingRaw=3618 clientSpeed=1852 effectiveSpeed=1852 -> no echo (trust local key events)
+2026-04-27T09:50:36.466Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3129, phase=combat)
+2026-04-27T09:50:36.467Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:36.467Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 38 28 4b 54 34 70 21 21 21 4b 51  |.!)KM8(KT4p!!!KQ|
+00000010  61 46 54 36 45 1b                                |aFT6E.|
+2026-04-27T09:50:36.467Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 38 28 4b 54 34 70 21 21 21 4b 51  |.!)KM8(KT4p!!!KQ|
+00000010  61 46 54 36 45 1b                                |aFT6E.|
+2026-04-27T09:50:36.468Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:36.468Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12800 y=63107 altitude=0 facingRaw=3618 clientSpeed=1865 effectiveSpeed=1865 -> no echo (trust local key events)
+2026-04-27T09:50:37.467Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3163, phase=combat)
+2026-04-27T09:50:37.468Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:37.468Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 37 36 4b 54 4a 5d 21 21 21 4b 51  |.!)KM76KTJ]!!!KQ|
+00000010  61 51 5f 40 54 1b                                |aQ_@T.|
+2026-04-27T09:50:37.468Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 37 36 4b 54 4a 5d 21 21 21 4b 51  |.!)KM76KTJ]!!!KQ|
+00000010  61 51 5f 40 54 1b                                |aQ_@T.|
+2026-04-27T09:50:37.468Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:37.469Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12729 y=64958 altitude=0 facingRaw=3618 clientSpeed=1876 effectiveSpeed=1876 -> no echo (trust local key events)
+2026-04-27T09:50:38.462Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3197, phase=combat)
+2026-04-27T09:50:38.462Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:38.463Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 35 5d 4b 54 60 4a 21 21 21 4b 51  |.!)KM5]KT`J!!!KQ|
+00000010  61 53 46 71 3a 1b                                |aSFq:.|
+2026-04-27T09:50:38.463Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 35 5d 4b 54 60 4a 21 21 21 4b 51  |.!)KM5]KT`J!!!KQ|
+00000010  61 53 46 71 3a 1b                                |aSFq:.|
+2026-04-27T09:50:38.463Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:38.464Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12598 y=66809 altitude=0 facingRaw=3618 clientSpeed=1878 effectiveSpeed=1878 -> no echo (trust local key events)
+2026-04-27T09:50:39.477Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3231, phase=combat)
+2026-04-27T09:50:39.477Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:39.477Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 33 68 4b 55 21 4b 21 21 21 4b 51  |.!)KM3hKU!K!!!KQ|
+00000010  61 52 25 24 3a 1b                                |aR%$:.|
+2026-04-27T09:50:39.478Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 33 68 4b 55 21 4b 21 21 21 4b 51  |.!)KM3hKU!K!!!KQ|
+00000010  61 52 25 24 3a 1b                                |aR%$:.|
+2026-04-27T09:50:39.478Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:39.478Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12439 y=68680 altitude=0 facingRaw=3618 clientSpeed=1877 effectiveSpeed=1877 -> no echo (trust local key events)
+2026-04-27T09:50:40.471Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3265, phase=combat)
+2026-04-27T09:50:40.472Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:40.472Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 31 4a 4b 55 37 32 21 21 21 4b 51  |.!)KM1JKU72!!!KQ|
+00000010  61 54 26 71 54 1b                                |aT&qT.|
+2026-04-27T09:50:40.473Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 31 4a 4b 55 37 32 21 21 21 4b 51  |.!)KM1JKU72!!!KQ|
+00000010  61 54 26 71 54 1b                                |aT&qT.|
+2026-04-27T09:50:40.473Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:40.474Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12239 y=70525 altitude=0 facingRaw=3618 clientSpeed=1879 effectiveSpeed=1879 -> no echo (trust local key events)
+2026-04-27T09:50:41.483Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3299, phase=combat)
+2026-04-27T09:50:41.484Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:41.484Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 2f 2a 4b 55 4d 30 21 21 21 4b 50  |.!)KM/*KUM0!!!KP|
+00000010  61 54 49 63 35 1b                                |aTIc5.|
+2026-04-27T09:50:41.484Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 2f 2a 4b 55 4d 30 21 21 21 4b 50  |.!)KM/*KUM0!!!KP|
+00000010  61 54 49 63 35 1b                                |aTIc5.|
+2026-04-27T09:50:41.484Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:41.485Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12037 y=72393 altitude=0 facingRaw=3617 clientSpeed=1879 effectiveSpeed=1879 -> no echo (trust local key events)
+2026-04-27T09:50:42.490Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3333, phase=combat)
+2026-04-27T09:50:42.490Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:42.491Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 2d 56 4b 55 62 72 21 21 21 4b 37  |.!)KM-VKUbr!!!K7|
+00000010  5f 73 33 34 2c 1b                                |_s34,.|
+2026-04-27T09:50:42.491Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 2d 56 4b 55 62 72 21 21 21 4b 37  |.!)KM-VKUbr!!!K7|
+00000010  5f 73 33 34 2c 1b                                |_s34,.|
+2026-04-27T09:50:42.491Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:42.492Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=11911 y=74244 altitude=0 facingRaw=3592 clientSpeed=1740 effectiveSpeed=1740 -> no echo (trust local key events)
+2026-04-27T09:50:43.497Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3367, phase=combat)
+2026-04-27T09:50:43.497Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:43.497Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 2f 62 4b 56 23 48 21 21 21 4b 2b  |.!)KM/bKV#H!!!K+|
+00000010  5f 5a 4c 59 3a 1b                                |_ZLY:.|
+2026-04-27T09:50:43.498Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 2f 62 4b 56 23 48 21 21 21 4b 2b  |.!)KM/bKV#H!!!K+|
+00000010  5f 5a 4c 59 3a 1b                                |_ZLY:.|
+2026-04-27T09:50:43.498Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:43.498Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12093 y=76072 altitude=0 facingRaw=3580 clientSpeed=1715 effectiveSpeed=1715 -> no echo (trust local key events)
+2026-04-27T09:50:44.505Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3401, phase=combat)
+2026-04-27T09:50:44.506Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:44.506Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 36 36 4b 56 37 58 21 21 21 4b 21  |.!)KM66KV7X!!!K!|
+00000010  5f 6e 54 54 63 1b                                |_nTTc.|
+2026-04-27T09:50:44.506Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 36 36 4b 56 37 58 21 21 21 4b 21  |.!)KM66KV7X!!!K!|
+00000010  5f 6e 54 54 63 1b                                |_nTTc.|
+2026-04-27T09:50:44.507Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:44.507Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=12644 y=77788 altitude=0 facingRaw=3570 clientSpeed=1735 effectiveSpeed=1735 -> no echo (trust local key events)
+2026-04-27T09:50:45.503Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3435, phase=combat)
+2026-04-27T09:50:45.503Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:45.503Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 40 32 4b 56 4a 32 21 21 21 4b 30  |.!)KM@2KVJ2!!!K0|
+00000010  61 24 56 72 33 1b                                |a$Vr3.|
+2026-04-27T09:50:45.504Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 40 32 4b 56 4a 32 21 21 21 4b 30  |.!)KM@2KVJ2!!!K0|
+00000010  61 24 56 72 33 1b                                |a$Vr3.|
+2026-04-27T09:50:45.504Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:45.504Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=13490 y=79365 altitude=0 facingRaw=3585 clientSpeed=1831 effectiveSpeed=1831 -> no echo (trust local key events)
+2026-04-27T09:50:46.510Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3469, phase=combat)
+2026-04-27T09:50:46.511Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:46.511Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 49 6d 4b 56 5d 27 21 21 21 4b 43  |.!)KMImKV]'!!!KC|
+00000010  60 3e 5a 3c 55 1b                                |`>Z<U.|
+2026-04-27T09:50:46.511Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 49 6d 4b 56 5d 27 21 21 21 4b 43  |.!)KMImKV]'!!!KC|
+00000010  60 3e 5a 3c 55 1b                                |`>Z<U.|
+2026-04-27T09:50:46.512Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:46.512Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=14314 y=80969 altitude=0 facingRaw=3604 clientSpeed=1772 effectiveSpeed=1772 -> no echo (trust local key events)
+2026-04-27T09:50:47.516Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3503, phase=combat)
+2026-04-27T09:50:47.517Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:47.517Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 50 71 4b 56 71 47 21 21 21 4b 40  |.!)KMPqKVqG!!!K@|
+00000010  61 30 50 28 5b 1b                                |a0P([.|
+2026-04-27T09:50:47.517Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 50 71 4b 56 71 47 21 21 21 4b 40  |.!)KMPqKVqG!!!K@|
+00000010  61 30 50 28 5b 1b                                |a0P([.|
+2026-04-27T09:50:47.518Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:47.518Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=14913 y=82701 altitude=0 facingRaw=3601 clientSpeed=1843 effectiveSpeed=1843 -> no echo (trust local key events)
+2026-04-27T09:50:48.520Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3537, phase=combat)
+2026-04-27T09:50:48.521Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:48.521Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 57 27 4b 57 30 75 21 21 21 4b 33  |.!)KMW'KW0u!!!K3|
+00000010  61 3b 32 49 26 1b                                |a;2I&.|
+2026-04-27T09:50:48.521Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 57 27 4b 57 30 75 21 21 21 4b 33  |.!)KMW'KW0u!!!K3|
+00000010  61 3b 32 49 26 1b                                |a;2I&.|
+2026-04-27T09:50:48.522Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:48.522Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=15434 y=84447 altitude=0 facingRaw=3588 clientSpeed=1854 effectiveSpeed=1854 -> no echo (trust local key events)
+2026-04-27T09:50:49.526Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3571, phase=combat)
+2026-04-27T09:50:49.527Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:49.527Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 5e 32 4b 57 45 5b 21 21 21 4b 3e  |.!)KM^2KWE[!!!K>|
+00000010  61 43 3e 46 55 1b                                |aC>FU.|
+2026-04-27T09:50:49.528Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 5e 32 4b 57 45 5b 21 21 21 4b 3e  |.!)KM^2KWE[!!!K>|
+00000010  61 43 3e 46 55 1b                                |aC>FU.|
+2026-04-27T09:50:49.528Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:49.528Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=16040 y=86206 altitude=0 facingRaw=3599 clientSpeed=1862 effectiveSpeed=1862 -> no echo (trust local key events)
+2026-04-27T09:50:50.526Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3605, phase=combat)
+2026-04-27T09:50:50.527Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:50.527Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 64 3a 4b 57 5a 39 21 21 21 4b 3f  |.!)KMd:KWZ9!!!K?|
+00000010  61 2a 51 2a 26 1b                                |a*Q*&.|
+2026-04-27T09:50:50.528Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 64 3a 4b 57 5a 39 21 21 21 4b 3f  |.!)KMd:KWZ9!!!K?|
+00000010  61 2a 51 2a 26 1b                                |a*Q*&.|
+2026-04-27T09:50:50.528Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:50.528Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=16558 y=87957 altitude=0 facingRaw=3600 clientSpeed=1837 effectiveSpeed=1837 -> no echo (trust local key events)
+2026-04-27T09:50:51.538Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3639, phase=combat)
+2026-04-27T09:50:51.538Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:51.538Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 69 3d 4b 57 6d 6f 21 21 21 4b 3f  |.!)KMi=KWmo!!!K?|
+00000010  5e 73 3b 51 65 1b                                |^s;Qe.|
+2026-04-27T09:50:51.539Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 69 3d 4b 57 6d 6f 21 21 21 4b 3f  |.!)KMi=KWmo!!!K?|
+00000010  5e 73 3b 51 65 1b                                |^s;Qe.|
+2026-04-27T09:50:51.539Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:51.539Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=16986 y=89626 altitude=0 facingRaw=3600 clientSpeed=1655 effectiveSpeed=1655 -> no echo (trust local key events)
+2026-04-27T09:50:52.541Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3673, phase=combat)
+2026-04-27T09:50:52.542Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:52.542Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 6d 4e 4b 58 2b 27 21 21 21 4b 3f  |.!)KMmNKX+'!!!K?|
+00000010  5e 22 67 68 72 1b                                |^"ghr.|
+2026-04-27T09:50:52.542Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 6d 4e 4b 58 2b 27 21 21 21 4b 3f  |.!)KMmNKX+'!!!K?|
+00000010  5e 22 67 68 72 1b                                |^"ghr.|
+2026-04-27T09:50:52.543Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:52.543Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=17343 y=91169 altitude=0 facingRaw=3600 clientSpeed=1574 effectiveSpeed=1574 -> no echo (trust local key events)
+2026-04-27T09:50:53.547Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3707, phase=combat)
+2026-04-27T09:50:53.548Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:53.548Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 71 3b 4b 58 3c 39 21 21 21 4b 3f  |.!)KMq;KX<9!!!K?|
+00000010  5c 5a 48 23 52 1b                                |\ZH#R.|
+2026-04-27T09:50:53.548Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 71 3b 4b 58 3c 39 21 21 21 4b 3f  |.!)KMq;KX<9!!!K?|
+00000010  5c 5a 48 23 52 1b                                |\ZH#R.|
+2026-04-27T09:50:53.549Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:53.549Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=17664 y=92632 altitude=0 facingRaw=3600 clientSpeed=1460 effectiveSpeed=1460 -> no echo (trust local key events)
+2026-04-27T09:50:54.554Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=3741, phase=combat)
+2026-04-27T09:50:54.554Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:50:54.554Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4d 74 6b 4b 58 4c 5f 21 21 21 4b 3f  |.!)KMtkKXL_!!!K?|
+00000010  5d 30 28 53 44 1b                                |]0(SD.|
+2026-04-27T09:50:54.555Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4d 74 6b 4b 58 4c 5f 21 21 21 4b 3f  |.!)KMtkKXL_!!!K?|
+00000010  5d 30 28 53 44 1b                                |]0(SD.|
+2026-04-27T09:50:54.555Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:50:54.555Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=17967 y=94030 altitude=0 facingRaw=3600 clientSpeed=1503 effectiveSpeed=1503 -> no echo (trust local key events)
+2026-04-27T09:50:55.554Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=3781, phase=combat)
+2026-04-27T09:50:55.555Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:50:55.555Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 23 63 4b 58 5f 26 21 21 21 4b 3f  |.!*KN#cKX_&!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 5f 51 3a 3d 66 1b              |KKKLKK_Q:=f.|
+2026-04-27T09:50:55.555Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 23 63 4b 58 5f 26 21 21 21 4b 3f  |.!*KN#cKX_&!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 5f 51 3a 3d 66 1b              |KKKLKK_Q:=f.|
+2026-04-27T09:50:55.556Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:50:55.556Z DEBUG [server:f38959b6] [world/combat] cmd9 moving: altitude=0 facingRaw=3600 pitchRaw=3613 torsoYawRaw=3612 clientSpeed=1706 effectiveSpeed=1706 pitch=182 torsoYaw=0 localEcho=none
+2026-04-27T09:50:56.556Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=3821, phase=combat)
+2026-04-27T09:50:56.556Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:50:56.557Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 27 6d 4b 58 72 6b 21 21 21 4b 3f  |.!*KN'mKXrk!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 60 59 55 47 75 1b              |KKKLKK`YUGu.|
+2026-04-27T09:50:56.557Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 27 6d 4b 58 72 6b 21 21 21 4b 3f  |.!*KN'mKXrk!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 60 59 55 47 75 1b              |KKKLKK`YUGu.|
+2026-04-27T09:50:56.557Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:50:56.557Z DEBUG [server:f38959b6] [world/combat] cmd9 moving: altitude=0 facingRaw=3600 pitchRaw=3613 torsoYawRaw=3612 clientSpeed=1799 effectiveSpeed=1799 pitch=182 torsoYaw=0 localEcho=none
+2026-04-27T09:50:57.575Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=3861, phase=combat)
+2026-04-27T09:50:57.575Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:50:57.576Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 2c 2c 4b 59 32 6b 21 21 21 4b 3f  |.!*KN,,KY2k!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 61 25 31 38 58 1b              |KKKLKKa%18X.|
+2026-04-27T09:50:57.576Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 2c 2c 4b 59 32 6b 21 21 21 4b 3f  |.!*KN,,KY2k!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 61 25 31 38 58 1b              |KKKLKKa%18X.|
+2026-04-27T09:50:57.576Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:50:57.577Z DEBUG [server:f38959b6] [world/combat] cmd9 moving: altitude=0 facingRaw=3600 pitchRaw=3613 torsoYawRaw=3612 clientSpeed=1832 effectiveSpeed=1832 pitch=182 torsoYaw=0 localEcho=none
+2026-04-27T09:50:58.315Z INFO  [server:f38959b6] [world/combat] bot jump start: slot=5 mechId=98 fuel=120 from=(34227,172450) to=(31791,160700) apex=6000 reason=aggressive range close
+2026-04-27T09:50:58.592Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=3901, phase=combat)
+2026-04-27T09:50:58.592Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:50:58.593Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 30 3c 4b 59 48 29 21 21 21 4b 3f  |.!*KN0<KYH)!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 61 3d 67 58 72 1b              |KKKLKKa=gXr.|
+2026-04-27T09:50:58.593Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 30 3c 4b 59 48 29 21 21 21 4b 3f  |.!*KN0<KYH)!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 61 3d 67 58 72 1b              |KKKLKKa=gXr.|
+2026-04-27T09:50:58.593Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:50:58.593Z DEBUG [server:f38959b6] [world/combat] cmd9 moving: altitude=0 facingRaw=3600 pitchRaw=3613 torsoYawRaw=3612 clientSpeed=1856 effectiveSpeed=1856 pitch=182 torsoYaw=0 localEcho=none
+2026-04-27T09:50:59.592Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=3941, phase=combat)
+2026-04-27T09:50:59.592Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:50:59.593Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 34 48 4b 59 5d 38 21 21 21 4b 3f  |.!*KN4HKY]8!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 61 4b 4c 40 49 1b              |KKKLKKaKL@I.|
+2026-04-27T09:50:59.593Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 34 48 4b 59 5d 38 21 21 21 4b 3f  |.!*KN4HKY]8!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 61 4b 4c 40 49 1b              |KKKLKKaKL@I.|
+2026-04-27T09:50:59.593Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:50:59.594Z DEBUG [server:f38959b6] [world/combat] cmd9 moving: altitude=0 facingRaw=3600 pitchRaw=3613 torsoYawRaw=3612 clientSpeed=1870 effectiveSpeed=1870 pitch=182 torsoYaw=0 localEcho=none
+2026-04-27T09:51:00.607Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=3981, phase=combat)
+2026-04-27T09:51:00.608Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:51:00.608Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 38 5b 4b 59 72 75 21 21 21 4b 3f  |.!*KN8[KYru!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 61 53 67 53 6f 1b              |KKKLKKaSgSo.|
+2026-04-27T09:51:00.608Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 38 5b 4b 59 72 75 21 21 21 4b 3f  |.!*KN8[KYru!!!K?|
+00000010  4b 4b 4b 4c 4b 4b 61 53 67 53 6f 1b              |KKKLKKaSgSo.|
+2026-04-27T09:51:00.608Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:51:00.609Z DEBUG [server:f38959b6] [world/combat] cmd9 moving: altitude=0 facingRaw=3600 pitchRaw=3613 torsoYawRaw=3612 clientSpeed=1878 effectiveSpeed=1878 pitch=182 torsoYaw=0 localEcho=none
+2026-04-27T09:51:00.656Z INFO  [server:f38959b6] [world/combat] bot volley: slot=5 side=2 mechId=98 target=player tic=B distance=625m weapons=0/1 heat=0->10 risk=0 expected=%.1f targetHealth=5.3999999999999995 updates=255 shots=[1] 0:LRM-15:15:center-torso-front:slot=5:target=player:attach=31:chance=18:roll=8:band=long:cross=1:health=255:updates=0x19=9,1:LRM-15:miss:target=player:chance=18:roll=26:band=long:cross=1:impact=16797/106416/0
+2026-04-27T09:51:01.619Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=4021, phase=combat)
+2026-04-27T09:51:01.619Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:51:01.620Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 3c 6b 4b 5a 33 4e 21 21 21 4b 3f  |.!*KN<kKZ3N!!!K?|
+00000010  4b 4b 4b 48 4b 4b 61 53 3a 3b 5c 1b              |KKKHKKaS:;\.|
+2026-04-27T09:51:01.620Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 3c 6b 4b 5a 33 4e 21 21 21 4b 3f  |.!*KN<kKZ3N!!!K?|
+00000010  4b 4b 4b 48 4b 4b 61 53 3a 3b 5c 1b              |KKKHKKaS:;\.|
+2026-04-27T09:51:01.620Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:51:01.621Z DEBUG [server:f38959b6] [world/combat] cmd9 moving: altitude=0 facingRaw=3600 pitchRaw=3609 torsoYawRaw=3612 clientSpeed=1878 effectiveSpeed=1878 pitch=-546 torsoYaw=0 localEcho=none
+2026-04-27T09:51:02.173Z INFO  [server:f38959b6] [world/combat] bot jump start: slot=6 mechId=98 fuel=120 from=(-19509,169715) to=(-13111,159563) apex=6000 reason=aggressive range close
+2026-04-27T09:51:02.432Z INFO  [server:f38959b6] [world/combat] bot jump land: slot=5 mechId=98 fuel=0 at=(31791,160700)
+2026-04-27T09:51:02.616Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=4061, phase=combat)
+2026-04-27T09:51:02.617Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:51:02.617Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 41 23 4b 5a 48 68 21 21 21 4b 3f  |.!*KNA#KZHh!!!K?|
+00000010  4b 4b 4b 48 4b 4b 61 54 3a 3f 28 1b              |KKKHKKaT:?(.|
+2026-04-27T09:51:02.618Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 41 23 4b 5a 48 68 21 21 21 4b 3f  |.!*KNA#KZHh!!!K?|
+00000010  4b 4b 4b 48 4b 4b 61 54 3a 3f 28 1b              |KKKHKKaT:?(.|
+2026-04-27T09:51:02.618Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:51:02.618Z DEBUG [server:f38959b6] [world/combat] cmd9 moving: altitude=0 facingRaw=3600 pitchRaw=3609 torsoYawRaw=3612 clientSpeed=1879 effectiveSpeed=1879 pitch=-546 torsoYaw=0 localEcho=none
+2026-04-27T09:51:02.688Z INFO  [server:f38959b6] [world/combat] bot jump start: slot=4 mechId=98 fuel=120 from=(82219,148969) to=(72224,142328) apex=6000 reason=aggressive range close
+2026-04-27T09:51:02.942Z INFO  [server:f38959b6] [world/combat] bot jump start: slot=5 mechId=98 fuel=51 from=(31784,160669) to=(29324,148924) apex=6000 reason=aggressive range close
+2026-04-27T09:51:03.625Z DEBUG [server:f38959b6] [world] recv 34 bytes (total=4095, phase=combat)
+2026-04-27T09:51:03.625Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=22
+2026-04-27T09:51:03.626Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 29 4b 4e 45 34 4b 5a 5e 41 21 21 21 4b 3f  |.!)KNE4KZ^A!!!K?|
+00000010  61 56 48 5a 6b 1b                                |aVHZk.|
+2026-04-27T09:51:03.626Z DEBUG [server:f38959b6] [world] rx type-0 len=22
+00000000  1b 21 29 4b 4e 45 34 4b 5a 5e 41 21 21 21 4b 3f  |.!)KNE4KZ^A!!!K?|
+00000010  61 56 48 5a 6b 1b                                |aVHZk.|
+2026-04-27T09:51:03.626Z DEBUG [server:f38959b6] [world] client seq=0 cmd=8
+2026-04-27T09:51:03.627Z DEBUG [server:f38959b6] [world/combat] cmd8 coasting: x=21142 y=109980 altitude=0 facingRaw=3600 clientSpeed=1881 effectiveSpeed=1881 -> no echo (trust local key events)
+2026-04-27T09:51:04.420Z DEBUG [server:f38959b6] [world] recv 56 bytes (total=4151, phase=combat)
+2026-04-27T09:51:04.421Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=44
+2026-04-27T09:51:04.421Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2b 21 27 23 4b 4b 4b 4b 4b 4f 68 35 4e 57  |.!+!'#KKKKKOh5NW|
+00000010  2c 49 75 75 75 2b 22 27 23 4b 4b 4b 4b 4b 54 2f  |,Iuuu+"'#KKKKKT/|
+00000020  74 4e 6d 26 6f 75 75 75 5f 68 42 1b              |tNm&ouuu_hB.|
+2026-04-27T09:51:04.421Z DEBUG [server:f38959b6] [world] rx type-0 len=44
+00000000  1b 21 2b 21 27 23 4b 4b 4b 4b 4b 4f 68 35 4e 57  |.!+!'#KKKKKOh5NW|
+00000010  2c 49 75 75 75 2b 22 27 23 4b 4b 4b 4b 4b 54 2f  |,Iuuu+"'#KKKKKT/|
+00000020  74 4e 6d 26 6f 75 75 75 5f 68 42 1b              |tNm&ouuu_hB.|
+2026-04-27T09:51:04.421Z DEBUG [server:f38959b6] [world] client seq=0 cmd=10
+2026-04-27T09:51:04.423Z DEBUG [server:f38959b6] [world/combat] cmd10 direct-cmd10 path: no recent cmd12/action0 (age=n/a records=2) — compatible with TIC fire geometry
+2026-04-27T09:51:04.424Z INFO  [server:f38959b6] [world/combat] cmd10 weapon fire accepted: firePath=direct-cmd10 records=2 weaponSlots=0/1 botHealth=1890 updates=0 shots=[0:LRM-15:15:slot=5:miss:5/1:chance=34:roll=50:band=long:cross=0:bot=30986/156859,1:LRM-15:15:slot=5:miss:5/1:chance=34:roll=72:band=long:cross=0:bot=30986/156859]
+2026-04-27T09:51:04.621Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=4191, phase=combat)
+2026-04-27T09:51:04.622Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:51:04.622Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 49 3d 4b 5a 73 54 21 21 21 4b 3f  |.!*KNI=KZsT!!!K?|
+00000010  4b 4b 4b 49 4b 4b 60 55 28 33 5a 1b              |KKKIKK`U(3Z.|
+2026-04-27T09:51:04.622Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 49 3d 4b 5a 73 54 21 21 21 4b 3f  |.!*KNI=KZsT!!!K?|
+00000010  4b 4b 4b 49 4b 4b 60 55 28 33 5a 1b              |KKKIKK`U(3Z.|
+2026-04-27T09:51:04.623Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:51:04.623Z DEBUG [server:f38959b6] [world/combat] cmd9 moving: altitude=0 facingRaw=3600 pitchRaw=3610 torsoYawRaw=3612 clientSpeed=1795 effectiveSpeed=1795 pitch=-364 torsoYaw=0 localEcho=none
+2026-04-27T09:51:05.069Z INFO  [server:f38959b6] [world/combat] bot volley: slot=6 side=2 mechId=98 target=player tic=B distance=623m weapons=0/1 heat=0->10 risk=0 expected=%.1f targetHealth=5.3999999999999995 updates=240 shots=[2] 0:LRM-15:miss:target=player:chance=18:roll=92:band=long:cross=73:impact=19268/108708/0,1:LRM-15:15:center-torso-front:slot=6:target=player:attach=31:chance=18:roll=8:band=long:cross=73:health=240:updates=0x19=0/0x24=15
+2026-04-27T09:51:05.581Z INFO  [server:f38959b6] [world/combat] bot volley: slot=4 side=2 mechId=98 target=player tic=B distance=625m weapons=0/1 heat=0->10 risk=0 expected=%.1f targetHealth=5.3999999999999995 updates=225 shots=[3] 0:LRM-15:15:center-torso-front:slot=4:target=player:attach=31:chance=18:roll=4:band=long:cross=74:health=225:updates=0x24=0/0x2c=1/0x2d=1,1:LRM-15:miss:target=player:chance=18:roll=37:band=long:cross=74:impact=24382/109326/0
+2026-04-27T09:51:05.581Z INFO  [server:f38959b6] [world/combat] queued match result=loss in 750ms (center torso destroyed)
+2026-04-27T09:51:05.628Z DEBUG [server:f38959b6] [world] recv 40 bytes (total=4231, phase=combat)
+2026-04-27T09:51:05.629Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=28
+2026-04-27T09:51:05.629Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 2a 4b 4e 4d 37 4b 5b 31 63 21 21 21 4b 3f  |.!*KNM7K[1c!!!K?|
+00000010  4b 4b 4b 47 4b 4b 5e 33 67 64 6e 1b              |KKKGKK^3gdn.|
+2026-04-27T09:51:05.629Z DEBUG [server:f38959b6] [world] rx type-0 len=28
+00000000  1b 21 2a 4b 4e 4d 37 4b 5b 31 63 21 21 21 4b 3f  |.!*KNM7K[1c!!!K?|
+00000010  4b 4b 4b 47 4b 4b 5e 33 67 64 6e 1b              |KKKGKK^3gdn.|
+2026-04-27T09:51:05.630Z DEBUG [server:f38959b6] [world] client seq=0 cmd=9
+2026-04-27T09:51:05.630Z DEBUG [server:f38959b6] [world/combat] cmd8/cmd9 ignored while result transition is pending
+2026-04-27T09:51:06.332Z INFO  [server:f38959b6] [world/combat] sending Cmd75/Cmd63 result transition (loss)
+2026-04-27T09:51:16.848Z INFO  [server:f38959b6] [world/combat] restoring world mode after result scene (loss)
+2026-04-27T09:51:16.849Z DEBUG [server:f38959b6] [world] recv 23 bytes (total=4254, phase=world)
+2026-04-27T09:51:16.850Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=11
+2026-04-27T09:51:16.850Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 24 22 3e 24 22 37 3e 22 1b                 |.!$">$"7>".|
+2026-04-27T09:51:16.850Z DEBUG [server:f38959b6] [world] rx type-0 len=11
+00000000  1b 21 24 22 3e 24 22 37 3e 22 1b                 |.!$">$"7>".|
+2026-04-27T09:51:16.850Z DEBUG [server:f38959b6] [world] client seq=0 cmd=3
+2026-04-27T09:51:16.851Z INFO  [server:f38959b6] [world] completing deferred world scene refresh (client-ready)
+2026-04-27T09:51:16.851Z INFO  [server:f38959b6] [world] scene refresh: logicalRoomId=167 sceneRoomId=167 header="Davion Arena"
+2026-04-27T09:51:16.852Z INFO  [server:f38959b6] [world] sending Cmd10 RoomPresenceSync (1 entries)
+2026-04-27T09:51:16.853Z INFO  [server:f38959b6] [world] notified room of arrival: rosterId=100015 callsign="Moose"
+2026-04-27T09:51:20.655Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:51:20.657Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4266, phase=world)
+2026-04-27T09:51:20.658Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:51:20.658Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:51:50.662Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:51:50.663Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4278, phase=world)
+2026-04-27T09:51:50.664Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:51:50.664Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:52:20.676Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:52:20.678Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4290, phase=world)
+2026-04-27T09:52:20.678Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:52:20.678Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:52:50.686Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:52:50.687Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4302, phase=world)
+2026-04-27T09:52:50.687Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:52:50.687Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:53:20.690Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:53:20.691Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4314, phase=world)
+2026-04-27T09:53:20.692Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:53:20.692Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:53:50.706Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:53:50.707Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4326, phase=world)
+2026-04-27T09:53:50.707Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:53:50.707Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:54:20.710Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:54:20.711Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4338, phase=world)
+2026-04-27T09:54:20.711Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:54:20.711Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:54:50.715Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:54:50.717Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4350, phase=world)
+2026-04-27T09:54:50.717Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:54:50.718Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:55:20.726Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:55:20.727Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4362, phase=world)
+2026-04-27T09:55:20.727Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:55:20.728Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:55:50.731Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:55:50.733Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4374, phase=world)
+2026-04-27T09:55:50.733Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:55:50.733Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:56:20.742Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:56:20.743Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4386, phase=world)
+2026-04-27T09:56:20.744Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:56:20.744Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:56:50.755Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:56:50.756Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4398, phase=world)
+2026-04-27T09:56:50.757Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:56:50.757Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:57:20.756Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:57:20.758Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4410, phase=world)
+2026-04-27T09:57:20.758Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:57:20.758Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:57:50.770Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:57:50.771Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4422, phase=world)
+2026-04-27T09:57:50.771Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:57:50.772Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:58:20.777Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:58:20.778Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4434, phase=world)
+2026-04-27T09:58:20.779Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:58:20.779Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:58:50.785Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:58:50.786Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4446, phase=world)
+2026-04-27T09:58:50.787Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:58:50.787Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:59:20.790Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:59:20.791Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4458, phase=world)
+2026-04-27T09:59:20.791Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:59:20.792Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T09:59:50.791Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T09:59:50.792Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4470, phase=world)
+2026-04-27T09:59:50.793Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T09:59:50.793Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:00:20.800Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:00:20.801Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4482, phase=world)
+2026-04-27T10:00:20.801Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:00:20.802Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:00:50.813Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:00:50.814Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4494, phase=world)
+2026-04-27T10:00:50.814Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:00:50.814Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:01:20.814Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:01:20.815Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4506, phase=world)
+2026-04-27T10:01:20.816Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:01:20.816Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:01:50.820Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:01:50.821Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4518, phase=world)
+2026-04-27T10:01:50.821Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:01:50.822Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:02:20.820Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:02:20.821Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4530, phase=world)
+2026-04-27T10:02:20.822Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:02:20.822Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:02:50.835Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:02:50.836Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4542, phase=world)
+2026-04-27T10:02:50.836Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:02:50.836Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:03:20.847Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:03:20.848Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4554, phase=world)
+2026-04-27T10:03:20.848Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:03:20.849Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:03:50.853Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:03:50.855Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4566, phase=world)
+2026-04-27T10:03:50.855Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:03:50.856Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:04:20.861Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:04:20.862Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4578, phase=world)
+2026-04-27T10:04:20.862Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:04:20.863Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:04:50.871Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:04:50.872Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4590, phase=world)
+2026-04-27T10:04:50.872Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:04:50.873Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:05:20.886Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:05:20.887Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4602, phase=world)
+2026-04-27T10:05:20.887Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:05:20.887Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:05:50.895Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:05:50.896Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4614, phase=world)
+2026-04-27T10:05:50.896Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:05:50.896Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:06:20.896Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:06:20.897Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4626, phase=world)
+2026-04-27T10:06:20.898Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:06:20.898Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:06:50.906Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:06:50.907Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4638, phase=world)
+2026-04-27T10:06:50.907Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:06:50.908Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:07:20.912Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:07:20.913Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4650, phase=world)
+2026-04-27T10:07:20.913Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:07:20.914Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:07:50.913Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:07:50.914Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4662, phase=world)
+2026-04-27T10:07:50.915Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:07:50.915Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:08:20.928Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:08:20.929Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4674, phase=world)
+2026-04-27T10:08:20.930Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:08:20.930Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:08:50.933Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:08:50.934Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4686, phase=world)
+2026-04-27T10:08:50.935Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:08:50.935Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:09:20.948Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:09:20.949Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4698, phase=world)
+2026-04-27T10:09:20.950Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:09:20.950Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:09:50.962Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:09:50.964Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4710, phase=world)
+2026-04-27T10:09:50.964Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:09:50.964Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:10:20.969Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:10:20.971Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4722, phase=world)
+2026-04-27T10:10:20.971Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:10:20.971Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:10:50.977Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:10:50.978Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4734, phase=world)
+2026-04-27T10:10:50.979Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:10:50.979Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:11:20.979Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:11:20.980Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4746, phase=world)
+2026-04-27T10:11:20.980Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:11:20.980Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:11:50.983Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:11:50.984Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4758, phase=world)
+2026-04-27T10:11:50.984Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:11:50.985Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:12:20.988Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:12:20.990Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4770, phase=world)
+2026-04-27T10:12:20.990Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:12:20.990Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:12:50.996Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:12:50.997Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4782, phase=world)
+2026-04-27T10:12:50.997Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:12:50.997Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:13:21.001Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:13:21.002Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4794, phase=world)
+2026-04-27T10:13:21.003Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:13:21.003Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:13:51.012Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:13:51.013Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4806, phase=world)
+2026-04-27T10:13:51.013Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:13:51.014Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:14:21.019Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:14:21.021Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4818, phase=world)
+2026-04-27T10:14:21.021Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:14:21.021Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:14:51.028Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:14:51.030Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4830, phase=world)
+2026-04-27T10:14:51.030Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:14:51.030Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:15:21.032Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:15:21.033Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4842, phase=world)
+2026-04-27T10:15:21.034Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:15:21.034Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:15:51.039Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:15:51.040Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4854, phase=world)
+2026-04-27T10:15:51.040Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:15:51.041Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:16:21.052Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:16:21.053Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4866, phase=world)
+2026-04-27T10:16:21.053Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:16:21.053Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:16:51.053Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:16:51.054Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4878, phase=world)
+2026-04-27T10:16:51.055Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:16:51.055Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:17:21.056Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:17:21.057Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4890, phase=world)
+2026-04-27T10:17:21.057Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:17:21.057Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:17:51.059Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:17:51.060Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4902, phase=world)
+2026-04-27T10:17:51.060Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:17:51.061Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:18:21.069Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:18:21.070Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4914, phase=world)
+2026-04-27T10:18:21.070Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:18:21.071Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:18:51.082Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:18:51.083Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4926, phase=world)
+2026-04-27T10:18:51.083Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:18:51.083Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:19:21.083Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:19:21.084Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4938, phase=world)
+2026-04-27T10:19:21.084Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:19:21.085Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:19:51.098Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:19:51.100Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4950, phase=world)
+2026-04-27T10:19:51.101Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:19:51.101Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:20:21.113Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:20:21.114Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4962, phase=world)
+2026-04-27T10:20:21.114Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:20:21.115Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:20:51.125Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:20:51.127Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4974, phase=world)
+2026-04-27T10:20:51.127Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:20:51.127Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:21:21.139Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:21:21.140Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4986, phase=world)
+2026-04-27T10:21:21.141Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:21:21.141Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:21:51.152Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:21:51.153Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=4998, phase=world)
+2026-04-27T10:21:51.153Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:21:51.154Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:22:21.155Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:22:21.156Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=5010, phase=world)
+2026-04-27T10:22:21.156Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:22:21.157Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:22:51.164Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:22:51.165Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=5022, phase=world)
+2026-04-27T10:22:51.165Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:22:51.165Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:23:21.167Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:23:21.168Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=5034, phase=world)
+2026-04-27T10:23:21.168Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:23:21.168Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:23:51.175Z DEBUG [server:f38959b6] [world] keepalive — sending ping
+2026-04-27T10:23:51.176Z DEBUG [server:f38959b6] [world] recv 12 bytes (total=5046, phase=world)
+2026-04-27T10:23:51.177Z DEBUG [server:f38959b6] [world] pkt type=0x05 tag=0x0 payloadLen=0
+2026-04-27T10:23:51.177Z DEBUG [server:f38959b6] [world] keepalive response received
+2026-04-27T10:24:20.102Z DEBUG [server:f38959b6] [world] recv 20 bytes (total=5066, phase=world)
+2026-04-27T10:24:20.103Z DEBUG [server:f38959b6] [world] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T10:24:20.103Z DEBUG [server:f38959b6] [world][rx]
+00000000  1b 21 27 23 2c 66 33 1b                          |.!'#,f3.|
+2026-04-27T10:24:20.103Z DEBUG [server:f38959b6] [world] rx type-0 len=8
+00000000  1b 21 27 23 2c 66 33 1b                          |.!'#,f3.|
+2026-04-27T10:24:20.103Z DEBUG [server:f38959b6] [world] client seq=0 cmd=6
+2026-04-27T10:24:20.104Z DEBUG [server:f38959b6] [world] cmd=6 — not yet handled (M3 stub)
+2026-04-27T10:24:20.110Z INFO  [server:f38959b6] [world] client disconnected (phase=world, bytes=5066)
+2026-04-27T10:24:20.111Z INFO  [server:f38959b6] [world] notified room of departure: rosterId=100015 callsign="Moose"
+2026-04-27T10:49:11.126Z INFO  [server:2c39e89c] Client connected from 127.0.0.1:58647 (session 2c39e89c-0de7-4d00-b95f-3a217fc36f92)
+2026-04-27T10:49:11.128Z INFO  [server:2c39e89c] Sending LOGIN_REQUEST (0x16) — 12 bytes
+2026-04-27T10:49:11.130Z DEBUG [server:2c39e89c] recv 349 bytes (total=349, phase=auth)
+2026-04-27T10:49:11.130Z DEBUG [server:2c39e89c] pkt type=0x15 tag=0x0 payloadLen=337
+2026-04-27T10:49:11.131Z DEBUG [server:2c39e89c] [rx]
+00000000  73 6d 6f 6b 65 5f 73 6f 6c 6f 5f 62 6f 74 5f 61  |smoke_solo_bot_a|
+00000010  6c 6c 5f 61 6c 6c 79 5f 67 61 74 65 5f 6d 6f 68  |ll_ally_gate_moh|
+00000020  32 72 67 37 71 33 33 32 77 00 00 00 00 00 00 00  |2rg7q332w.......|
+00000030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000060  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000070  4b 65 73 6d 61 69 20 43 6f 6d 6d 20 45 6e 67 69  |Kesmai Comm Engi|
+00000080  6e 65 20 33 2e 32 32 00 00 00 00 00 00 00 00 00  |ne 3.22.........|
+00000090  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000a0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000b0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000c0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000d0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000e0  00 00 00 00 00 00 00 00 42 41 54 54 4c 45 54 45  |........BATTLETE|
+000000f0  43 48 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |CH..............|
+00000100  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000110  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000120  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000130  00 00 00 00 00 00 00 00 00 00 00 00 07 d0 39 00  |..............9.|
+00000140  00 00 0c 00 53 6d 6f 6b 65 50 61 73 73 31 32 33  |....SmokePass123|
+00000150  00                                               |.|
+2026-04-27T10:49:11.131Z DEBUG [server:2c39e89c] [auth] login payload len=337
+00000000  73 6d 6f 6b 65 5f 73 6f 6c 6f 5f 62 6f 74 5f 61  |smoke_solo_bot_a|
+00000010  6c 6c 5f 61 6c 6c 79 5f 67 61 74 65 5f 6d 6f 68  |ll_ally_gate_moh|
+00000020  32 72 67 37 71 33 33 32 77 00 00 00 00 00 00 00  |2rg7q332w.......|
+00000030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000060  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000070  4b 65 73 6d 61 69 20 43 6f 6d 6d 20 45 6e 67 69  |Kesmai Comm Engi|
+00000080  6e 65 20 33 2e 32 32 00 00 00 00 00 00 00 00 00  |ne 3.22.........|
+00000090  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000a0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000b0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000c0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000d0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000000e0  00 00 00 00 00 00 00 00 42 41 54 54 4c 45 54 45  |........BATTLETE|
+000000f0  43 48 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |CH..............|
+00000100  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000110  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000120  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000130  00 00 00 00 00 00 00 00 00 00 00 00 07 d0 39 00  |..............9.|
+00000140  00 00 0c 00 53 6d 6f 6b 65 50 61 73 73 31 32 33  |....SmokePass123|
+00000150  00                                               |.|
+2026-04-27T10:49:11.131Z INFO  [server:2c39e89c] [auth] login from "smoke_solo_bot_all_ally_gate_moh2rg7q332w" ver="Kesmai Comm Engine 3.22" service="BATTLETECH" pwLen=12
+2026-04-27T10:49:11.132Z INFO  [server:2c39e89c] [login] credentials received: user="smoke_solo_bot_all_ally_gate_moh2rg7q332w" service="BATTLETECH" clientVer="Kesmai Comm Engine 3.22"
+2026-04-27T10:49:11.456Z INFO  [server:2c39e89c] [login] new account created for "smoke_solo_bot_all_ally_gate_moh2rg7q332w" (id=697)
+2026-04-27T10:49:11.456Z INFO  [server:2c39e89c] [login] sending SYNC ack — 12 bytes
+2026-04-27T10:49:11.457Z INFO  [server:2c39e89c] [login] sending WELCOME escape — 45 bytes
+2026-04-27T10:49:11.458Z DEBUG [server:2c39e89c] recv 20 bytes (total=369, phase=lobby)
+2026-04-27T10:49:11.458Z DEBUG [server:2c39e89c] pkt type=0x00 tag=0x0 payloadLen=8
+2026-04-27T10:49:11.458Z DEBUG [server:2c39e89c] [rx]
+00000000  1b 21 24 20 2c 65 6c 1b                          |.!$ ,el.|
+2026-04-27T10:49:11.458Z DEBUG [server:2c39e89c] [game] rx type-0 len=8
+00000000  1b 21 24 20 2c 65 6c 1b                          |.!$ ,el.|
+2026-04-27T10:49:11.459Z DEBUG [server:2c39e89c] [game] client seq=0 cmd=3 phase=lobby
+2026-04-27T10:49:11.462Z INFO  [server:2c39e89c] [game] no character for account 697 — starting char creation
+2026-04-27T10:49:11.462Z INFO  [server:2c39e89c] [game] sending Cmd9 character creation prompt (Davion/Steiner/Liao/Marik/Kurita)
+2026-04-27T10:49:11.463Z DEBUG [server:2c39e89c] recv 41 bytes (total=410, phase=char-creation)
+2026-04-27T10:49:11.464Z DEBUG [server:2c39e89c] pkt type=0x00 tag=0x0 payloadLen=29
+2026-04-27T10:49:11.464Z DEBUG [server:2c39e89c] [rx]
+00000000  1b 22 2a 22 33 50 69 6c 6f 74 5f 6d 6f 68 32 72  |."*"3Pilot_moh2r|
+00000010  67 37 71 33 33 32 77 25 20 32 60 21 1b           |g7q332w% 2`!.|
+2026-04-27T10:49:11.465Z DEBUG [server:2c39e89c] [game] rx type-0 len=29
+00000000  1b 22 2a 22 33 50 69 6c 6f 74 5f 6d 6f 68 32 72  |."*"3Pilot_moh2r|
+00000010  67 37 71 33 33 32 77 25 20 32 60 21 1b           |g7q332w% 2`!.|
+2026-04-27T10:49:11.465Z DEBUG [server:2c39e89c] [game] client seq=1 cmd=9 phase=char-creation
+2026-04-27T10:49:11.465Z INFO  [server:2c39e89c] [game] cmd 9 character reply: subcmd=1 displayName="Pilot_moh2rg7q332w" selection=4 phase=char-creation
+2026-04-27T10:49:11.467Z INFO  [server:2c39e89c] [game] char-creation Cmd9 accepted: displayName="Pilot_moh2rg7q332w" allegiance=Marik mech=ANH-1A (id=156) → REDIRECT
+2026-04-27T10:49:11.468Z INFO  [server:2c39e89c] [game] recorded world launch: displayName="Pilot_moh2rg7q332w" allegiance=Marik mech=ANH-1A (id=156)
+2026-04-27T10:49:11.468Z INFO  [server:2c39e89c] [game] sending REDIRECT → 192.168.1.109:2001
+2026-04-27T10:49:11.986Z ERROR [server:2c39e89c] Socket error: read ECONNRESET
+2026-04-27T10:49:11.986Z INFO  [server:2c39e89c] Client disconnected (phase=closing, bytes=410)

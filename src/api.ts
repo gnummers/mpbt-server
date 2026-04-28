@@ -5,23 +5,30 @@
  * Godot 4 client.  The ARIES TCP protocol (ports 2000/2001) is unaffected.
  *
  * Endpoints:
- *   GET  /health          →  { ok: true, version, name }
- *   GET  /world/rooms     →  { ok: true, rooms: WorldRoom[], source_available: boolean }
- *   POST /world/travel    →  { ok: true, room: WorldRoom | null }
- *                             Body: { roomId: number }
- *                             Header: X-Username (authenticated display name)
- *   GET  /world/presence  →  { ok: true, rooms: Array<{ roomId, occupants: string[] }> }
- *   POST /world/chat      →  { ok: true }
- *                             Body: { roomId: number, text: string (max 200 chars) }
- *                             Header: X-Username
- *                             Broadcasts room_chat WebSocket event to all clients
- *   WS   /ws              →  real-time push: presence_update, room_chat events
+ *   GET   /health               →  { ok: true, version, name }
+ *   GET   /mechs                →  { ok: true, mechs: MechApiEntry[] }
+ *   GET   /world/rooms          →  { ok: true, rooms: WorldRoom[], source_available: boolean }
+ *   POST  /world/travel         →  { ok: true, room: WorldRoom | null }
+ *                                   Body: { roomId: number }
+ *                                   Header: X-Username (authenticated display name)
+ *   GET   /world/presence       →  { ok: true, rooms: Array<{ roomId, occupants: string[] }> }
+ *   POST  /world/chat           →  { ok: true }
+ *                                   Body: { roomId: number, text: string (max 200 chars) }
+ *                                   Header: X-Username
+ *                                   Broadcasts room_chat WebSocket event to all clients
+ *   PATCH /world/mech/select    →  { ok: true, mechId, typeString, slot }
+ *                                   Body: { mechId: number }
+ *                                   Header: X-Username
+ *   WS    /ws                   →  real-time push: presence_update, room_chat events
  */
 
 import * as http from 'http';
 import { readFileSync } from 'fs';
 import { Logger } from './util/logger.js';
 import { loadSolarisRooms } from './data/maps.js';
+import { WORLD_MECHS } from './world/world-data.js';
+import { MECH_STATS } from './data/mech-stats.js';
+import { findCharacterByDisplayName, updateCharacterMech } from './db/characters.js';
 import { presenceStore } from './world/presence.js';
 import { wsBroadcaster } from './world/ws_broadcaster.js';
 
@@ -31,7 +38,7 @@ const _pkg = JSON.parse(
 
 function setCors(res: http.ServerResponse): void {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Username');
 }
 
@@ -79,6 +86,28 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
 
     if (req.method === 'GET' && pathname === '/health') {
       jsonOk(res, { ok: true, version: _pkg.version, name: 'mpbt-server' });
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/mechs') {
+      const mechs = WORLD_MECHS.map((entry) => {
+        const stats = MECH_STATS.get(entry.typeString) ?? null;
+        return {
+          id:            entry.id,
+          slot:          entry.slot,
+          typeString:    entry.typeString,
+          name:          stats?.name ?? '',
+          weightClass:   stats?.weightClass ?? 'unknown',
+          tonnage:       stats?.tonnage ?? entry.tonnage ?? null,
+          maxSpeedKph:   stats?.maxSpeedKph ?? null,
+          armor:         stats?.armor ?? null,
+          jumpMeters:    stats?.jumpMeters ?? null,
+          armament:      stats?.armament ?? [],
+          effectiveRange: stats?.effectiveRange ?? null,
+          disabled:      stats?.disabled ?? true,
+        };
+      });
+      jsonOk(res, { ok: true, mechs });
       return;
     }
 
@@ -177,6 +206,52 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
       apiLog.info('chat room %d [%s]: %s', roomId, username, rawText.slice(0, 40));
       wsBroadcaster.broadcast('room_chat', { roomId, username, text: rawText });
       jsonOk(res, { ok: true });
+      return;
+    }
+
+    if (req.method === 'PATCH' && pathname === '/world/mech/select') {
+      const username = (req.headers['x-username'] ?? '') as string;
+      if (!username) {
+        jsonError(res, 400, 'X-Username header required');
+        return;
+      }
+      let body: string;
+      try {
+        body = await readBody(req);
+      } catch {
+        jsonError(res, 400, 'failed to read request body');
+        return;
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        jsonError(res, 400, 'invalid JSON body');
+        return;
+      }
+      const mechId =
+        parsed !== null &&
+        typeof parsed === 'object' &&
+        typeof (parsed as Record<string, unknown>).mechId === 'number'
+          ? ((parsed as Record<string, unknown>).mechId as number)
+          : NaN;
+      if (!Number.isFinite(mechId)) {
+        jsonError(res, 400, 'mechId must be a number');
+        return;
+      }
+      const entry = WORLD_MECHS.find((m) => m.id === mechId);
+      if (!entry) {
+        jsonError(res, 404, `mech id ${mechId} not in roster`);
+        return;
+      }
+      const character = await findCharacterByDisplayName(username);
+      if (!character) {
+        jsonError(res, 404, 'character not found');
+        return;
+      }
+      await updateCharacterMech(character.account_id, mechId, entry.slot);
+      apiLog.info('%s selected mech %s (id=%d slot=%d)', username, entry.typeString, mechId, entry.slot);
+      jsonOk(res, { ok: true, mechId, typeString: entry.typeString, slot: entry.slot });
       return;
     }
 
