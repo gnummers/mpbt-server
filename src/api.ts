@@ -19,6 +19,9 @@
  *   PATCH  /world/mech/select    →  { ok: true, mechId, typeString, slot }
  *                                    Body: { mechId: number }
  *                                    Header: X-Username
+ *   GET    /standings            →  { ok: true, standings: SolarisStanding[] (top 50) }
+ *   GET    /world/character      →  { ok: true, cbills, allegiance, mechId, mechSlot }
+ *                                    Header: X-Username
  *   GET    /arena/queue          →  { ok: true, slots: ArenaSlot[], pendingMatch }
  *   POST   /arena/queue          →  { ok: true, slot: ArenaSlot }
  *                                    Header: X-Username
@@ -42,7 +45,9 @@ import { Logger } from './util/logger.js';
 import { loadSolarisRooms } from './data/maps.js';
 import { WORLD_MECHS } from './world/world-data.js';
 import { MECH_STATS } from './data/mech-stats.js';
-import { findCharacterByDisplayName, updateCharacterMech } from './db/characters.js';
+import { findCharacterByDisplayName, updateCharacterMech, listCharacters } from './db/characters.js';
+import { listAllDuelResults } from './db/duel-results.js';
+import { computeSolarisStandings } from './world/solaris-rankings.js';
 import { presenceStore } from './world/presence.js';
 import { wsBroadcaster } from './world/ws_broadcaster.js';
 import { arenaQueue } from './world/arena-queue.js';
@@ -269,6 +274,49 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
       await updateCharacterMech(character.account_id, mechId, entry.slot);
       apiLog.info('%s selected mech %s (id=%d slot=%d)', username, entry.typeString, mechId, entry.slot);
       jsonOk(res, { ok: true, mechId, typeString: entry.typeString, slot: entry.slot });
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/standings') {
+      const [results, chars] = await Promise.all([
+        listAllDuelResults(),
+        listCharacters(),
+      ]);
+      const standings = computeSolarisStandings(results, chars).slice(0, 50);
+      jsonOk(res, {
+        ok: true,
+        standings: standings.map(s => ({
+          overallRank: s.overallRank,
+          displayName: s.displayName,
+          allegiance: s.allegiance,
+          wins: s.wins,
+          losses: s.losses,
+          ratioText: s.ratioText,
+          tierLabel: s.tierLabel,
+          score: s.score,
+        })),
+      });
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/world/character') {
+      const username = (req.headers['x-username'] ?? '') as string;
+      if (!username) {
+        jsonError(res, 400, 'X-Username header required');
+        return;
+      }
+      const character = await findCharacterByDisplayName(username);
+      if (!character) {
+        jsonError(res, 404, 'character not found');
+        return;
+      }
+      jsonOk(res, {
+        ok: true,
+        cbills: character.cbills,
+        allegiance: character.allegiance,
+        mechId: character.mech_id,
+        mechSlot: character.mech_slot,
+      });
       return;
     }
 
