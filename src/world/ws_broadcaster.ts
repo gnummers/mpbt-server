@@ -16,6 +16,16 @@ import { arenaQueue } from './arena-queue.js';
 export class WsBroadcaster {
   private readonly _wss = new WebSocketServer({ noServer: true });
   private _attached = false;
+  private readonly _messageHandlers: Array<(ws: WebSocket, raw: string) => void> = [];
+
+  /**
+   * Register a handler that is called for every incoming WebSocket message.
+   * Multiple handlers may be registered; each receives the same (ws, raw) pair.
+   * Handlers must not throw — errors are swallowed to protect the WS loop.
+   */
+  registerMessageHandler(handler: (ws: WebSocket, raw: string) => void): void {
+    this._messageHandlers.push(handler);
+  }
 
   attach(server: http.Server): void {
     if (this._attached) return;
@@ -52,6 +62,14 @@ export class WsBroadcaster {
           }),
         );
       }
+
+      // Route incoming messages to registered handlers.
+      ws.on('message', (data) => {
+        const raw = Buffer.isBuffer(data) ? data.toString('utf8') : String(data);
+        for (const handler of this._messageHandlers) {
+          try { handler(ws, raw); } catch { /* handler errors must not crash the WS loop */ }
+        }
+      });
     });
   }
 

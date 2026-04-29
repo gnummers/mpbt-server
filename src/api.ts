@@ -46,6 +46,7 @@ import { findCharacterByDisplayName, updateCharacterMech } from './db/characters
 import { presenceStore } from './world/presence.js';
 import { wsBroadcaster } from './world/ws_broadcaster.js';
 import { arenaQueue } from './world/arena-queue.js';
+import { combatWsManager } from './world/combat-ws.js';
 import { randomUUID } from 'crypto';
 
 const _pkg = JSON.parse(
@@ -364,12 +365,14 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
         const arenaId = randomUUID();
         const match = arenaQueue.recordLaunch(arenaId);
         apiLog.info('arena match launching: id=%s players=%d', arenaId, match.slots.length);
+        const mode = match.slots.length === 1 ? 'solo' : 'pvp';
         wsBroadcaster.broadcast('arena_match_launch', {
           arenaId: match.arenaId,
           slots: match.slots,
           launchedAt: match.launchedAt,
-          mode: match.slots.length === 1 ? 'solo' : 'pvp',
+          mode,
         });
+        combatWsManager.startSession(match.arenaId, mode, match.slots);
         jsonOk(res, { ok: true, launched: true, arenaId: match.arenaId });
         return;
       }
@@ -383,6 +386,7 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
   });
 
   wsBroadcaster.attach(server);
+  combatWsManager.init(wsBroadcaster);
 
   server.on('error', (err: Error) => {
     apiLog.error('HTTP server error: %s', err.message);
