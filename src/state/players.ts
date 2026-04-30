@@ -79,6 +79,7 @@ export interface SoloCombatBotActorState {
   slot: number;
   mechId: number;
   side: number;
+  combatRetaliationCursor?: number;
   health: number;
   armorValues: number[];
   internalValues: number[];
