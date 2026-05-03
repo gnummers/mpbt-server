@@ -356,18 +356,18 @@ Full table: 0x4C (76) entries × 4 bytes = 304 bytes.  Confirmed non-null entrie
 | Index | Canonical Name | Binary Address | Role |
 |:---:|---------|---------|------|
 | 0 | — | `NULL` | Crashes with "Invalid RPS command: 0" |
-| 3 | `Cmd3_TextBroadcast` | `FUN_0040C190` | Server text message → displays string in chat window (see §18 correction note) |
-| 7 | `Cmd7_ParseMenuDialog` | `FUN_004112B0` | Server menu dialog renderer |
-| 20 | `Cmd20_ParseTextDialog` | `FUN_00411D90` | Server text dialog with mech stats (see §14) |
-| 26 | `Cmd26_ParseMechList` | `FUN_0043A370` | Mech list parser → `MechWin_Create` (`FUN_00439f70`) |
+| 3 | `Cmd3_TextBroadcast` | `FUN_0040C190` | Server text message -> displays string in chat window (see §18 correction note; not yet reconciled to a v1.29 catalog name) |
+| 7 | `World_Cmd07_MenuDialog_v129` | `0x0043E0F0` | Server menu dialog renderer |
+| 20 | `World_Cmd20_ParseTextDialog_v129` | `0x0043EBC0` | Server text dialog with mech stats (see §14) |
+| 26 | `World_Cmd26_ParseMechList_v129` | `0x00423DF0` | Mech list parser feeding the mech-selection flow |
 
 ### Combat Command Table (`g_combat_DispatchTable` / `DAT_00470408`) — Key Entries
 
 | Index | Binary Address | Notes |
 |:---:|---------|------|
-| 0x40 | `FUN_00401390` | Seeds/creates a remote combatant slot: reads server player id, strings, mech id, then allocates/fills the per-player mech structures |
-| 0x41 | `FUN_00401820` | Strongest current position-sync handler: reads player id, X/Y/Z, rotation/heading-ish bytes, and speed/throttle-ish byte into per-player motion fields |
-| 0x44 | `FUN_00402380` | Combat effect/attack update: reads source/target ids plus angle and X/Y/Z fields, then calls effect helpers |
+| 0x40 | `Combat_Cmd64_AddActor_v129` (`0x00429BB0`) | Seeds/creates a remote combatant slot with pilot/mech data. |
+| 0x41 | `Combat_Cmd65_UpdateActorPosition_v129` (`0x0042A050`) | Primary remote actor position-sync handler. |
+| 0x44 | `Combat_Cmd68_SpawnWeaponEffect_v129` (`0x0042AC60`) | Combat weapon/effect update with source-target ids plus angle and XYZ fields. |
 | 0x45 | `FUN_00402530` | Combat effect/sound/projectile update with X/Y/Z fields and local-distance checks |
 | 0x46 | `FUN_004026D0` | Combat state/animation control; action byte drives animation/flag helper calls |
 | 0x48 | `FUN_00406140` | Local combat scene/self init: loads scene/mech metadata, local callsign/mech strings, origin coordinates, arena counts, and marks combat scene active |
@@ -545,10 +545,11 @@ now has a clean wire-contract readback: `list_id + title + count + repeated
 
 The follow-up actions are now confirmed:
 
-- Option 1 (`Send a ComStar message`) opens the editable dialog builder
-  `FUN_00416db0(target_id, NULL)`. Pressing its `Send` button (`MPBT.MSG[0xA5]`)
-  emits client `cmd 21` with `type4(target_id)` followed by the typed message
-  string via `FUN_00416b90()`.
+- Option 1 (`Send a ComStar message`) opens `World_OpenComposeEditor_v129`
+  (`0x00443D80`) with the selected target id. Pressing its `Send` button
+  (`MPBT.MSG[0xA5]`) reaches `World_ComposeEditor_SubmitMessage_v129`
+  (`0x004458C0`), which emits client `cmd 21` / opcode `0x15` with the
+  target id or recipient list followed by the typed message body.
 - Option 2 (`Access personnel data`) emits `Cmd7(0x3f2, target_id + 1)` from
   `FUN_00412190()`.
 
@@ -642,11 +643,148 @@ email=player@mpbt.local
 
 ---
 
+## 13a. Retail Settings / Options Surface (v1.29 client catalog)
+
+The completed `mpbt-client/scripts/research` catalogs now identify the retail
+Settings/options cluster used by the frontend and world shell. This is mostly local
+client state rather than an ARIES/server protocol surface, but it matters for the
+modern client Settings parity slice and for avoiding accidental server-side ownership
+of retail-local preferences.
+
+### Shared Options Sheet
+
+- `Shell_OpenOptionsPropertySheet_v129` opens the shared retail options property
+  sheet used by the frontend and fixed world-shell option buttons.
+- It builds up to four localized property-sheet pages from the caller bitmask,
+  sets the shell modal flag, starts the short options timer, captures the active
+  palette through `Frame_CaptureDisplayPaletteState_v129`, and restores the
+  palette after `PropertySheetA` returns.
+- `Shell_TickOptionsPropertySheetAudio_v129` is installed through
+  `SetTimer(..., 0xfa, ...)` while the modal sheet is open. It keeps the retail
+  audio service ticking by calling `KSND_C_update()` and the LASR sound-state
+  tick path, so audio preview and state do not stall inside the modal loop.
+- `Shell_InitializePropertySheetPage_v129` fills the fixed `0x28`-byte page
+  descriptor used for each enabled property-sheet page.
+- `Shell_OptionsPropertySheetInitCallback_v129` records the property-sheet
+  window handle and installs the shell input/palette wrapper behavior.
+
+### Audio Options Page
+
+- `Shell_AudioOptionsPageProc_v129` is the dialog proc for property-sheet
+  resource `0x6d`.
+- On `WM_INITDIALOG`, it seeds the global/music sliders, speech and LASR preview
+  buttons, and the live capability/status text from the saved frontend config.
+- Preview buttons route through the KSND parameter helpers, LASR sound state, and
+  speech-in/Miles helpers. The mixer button launches `SNDVOL32`.
+- Applying changes persists the updated sound flags through
+  `System_SaveFrontendConfigToRegistry_v129`.
+
+### Joystick / Control Options Page
+
+- `Shell_JoystickOptionsPageProc_v129` is the dialog proc for property-sheet
+  resource `0x6c`.
+- On init, it populates four joystick selector combo boxes from the retail
+  joystick capability table, restores slider/checkbox state, and refreshes the
+  localized joystick status line.
+- It owns the config/binding modal buttons, the OS joystick-control-panel refresh
+  button, duplicate-selector rejection, conversion of combo selections back into
+  capability-slot ids, and apply-time persistence through
+  `System_SaveFrontendConfigToRegistry_v129`.
+
+### Shortcut Binding Server Round-Trip
+
+- `World_RegisterShortcutBinding_v129` appends a pending row to the shared
+  shortcut table `DAT_0047f8b4`, persists the updated local frontend config, and
+  sends outbound opcode `0x1f` with the `(menu_id, selection_id)` pair.
+- The local row is optimistic. The server later answers with either
+  `World_Cmd52_RejectShortcutBinding_v129` or
+  `World_Cmd53_ConfirmShortcutBinding_v129`.
+- Cmd52 reads the same pair, removes the pending row, opens the localized failure
+  dialog, and refreshes the shortcut display.
+- Cmd53 reads the same pair, finds the pending row, clears the high-bit pending
+  marker on the stored shortcut key, shows the final `Alt-<key>` assignment text,
+  and refreshes the shortcut display.
+- `World_RemoveShortcutBindingAtIndex_v129` is the local removal path: it shifts
+  later rows in `DAT_0047f8b4`, decrements `DAT_0047f8b0`, then persists the
+  updated frontend config. This is local settings state, not a server-owned delete,
+  unless a future packet path proves otherwise.
+- Server impact: shortcut binding is the protocol-relevant part of this settings
+  cluster. If `mpbt-server` implements shortcut binding, it should treat outbound
+  opcode `0x1f` as a request and validate the menu/selection pair before sending
+  Cmd53; invalid or conflicting requests should produce Cmd52.
+
+### Persistence Contract
+
+- `System_LoadOrInitializeFrontendConfig_v129` creates or opens
+  `HKEY_CURRENT_USER\Software\Kesmai\MultiPlayer Battletech Solaris\Config` at
+  frontend startup.
+- The stored config is accepted only when both the schema version marker and the
+  `0x91`-byte settings payload are present. Otherwise retail falls back to the
+  in-memory defaults and immediately saves those defaults as the new baseline.
+- `System_SaveFrontendConfigToRegistry_v129` writes the single-character schema
+  marker for config schema `100`, then persists the `0x91`-byte settings blob
+  rooted at `DAT_0047f890`. Registry open/write failures are surfaced through the
+  retail modal message-box/error path.
+- Server impact: these settings are local frontend preferences. The emulator
+  should not treat them as canonical multiplayer state unless a future retail
+  packet path proves otherwise.
+
+---
+
+## 13b. Retail Startup Guards / Diagnostics (v1.29 client catalog)
+
+The client research catalogs also identify local runtime guard and diagnostic
+surfaces. These are useful for retail-client harness parity and interpreting local
+logs, but they do not add server-owned multiplayer state.
+
+- `System_VerifyManifestFiles_v129` opens `MANIFEST.TXT` relative to the retail
+  install path, trims each listed path, and attempts to reopen every payload file.
+  Missing manifest or payload files are reported through the localized
+  `bterror.log` path with the missing filename and active install path.
+- `System_VerifyExecutableChecksum_v129` initializes a dedicated checksum table,
+  opens the running `mpbtwin.exe` image from disk, hashes the protected prefix and
+  post-checksum tail around the embedded 16-byte checksum block, then compares the
+  result with the stored checksum dword at `DAT_0047febc`. `Shell_RunFrontendMain_v129`
+  aborts startup and reports the localized frontend error when this verifier fails.
+- `System_OpenNoGameCpuCheckDialog_v129` enforces the frontend game CPU threshold
+  unless `Software\Kesmai\MultiPlayer Battletech Solaris\NoGameCPUCheck` exists.
+  The dialog resource is `0x77`, and the dialog proc returns the retail OK/Cancel
+  codes while toggling the override registry key.
+- `System_ResolveSpeechCpuCheckMode_v129` performs the parallel speech CPU check
+  against threshold `0x24A`, using
+  `Software\Kesmai\MultiPlayer Battletech Solaris\NoSpeechCPUCheck` plus optional
+  `Override` value before opening dialog resource `0x78`.
+- `System_ReportBterrorEvent_v129` writes formatted timestamped entries to
+  `bterror.log`, optionally surfaces the message immediately, and can latch the
+  shared retail error flags.
+- `System_ToggleCaptureLog_v129` opens or closes `btcap_log`, flips the shared
+  capture bit, posts localized begin/end status text, and writes timestamped
+  `BEGIN/END capture` banner lines. `System_WriteCaptureLogEntry_v129` appends a
+  formatted entry while capture is active and clears the capture bit on open
+  failure.
+- `Frame_HandleCtrlShiftDebugToggleChord_v129` consumes retail Ctrl+Shift debug
+  chords: `X` arms the framerate overlay bit, and `.` arms the capture-log toggle
+  bit in `DAT_004e4f68`.
+- `System_StartAolPaletteWatcherTimer_v129` is a legacy host compatibility path:
+  it looks for an `AOL Frame25` host window, arms a 30-second timer, and later
+  auto-dismisses the external `_AOL_Palette` dialog by double-clicking its exact
+  `OK` button child.
+- Server impact: these are local startup/diagnostic surfaces. They should not be
+  modeled as server protocol unless a later bounded slice finds a wire-visible
+  dependency.
+
+---
+
 ## 14. Command 20 — Text Dialog (Server→Client)
 
 **Confirmed from `Cmd20_ParseTextDialog` (`FUN_00411D90`) and inner handler
 `FUN_00411a10` in MPBTWIN.EXE.  Packet capture of the T1 test session confirmed
 the client-side payload format.**
+
+v1.29 catalog note: the current named entry is
+`World_Cmd20_ParseTextDialog_v129` at `0x0043EBC0`. The payload format below is
+the same server-facing text-dialog contract; only the function inventory name/address
+has been reconciled for the later retail client.
 
 Command 20 is sent by the **server** to display a stats panel in the mech selection UI.
 When the player presses `X` (examine) in the mech window, the server responds with
@@ -1092,89 +1230,433 @@ No seed change happens mid-session in standard gameplay.
 | 1 | `0x22` | `FUN_0040C030` | Seq/ACK check |
 | 2 | `0x23` | `FUN_0040C060` | |
 | 3 | `0x24` | `0x0040C190` | `Cmd3_ThunkSendCapabilities` |
-| 4 | `0x25` | `0x00414B70` | |
-| 5 | `0x26` | `0x0040C2F0` | |
-| 6 | `0x27` | `0x0040C300` | |
-| 7 | `0x28` | `0x004112B0` | `Cmd7_ParseMenuDialog` |
-| 8 | `0x29` | `0x00413960` | |
-| 9 | `0x2a` | `0x0040C310` | |
-| 10 | `0x2b` | `0x0040C370` | |
-| 11 | `0x2c` | `0x0040C6C0` | |
-| 12 | `0x2d` | `0x0040C5C0` | |
-| 13 | `0x2e` | `0x0040C920` | |
-| 14 | `0x2f` | `0x00415700` | `Cmd14_PersonnelRecord` | Reads `type4 comstar_id`, `type3 battles_to_date`, then two legacy/unused `type4` values, followed by six `Frame_ReadArg` strings. Opens a type-2 text window and formats the visible record as: current selected roster handle via `MPBT.MSG[0x98]` (`Handle  : %s`), formatted ComStar ID, `MPBT.MSG[0xa0]` (`Battles to date: %ld`), then the six server-supplied strings verbatim as additional lines. The dialog installs `FUN_00415690` as its key handler: Enter/ESC close the view, while Space emits `Cmd7(0x95, 2)` and flushes, strongly suggesting a built-in `More` / next-page request for personnel records. |
-| 15 | `0x30` | `0x004139C0` | |
+| 4 | `0x25` | `0x00441980` | `World_Cmd04_TravelCompassPage_v129` | Early-world travel-compass page with one center slot, four surrounding travel slots, and fixed action buttons. |
+| 5 | `0x26` | `0x0042E9B0` | `World_Cmd05_SetArrowCursor_v129` | Restores the retail arrow cursor mode for the world/frontend shell. |
+| 6 | `0x27` | `0x0042E9C0` | `World_Cmd06_SetWaitCursor_v129` | Enters the retail wait-cursor mode for the world/frontend shell. |
+| 7 | `0x28` | `0x0043E0F0` | `World_Cmd07_MenuDialog_v129` | Server menu dialog renderer. |
+| 8 | `0x29` | `0x00440780` | `World_Cmd08_MenuClose_v129` | Menu/modal close command in the same modal text-window family as Cmd9/Cmd14; opens or refreshes the stacked text-window close/input path. |
+| 9 | `0x2a` | `0x0042E9D0` | `World_Cmd09_OpenNumberedTextSelection_v129` | Older numbered text-selection modal; carries a subcommand byte, choice count, and decoded choice strings on open. |
+| 10 | `0x2b` | `0x0042EA30` | `World_Cmd10_ParseCachedNamedEntryList_v129` | Parses the early-world cached named-entry list, clears/reseeds the shared table used by Cmd11/Cmd12 follow-ups, and emits a compact summary line into the live shell text surface. |
+| 11 | `0x2c` | `0x0042EC90` | `World_Cmd11_UpdateCachedNamedEntryText_v129` | Updates the cached text for one named-entry id and appends the resource-formatted before/after shell line when the text surface is present. |
+| 12 | `0x2d` | `0x0042ED90` | `World_Cmd12_UpdateCachedNamedEntryState_v129` | Updates the active/state fields for one cached named entry and chooses the matching resource-formatted shell status line before redrawing the world text surface. |
+| 13 | `0x2e` | `0x0042EFF0` | `World_Cmd13_StoreCachedNamedEntry_v129` | Stores or refreshes one cached named-entry record for the older world list/prompt family. |
+| 14 | `0x2f` | `0x00442620` | `World_Cmd14_PersonnelRecord_v129` | Reads `type4 comstar_id`, `type3 battles_to_date`, two legacy/unused `type4` values, and six text fields for the shared personnel/dossier modal. Older v1.23 notes below still describe the detailed visible formatting and More request behavior. |
+| 15 | `0x30` | `0x004407E0` | `World_Cmd15_OpenNumericPrompt_v129` | Range-checked numeric input prompt with follow-up command id plus minimum and maximum bounds. |
 | 16 | `0x31` | `0x00411DE0` | same addr as cmd 19 |
 | 17 | `0x32` | `0x0041E2C0` | Mid-function entry inside the bilateral scene-offer / duel-review family. This address lands in the accept/choice path that ultimately emits client `cmd 29`; it is not a clean standalone parser start. |
 | 18 | `0x33` | `0x00420780` | `Cmd18_SceneOfferStatus` | Reads one type1 mode/status value and routes into the shared scene-offer panel builder `FUN_00413800(...)`. Confirmed string anchors from `MPBT.MSG`: mode `0` shows `Contract accepted.` (`449`), while mode `6` builds the `Contract Accepted` / `What name should it be filed under?` (`450` / `451`) filing-under prompt. This is part of the agreement / subcontract acceptance UI family, not a ranking surface. |
 | 19 | `0x34` | `0x00411DE0` | same as cmd 16 |
-| 20 | `0x35` | `0x00411D90` | `Cmd20_ParseTextDialog` |
+| 20 | `0x35` | `0x0043EBC0` | `World_Cmd20_ParseTextDialog_v129` | Server text dialog / mech-stats page renderer. |
 | 21 | `0x36` | `0x004208C0` | |
 | 22 | `0x37` | `0x00420940` | |
 | 23 | `0x38` | `0x00420990` | |
 | 24 | `0x39` | `0x00420A10` | |
 | 25 | `0x3a` | `0x00411590` | |
-| 26 | `0x3b` | `0x0043A370` | `Cmd26_ParseMechList` |
-| 27 | `0x3c` | `0x0043A6B0` | |
+| 26 | `0x3b` | `0x00423DF0` | `World_Cmd26_ParseMechList_v129` | Mech list parser that feeds the mech-selection flow. |
+| 27 | `0x3c` | `0x00424130` | `World_Cmd27_AlternateMechChooser_v129` | Alternate mech chooser that feeds the paged mech-list window family shared with Cmd26/Cmd32. |
 | 28 | `0x3d` | `0x00413D20` | |
-| 29 | `0x3e` | `0x00427710` | |
-| 30 | `0x3f` | `0x0043B4E0` | |
-| 31 | `0x40` | `0x0043C190` | |
-| 32 | `0x41` | `0x0043A520` | Alternate list parser / extended ranking-style list. Reads `type1 list_id`, `byte count`, then per row a numeric `item_id`, a second numeric field, and a `type3` score-like value before formatting the visible text partly from local lookups rather than three free-form wire strings. Only list ids `0x20` and `0x3e` flip the shared dialog into its multi-select submit mode; other list ids still behave like ordinary single-pick lists. This remains a candidate for Solaris ranking / match-results style data, but it is no longer the strongest row-shape match. |
-| 33 | `0x42` | `0x00419360` | `FUN_00419370` — Ok-dialog callback |
-| 34 | `0x43` | `0x00413FF0` | |
-| 35 | `0x44` | `0x00429C80` | |
-| 36 | `0x45` | `0x004161A0` | `Cmd36_MessageView` | Reads `type4 reply_target_id` plus a `Frame_ReadString` body. Creates a type-4 read-message window. `reply_target_id == 0` gives a plain read-only page; nonzero adds `Reply` and `Enter`, and the installed key handler reopens the local compose builder `FUN_00416db0(reply_target_id, NULL)` when the user presses `R`. This is a received-message / reply view, not the compose editor itself. |
-| 37 | `0x46` | `0x00416D40` | `Cmd37_OpenCompose` | Reads one `type4` count-or-target value; if `0 < value < 1000`, reads that many additional `type4` ids into a local array; otherwise treats the first value as the single target identifier. Then calls `FUN_00416db0(value, ids)` to open the local editable compose window. This is the server-side wrapper around the same compose builder used locally by the inquiry submenu. Passing `0` still lands in that same ComStar-specific editor; this pass did not uncover any separate generic first-login name-entry mode behind `Cmd37`. |
-| 38 | `0x47` | `0x00419250` | |
-| 39 | `0x48` | `0x0043DAE0` | Scene-status text / toast family. Dispatch lands inside `FUN_0043da70`, which either appends text into `g_world_SceneStatusTextWidget` or pushes a short transient status update depending on the current local scene-status mode. |
-| 40 | `0x49` | `0x0040ECB0` | |
-| 41 | `0x4a` | `0x00415AF0` | |
-| 42 | `0x4b` | `0x00412680` | |
-| 43 | `0x4c` | `0x0040EED0` | |
-| 44 | `0x4d` | `0x00410000` | `Cmd44_KeyedSingleStringList` (mid-function entry into `FUN_0040fe80`) | Reads a `type1 list_id`, a title string, a count, then per row a `type4 item_id` plus one wire string. Builds a numbered selection list while preserving the wire `item_id` for later `Cmd7(listId, item_id + 1)` replies. The ordinary callback (`LAB_00410a70`) sends plain `Cmd7` for ESC / row pick, then only skips the close helper `FUN_0040faf0()` for keep-open list ids `0x08`, `0x0c`, `0x22`, `0x25`, and `0x34`. Special case: `list_id == 0x22` appends a synthetic `item_id = 100` row labeled `Exit to online service` (`MPBT.MSG[139]`) locally, and picking that row opens `FUN_00444af0()` instead of sending a wire request. An alternate callback (`LAB_00410bb0`) exists but uses `cmd29` control-family `2` for both ESC and row pick, so it should not be treated as the ordinary terminal-picker path. Strong current candidate for compact chooser menus such as **Choose a ranking tier** / **Choose a mech class**. |
-| 45 | `0x4e` | `0x0040CEF0` | `Cmd45_ScrollListShell` | Reads a 1-byte mode and a `Frame_ReadString` title/body string into `DAT_004e1844`, normalizing `\` to newlines. Creates/reuses a type-6 scroll-list window backed by `DAT_004e2620`, installs callbacks `FUN_0040ce70` / `FUN_0040ca70`, and copies the previously latched list-id from `DAT_00472a34` into `window[0x512]` so later Enter/ESC actions can emit `Cmd7(listId, selection)` replies. Enter on a populated row goes straight to `Cmd7(listId, item_id + 1)`; only `listId == 0` diverts into the local `Personal inquiry on:` submenu. Mode `0/1` creates a plain list shell, `2/4` add Space/ESC footer controls, and `3` adds a Space-only footer. Crucial paging clue: in `FUN_0040ca70`, pressing **Space** while `mode != 3` sends raw outbound byte `0x1c` (client `cmd28`), flushes, and clears the shared row store, which is the strongest current match for a built-in **MORE / next-page** action. New hard proof from `FUN_00433310`: when the long string is rendered into a real window it feeds each line through `FUN_00431f10`, so the `|NN|%id` / `|NN|$text` row-feed grammar can ride **inline inside the same Cmd45 body string** rather than requiring a separate visible carrier command. |
-| 46 | `0x4f` | `0x00414130` | Rich record / info panel (mid-function entry inside `World_HandleInfoPanelPacket_v123`) | The containing handler reads one `type4` id, one `type3` numeric value, skips two additional `type4` fields, then reads **six wire strings** and renders a modal text/info page. The proven title/label format hardcodes `MPBT.MSG` fields including `Handle`, `ID`, and `Battles to date`, making this the strongest current candidate for richer Solaris ranking/personnel detail beyond the simpler `Cmd14` page. Follow-up xrefs show it also pushes the client-global room-presence buffer `004f4238` for its visible `Handle` line, so it is **not** an escape hatch from the same local-handle dependency that affects `Cmd14`. |
-| 47 | `0x50` | `0x004192F0` | |
-| 48 | `0x51` | `0x00411DF0` | `Cmd48_KeyedTripleStringList` | Wrapper to `FUN_00411e20(1)`. Reads `type1 list_id`, a `Frame_ReadArg` title string, a 1-byte count, then per row: `type4 item_id` + three `Frame_ReadArg` strings. Builds a type-4 numbered selection window where each line formats as `N. <item_id> <str1> <str2> <str3>` when `item_id != 0`. Selecting an entry later emits `Cmd7(list_id, item_id + 1)` via `FUN_00412190`. This is the strongest current candidate for the real global all-roster / KP5 response, because the payload naturally fits `ComStar ID + handle + sector + location` style rows. |
-| 49 | `0x52` | `0x0040F980` | Solaris map connector / path overlay. Reads one compact type3 value, resolves two map-node indices plus a color/style value, and draws a line between the corresponding Solaris map locations. |
-| 50 | `0x53` | `0x00410460` | |
-| 51 | `0x54` | `0x00410480` | |
-| 52 | `0x55` | `0x00401000` | |
-| 53 | `0x56` | `0x004010C0` | |
-| 54 | `0x57` | `0x00419320` | |
-| 55 | `0x58` | `0x00419340` | |
-| 56 | `0x59` | `0x0040FD60` | Solaris map room-marker overlay. Reads a compact type2 bitfield, resolves one map location plus color/style, and draws a small highlight box over that room on the Solaris map. |
-| 57 | `0x5a` | `0x004168E0` | |
-| 58 | `0x5b` | `0x0040CEE0` | `Cmd58_SetScrollListId` | Reads one `type1` value via `FUN_0040d4c0()` and stores it in `DAT_00472a34`. `Cmd45_ScrollListShell` later copies that value into `window[0x512]`, making `Cmd58` a companion “set list-id for the scroll-list shell” packet rather than a visible UI command on its own. |
-| 59 | `0x5c` | `0x0040D4E0` | |
-| 60 | `0x5d` | `0x0040FEB0` | Solaris map room-marker overlay (wide-range variant). Same visual family as `Cmd56`, but with wider packed bitfields for room/style indices. |
-| 61 | `0x5e` | `0x0040FA00` | Mid-function entry inside `World_RefreshSceneLocationIcons_v123`. Refreshes / rebuilds the per-location icon buttons for the current Solaris scene after the location table has been populated. |
+| 29 | `0x3e` | `0x0044CDF0` | `World_Cmd29_QueueTransientNotice_v129` | Queues a transient late-world notice into the shared popup/notice pipeline. |
+| 30 | `0x3f` | `0x00424FB0` | `World_Cmd30_MechStatusOptionPage_v129` | Mech status option page in the Solaris mech-management family. |
+| 31 | `0x40` | `0x00425D60` | `World_Cmd31_MechComponentActionPage_v129` | Mech component action / maintenance submenu page. |
+| 32 | `0x41` | `0x00423FA0` | `World_Cmd32_AlternateRankingList_v129` | Alternate ranking-style list parser. |
+| 33 | `0x42` | `0x004468B0` | `World_Cmd33_NoOp_v129` | Compiled-out world dispatch slot. Performs no decoding or UI work and returns zero immediately. |
+| 34 | `0x43` | `0x00440E40` | `World_Cmd34_TravelCompassLabelStrip_v129` | Travel-compass label-strip updater for the older world travel shell. |
+| 35 | `0x44` | `0x004031A0` | `World_Cmd35_RequestClientExit_v129` | Server-driven client-exit request. Posts shell command `2` to the main window and sets the shared exit bit, matching the low-level shutdown action after a local exit confirmation. |
+| 36 | `0x45` | `0x004430B0` | `World_Cmd36_MessageView_v129` | Reads `type4 reply_target_id` plus a `Frame_ReadString` body. Creates a type-4 read-message window. `reply_target_id == 0` gives a plain read-only page; nonzero adds `Reply` and `Enter`, and the installed key handler opens the local compose builder when the user presses `R`. The body path extracts hidden inline nine-byte `[p......]` / `[r......]` reply-prefix tags into an auxiliary buffer, strips them from visible text, and later prepends them to reply submissions. This is a received-message / reply view, not the compose editor itself. |
+| 37 | `0x46` | `0x00443D10` | `World_Cmd37_OpenCompose_v129` | Reads one `type4` count-or-target value; if `0 < value < 1000`, reads that many additional `type4` ids into a local array; otherwise treats the first value as the single target identifier. Then forwards into `World_OpenComposeEditor_v129` to open the local editable compose window. This is the server-side wrapper around the same compose builder used locally by the inquiry submenu. Passing `0` still lands in that same ComStar-specific editor; this pass did not uncover any separate generic first-login name-entry mode behind `Cmd37`. |
+| 38 | `0x47` | `0x004467A0` | `World_Cmd38_NoOp_v129` | Compiled-out world dispatch slot. Body is just `return 0`; no packet decoding or UI side effects. |
+| 39 | `0x48` | `0x00427730` | `World_Cmd39_BuyExtraAmmoList_v129` | Buy-extra-ammo list in the mech-management family. |
+| 40 | `0x49` | `0x00432540` | `World_Cmd40_LocationBrowser_v129` | Shared world location / scene browser builder. |
+| 41 | `0x4a` | `0x00442A00` | `World_Cmd41_NameMechScoreMatrix_v129` | Name/mech score matrix surface. |
+| 42 | `0x4b` | `0x0043F4C0` | `World_Cmd42_BitmaskSelectionList_v129` | Numbered checkbox / multi-select list routed through the older cmd10 bitmask submit path. |
+| 43 | `0x4c` | `0x00432800` | `World_Cmd43_GroupedLocationBrowser_v129` | Grouped Solaris location browser / travel-mode aggregator. |
+| 44 | `0x4d` | `0x00433940` | `World_Cmd44_SetLocationDistanceScale_v129` | Location-browser distance scale / range-setting helper. |
+| 45 | `0x4e` | `0x0042F5B0` | `World_Cmd45_ScrollListShell_v129` | Scrollable list shell with inline row-feed grammar and MORE paging action. |
+| 46 | `0x4f` | `0x00440F80` | `World_Cmd46_ClearWorldUiChildren_v129` | Clears active world UI children before rebuilding a world sub-surface. |
+| 47 | `0x50` | `0x00446840` | `World_Cmd47_SetLocationLabelCode_v129` | Updates the location-browser label code and refreshes its bitmap when the code changes. |
+| 48 | `0x51` | `0x0043EC20` | `World_Cmd48_KeyedTripleStringList_v129` | Late-world keyed triple-string list dialog with one item id column plus three streamed text columns per row. |
+| 49 | `0x52` | `0x004332B0` | `World_Cmd49_MapConnectorOverlay_v129` | Draws a Solaris map connector/path line between two locations. |
+| 50 | `0x53` | `0x00433EC0` | `World_Cmd50_ClearLocationBrowserSelectionHighlight_v129` | Clears the currently latched location-browser selection highlight through the browser window callback. |
+| 51 | `0x54` | `0x00433EE0` | `World_Cmd51_DrawLocationBrowserSelectionHighlight_v129` | Redraws the current location-browser selection highlight through the browser window callback. |
+| 52 | `0x55` | `0x004298B0` | `World_Cmd52_RejectShortcutBinding_v129` | Rejects a pending world shortcut binding, removes the optimistic local row, and reports the failure text. |
+| 53 | `0x56` | `0x00429970` | `World_Cmd53_ConfirmShortcutBinding_v129` | Confirms a pending world shortcut binding and reports the final `Alt-<key>` assignment text. |
+| 54 | `0x57` | `0x00446870` | `World_Cmd54_SetCurrentUnitCode_v129` | Sets the current unit code used by later world UI surfaces. |
+| 55 | `0x58` | `0x00446890` | `World_Cmd55_SetCurrentHouseCode_v129` | Sets the current House code used by later world UI surfaces. |
+| 56 | `0x59` | `0x004336A0` | `World_Cmd56_MapRoomMarkerOverlay_v129` | Draws a small highlight box over a room on the Solaris map. |
+| 57 | `0x5a` | `0x004438B0` | `World_Cmd57_HotkeySelectionMenu_v129` | Hotkey-driven selection menu in the late-world list family. |
+| 58 | `0x5b` | `0x0042F5A0` | `World_Cmd58_SetScrollListId_v129` | Companion helper that latches the current scroll-list id for Cmd45; not a visible UI command on its own. |
+| 59 | `0x5c` | `0x0042FBA0` | `World_Cmd59_FailStub_v129` | Failure stub in the late-world command table. |
+| 60 | `0x5d` | `0x004337F0` | `World_Cmd60_MapRoomMarkerOverlayWide_v129` | Wide-range variant of the Solaris room-marker overlay. |
+| 61 | `0x5e` | `0x00433340` | `World_Cmd61_MapConnectorOverlayWide_v129` | Wide-range variant of the Solaris connector/path overlay family. |
 | 62–75 | — | NULL | unused in RPS mode |
 | 76 | `0x61` | `0x0040C0A0` | in both tables |
 
-Combat-only entries (cmd 62–79, only non-null in combat table):
+### v1.29 Client-Catalog Alignment Note
 
-| Cmd | Wire byte | Combat dispatch address |
-|-----|-----------|------------------------|
-| 62 | `0x63` | `0x004017E0` |
-| 63 | `0x64` | `0x00406880` |
-| 64 | `0x65` | `0x00401390` |
-| 65 | `0x66` | `0x00401820` |
-| 66 | `0x67` | `0x00401E40` |
-| 67 | `0x68` | `0x00401E70` |
-| 68 | `0x69` | `0x00402380` |
-| 69 | `0x6a` | `0x00402530` |
-| 70 | `0x6b` | `0x004026D0` |
-| 71 | `0x6c` | `0x00402A90` |
-| 72 | `0x6d` | `0x00406140` |
-| 73 | `0x6e` | `0x004022D0` |
-| 74 | `0x6f` | `0x004069F0` |
-| 75 | `0x70` | `0x00406840` |
-| 76 | `0x71` | `0x0040C0A0` | (same as RPS 76) |
-| 77 | `0x72` | `0x00401F80` |
-| 78 | `0x73` | `0x004069E0` |
-| 79 | `0x74` | `0x00402AB0` |
+Second/third-pass audits against `mpbt-client/scripts/research` on 2026-05-02 found that
+older versions of the table above mixed historical addresses with newer semantic notes.
+The current v1.29 named-function inventory in `retail_function_catalog.gd` and
+`retail_command_catalog.gd` is the canonical address/name source when older prose
+disagrees. These passes reconciled the high-risk ComStar-facing slots, stale no-op/exit
+slots, low world UI/dialog slots, later world/map/list slots, and named v1.29
+combat Cmd59-Cmd74 slots.
+
+- `World_Cmd04_TravelCompassPage_v129` at `0x00441980`
+- `World_Cmd05_SetArrowCursor_v129` at `0x0042E9B0`
+- `World_Cmd06_SetWaitCursor_v129` at `0x0042E9C0`
+- `World_Cmd07_MenuDialog_v129` at `0x0043E0F0`
+- `World_Cmd08_MenuClose_v129` at `0x00440780`
+- `World_Cmd09_OpenNumberedTextSelection_v129` at `0x0042E9D0`
+- `World_Cmd10_ParseCachedNamedEntryList_v129` at `0x0042EA30`
+- `World_Cmd11_UpdateCachedNamedEntryText_v129` at `0x0042EC90`
+- `World_Cmd12_UpdateCachedNamedEntryState_v129` at `0x0042ED90`
+- `World_Cmd13_StoreCachedNamedEntry_v129` at `0x0042EFF0`
+- `World_Cmd14_PersonnelRecord_v129` at `0x00442620`
+- `World_Cmd15_OpenNumericPrompt_v129` at `0x004407E0`
+- `World_Cmd20_ParseTextDialog_v129` at `0x0043EBC0`
+- `World_Cmd26_ParseMechList_v129` at `0x00423DF0`
+- `World_Cmd27_AlternateMechChooser_v129` at `0x00424130`
+- `World_Cmd29_QueueTransientNotice_v129` at `0x0044CDF0`
+- `World_Cmd33_NoOp_v129` at `0x004468B0`
+- `World_Cmd35_RequestClientExit_v129` at `0x004031A0`
+- `World_Cmd36_MessageView_v129` at `0x004430B0`
+- `World_Cmd37_OpenCompose_v129` at `0x00443D10`
+- `World_Cmd38_NoOp_v129` at `0x004467A0`
+
+The table rows for known v1.29 world and combat command names now match the client
+function catalog. Remaining unnamed rows and older narrative sections should still be
+reconciled in bounded feature slices rather than by mechanically overwriting old prose.
+
+Cmd10–13 follow-up from the subsystem catalog: the v1.29 cached named-entry cluster is
+not just a text/status side channel. `Cmd10` seeds or reseeds the shared cached-entry
+table, while `Cmd11` / `Cmd12` are incremental updates that resolve existing slots
+through `World_FindCachedNamedEntrySlotById_v129` before rewriting text or state. The
+same retained table can later drive `World_OpenCachedNamedEntrySelectionDialog_v129`,
+whose local highlight/input callbacks answer through `World_SendMenuSelection_v129`.
+Practical read: this cluster should be modeled as a persistent early-world cached list
+surface with later delta updates and an optional local selection dialog layered over
+the same retained records.
+
+Cmd29 follow-up from the helper catalog: `World_QueueTransientNotice_v129`
+(`0x0044C750`) appends each decoded notice into a 12-slot circular queue, stores the
+notice id and two small mode fields, and opens the next notice immediately when no
+notice window is active. `World_ResetTransientNoticeQueue_v129` (`0x0044C6D0`)
+clears the active slot, next-display index, next-write index, and active window
+pointer. Server impact: bursty transient notices should be modeled as ordered queued
+items, not as a last-one-wins toast.
+
+The later helper pass also recovers the display/advance side of that queue:
+
+- `World_ShowNextTransientNotice_v129` consumes the next queued slot, advances the
+  display index, and chooses between the shared type-3 popup path and a direct
+  stacked-shell presentation for certain type-2 notices.
+- `World_OpenStackedTransientNoticeWindow_v129` is the direct stacked-shell path for
+  those type-2 notices: it opens the shared style-2 shell child, writes the notice
+  text, and routes dismissal through `World_CloseStackedShellWindow_v129` instead of
+  the separate transient-popup handle.
+- `World_HandleTransientNoticeInput_v129` closes the active transient popup, clears
+  the active notice pointer, restores the world root when needed, and immediately
+  opens the next queued notice if entries remain.
+- `World_TransientNoticeDialog_HandleInput_v129` is the interactive reply path:
+  `Esc`/`N` map to zero, `Y` maps to one, and `Enter` maps to the notice's stored
+  default/type value before the client sends `World_SendTransientNoticeResponse_v129`
+  (`cmd 0x12`). Type-2 informational notices bypass that reply send and simply
+  advance the queue.
+- `World_RestoreTransientNoticeWindowFocus_v129` repairs z-order when a travel-compass
+  rebuild or other world-shell refresh would otherwise bury the active transient
+  notice beneath the refreshed root window.
+
+Practical read: Cmd29 is not just a fire-and-forget popup trigger. Retail models
+transient notices as an ordered modal queue with distinct informational vs interactive
+paths, immediate queue advancement on dismissal, and focus restoration over the world
+travel shell.
+
+Named v1.29 combat entries:
+
+| Cmd | Wire byte | Handler | Canonical Name | Semantics |
+|-----|-----------|---------|----------------|-----------|
+| 59 | `0x5c` | `0x0042B550` | `Combat_Cmd59_ConfigureVoiceTransmission_v129` | Configures the combat voice-transmission HUD/system. |
+| 60 | `0x5d` | `0x0042B4E0` | `Combat_Cmd60_UpdateActorVoiceTransmissionState_v129` | Updates one actor's voice-transmission state and refreshes the voice HUD. |
+| 61 | `0x5e` | `0x0042B470` | `Combat_Cmd61_SetVoiceTransmissionTuneToChannelId_v129` | Sets the voice-transmission tune/channel mapping and refreshes the voice HUD. |
+| 62 | `0x5f` | `0x0042A010` | `Combat_Cmd62_StartCombat_v129` | Begins the combat scene / active combat session. |
+| 63 | `0x60` | `0x00404BC0` | `Combat_Cmd63_ResultSceneInit_v129` | Initializes the combat result scene / post-match surface. |
+| 64 | `0x61` | `0x00429BB0` | `Combat_Cmd64_AddActor_v129` | Creates or seeds a remote combatant slot with pilot/mech data. |
+| 65 | `0x62` | `0x0042A050` | `Combat_Cmd65_UpdateActorPosition_v129` | Primary remote actor position-sync handler. |
+| 66 | `0x63` | `0x0042A6A0` | `Combat_Cmd66_ActorDamageUpdate_v129` | Remote actor damage-state update. |
+| 67 | `0x64` | `0x0042A6E0` | `Combat_Cmd67_LocalDamageUpdate_v129` | Local actor damage-state update. |
+| 68 | `0x65` | `0x0042AC60` | `Combat_Cmd68_SpawnWeaponEffect_v129` | Weapon/effect update that reads source-target ids plus angle and XYZ fields. |
+| 69 | `0x66` | `0x0042AE50` | `Combat_Cmd69_ImpactEffectAtCoord_v129` | Projectile / sound / impact update with XYZ fields and local-distance checks. |
+| 70 | `0x67` | `0x0042B000` | `Combat_Cmd70_ActorAnimState_v129` | Combat state/animation control packet. |
+| 71 | `0x68` | `0x0042B400` | `Combat_Cmd71_ResetEffectState_v129` | Resets combat effect state after transient effect packets. |
+| 72 | `0x69` | `0x00404420` | `Combat_Cmd72_InitLocalActor_v129` | Initializes the local combat scene / self actor. |
+| 73 | `0x6a` | `0x0042ABA0` | `Combat_Cmd73_UpdateActorRateFields_v129` | Stores scaled short control/aim/offset values into the combat actor table. |
+| 74 | `0x6b` | `0x00404D40` | `Combat_Cmd74_DisplayStatusMessage_v129` | Displays combat status / HUD message text. |
+
+Cmd75–79 are not currently named in the v1.29 client command catalog; keep older
+combat notes for those slots version-scoped until they are recovered in a bounded
+combat slice.
+
+### v1.29 Cmd72 Local-Actor Decode Helpers
+
+The helper catalog now names several sub-decoders under
+`Combat_Cmd72_InitLocalActor_v129`. These are part of the server-to-client local
+combat bootstrap payload rather than independent command ids:
+
+- `Combat_DecodeTerrainSceneryConfig_v129` decodes the local-actor terrain-scenery
+  config, including scenery class masks and a counted `(x, y, radius)` blocker
+  circle table used when the client places terrain scenery.
+- `Combat_DecodeTerrainProjectionOutlinePoints_v129` decodes the tactical terrain
+  projection outline point list. It reads a point-count byte, consumes all encoded
+  `(x, y)` pairs, subtracts the shared world-origin bias `0x018e4258`, stores at
+  most ten points, and clamps the surviving count back to `10` when the wire count
+  is larger.
+- `Combat_DecodeLocalActorMechState_v129` decodes the backing mech id/record,
+  seeds runtime and component-status state from the mech record, then reads the
+  XOR-protected byte/type1 tables into the local actor arrays and copies the capped
+  trailing actor label string.
+- Server impact: a faithful Cmd72 builder should preserve these subblocks. The
+  terrain outline decoder consuming extra points even when it stores only ten is
+  especially important for keeping the remaining Cmd72 stream aligned.
+
+The subsystem catalog also clarifies the mech-record side of that same decode path:
+
+- `Combat_DecodeLocalActorMechState_v129` reaches
+  `Mech_AllocateAndLoadRecordById_v129`, which loads the referenced `.MEC` payload
+  through `Mech_LoadRecordIntoBufferById_v129`.
+- The retail load path seeds the record cipher from the filename suffix through
+  `Mech_SeedRecordCipherFromFilenameSuffix_v129`, then decodes the buffer through
+  `Mech_XorRecordBufferWithCipherStream_v129` and
+  `Mech_NextRecordCipherWord_v129` before runtime fields are copied out.
+- `Mech_InitRuntimeStateFromRecord_v129` and
+  `Mech_InitComponentStatusFromRecord_v129` are the two main post-load initializers:
+  the former seeds actor runtime fields from the decoded mech record (including the
+  recovered jump-jet / jump-fuel path), while the latter seeds component and
+  internal-structure state using the mech section mapping and tonnage-based maxima.
+- Practical read: Cmd72 is not just a stream of local-actor scalars. The v1.29 client
+  expects the embedded mech-record block to pass through the same retail load,
+  decipher, runtime-init, and component-init path that later Solaris mech-status and
+  component-action pages reuse.
+
+### v1.29 Named Client Outbound Helpers
+
+The same client-catalog pass also pins several client-to-server helpers that should
+be treated as named v1.29 protocol evidence when reconciling older combat/world
+notes:
+
+- `Shell_SendHeartbeat_v129` emits outbound opcode `0x21` in Solaris RPS shell
+  state `3`, and opcode `0x14` in combat shell state `4`. Other states log the
+  retail "attempting to send a heartbeat" warning before flushing.
+- `Shell_RespondToFrq_v129` is combat-state only. It emits outbound opcode
+  `0x18`, serializes four cached 4-byte combat/session values, clears those
+  cached fields, and flushes. Non-combat states log `Unknown state attempting to
+  respond to FRQ`.
+- `Combat_SendCmd19Action_v129` runs after the battlefield presentation state is
+  ready, appends opcode `0x13`, and flushes immediately. Treat it as the v1.29
+  scene-ready / post-bootstrap combat action frame.
+- `Combat_SendLocalActorStateChecksum_v129` hashes the selected local-actor and
+  mech-record bytes from an inbound challenge seed, then appends opcode `0x19`
+  with the computed 4-byte checksum and flushes.
+- `Combat_SendWeaponEffectUpdate_v129` appends opcode `0x0A`, maps positive
+  target actor slots through `DAT_0047e138`, writes selector/tag bytes, then
+  serializes the scaled angle and XYZ/effect arguments. Its decoded shape matches
+  `Combat_Cmd68_SpawnWeaponEffect_v129`.
+- `Combat_SendLocalWeaponEffectUpdate_v129` is the higher-level local fire wrapper
+  used after the local control/fire path has resolved weapon slot, target actor,
+  source tag, and effect origin. It normalizes angle/coordinate values into retail
+  wire units, then forwards the completed shape to `Combat_SendWeaponEffectUpdate_v129`.
+- `Combat_SendLocalMotionUpdate_v129` runs after the local actor pose is integrated
+  for a combat tick, rate-limits outbound movement frames, computes the current
+  forward-speed component, and emits either opcode `0x08` or opcode `0x09` depending
+  on whether the encoded pose needs the extra attitude fields.
+- `Combat_SendLocalMechContactUpdate_v129` is reached after a confirmed local
+  mech-to-mech collision. It maps the contacted actor through `DAT_0047e138` and
+  writes three local contact/rebound motion components into the outbound combat
+  stream, matching the older cmd13 contact-report family.
+- `Combat_SendCmd12Action_v129` is the named v1.29 outbound sender for generic
+  combat action/control frames, preserving the older cmd12 action-family role used
+  by weapon fire, jump, and recovery-related input paths.
+- `Combat_NoOpMissedPacketLog_v129` is a compiled-out missed-packet logger sink.
+  Recovered callers in `Combat_Cmd65_UpdateActorPosition_v129`,
+  `Combat_ApplyDamagePairOrQueueEffect_v129`, and
+  `Combat_Cmd68_SpawnWeaponEffect_v129` push `packet.log` plus one of
+  `Missed packet!<P>`, `<D>`, or `<S>`, but the retail function ignores its
+  arguments and returns zero. Server impact: these paths are diagnostics anchors,
+  not an active resend or recovery protocol.
+- `Shell_OpenCmpActionDialog_v129` is shared by the combat HUD CMP toggle and the
+  travel-compass CMP button. In shell state `3`, the chooser opens either the
+  typed CMP message dialog or a one-button info dialog; in combat state `4`, its
+  primary action sends an immediate CMP command through `Shell_SendCmpDialogCommand_v129`.
+- `Shell_SendCmpDialogCommand_v129` appends the caller-supplied CMP opcode, writes
+  a type1 text payload only for opcode `0x22`, and flushes immediately. This is
+  separate from ComStar compose: opcode `0x15` carries recipient/body message data,
+  while CMP sends only tiny no-arg or text-only prompt commands.
+- `Shell_ClassifyBannerLine_v129` recognizes the ESC-prefixed
+  `MMW Copyright Kesmai Corp. 1991` and `MMC Copyright Kesmai Corp. 1991`
+  banner lines consumed by the pre/post-version shell handlers.
+- `Shell_AppendBannerStateChangeControlFrame_v129` assembles the direct shell
+  state-change frame used during banner negotiation: outbound opcode `0x03`,
+  followed by bytes `1`, `0x1d`, `0x03`, and final selector `1` or `3`
+  depending on the active world/combat state bit.
+- `Shell_HandleRpsPreambleStateByte_v129` runs before ordinary Solaris RPS command
+  dispatch. When the decoded preamble byte is greater than `0x2A`, retail subtracts
+  `0x2B`, echoes the new state as fixed marker byte `1` plus the state byte through
+  `Shell_EncodeRpsPreambleStateByte_v129`, flushes, and can suppress ordinary
+  dispatch when the state is unchanged from the last heartbeat reset.
+- `Shell_ValidateAndDispatchEscCommandBuffer_v129` terminates each ESC-delimited
+  command line, verifies the retail checksum, and on validation failure queues
+  fallback opcode `0x02` before flushing the outbound buffer.
+- `Shell_VerifyEscCommandChecksum_v129` copies the pending command bytes into the
+  working decode buffer, seeds the rolling checksum from the active world/combat
+  shell state, and compares the decoded trailing checksum before dispatch.
+- `Shell_DispatchValidatedCommandBuffer_v129` walks a verified command payload,
+  skips spacer bytes, decodes the `!`-offset opcode, validates handler slot and
+  payload length, and invokes the mapped retail callback.
+- `Shell_AppendOutboundCommandChecksumTrailer_v129` finalizes outbound shell frames
+  by choosing the active scene checksum seed, folding the already encoded payload,
+  writing the two-byte trailer through `Frame_EncodeArg_v129`, and appending the
+  closing escape byte. `Shell_SendOutboundCommand06ByteArg_v129` is the named raw
+  helper for opcode `0x06` plus one encoded byte argument.
+- `Shell_HandleReceivedMessage_v129` is the shared inbound text-message handler:
+  shell state `3` appends a type1-length string to the world message surface, while
+  shell state `4` appends a standard string to combat voice/transmission history
+  and plays the retail message cue. Other states only log the retail warning.
+- `Combat_SendEjectCommandAfterCue_v129` waits for the armed eject warning cue to
+  finish, then emits outbound combat opcode `0x05` and flushes immediately.
+- Combat voice/transmission helpers are also named now:
+  `Combat_SendSpeechOutText_v129` emits opcode `0x0F` with combat byte-counted
+  text, `Combat_SendVoiceTransmissionText_v129` emits opcode `0x04`,
+  `Combat_SendVoiceTransmissionActorState_v129` emits opcode `0x16` with actor id
+  plus enable/disable byte, and `Combat_SendVoiceTransmissionTuneToChannelId_v129`
+  emits opcode `0x17` for tune ids `0..2`.
+
+### v1.29 Shell Framing / FIFO Helpers
+
+A later pass over `mpbt-client/scripts/research` fills in the named shell framing
+helpers around the command tables above. Treat these as the v1.29 client-side oracle
+for retail ESC/`!` frame construction, validation, and ordered inbound processing:
+
+- `Shell_ResetOutboundCommandBuffer_v129` resets the transmit write pointer and
+  seeds each outbound frame with `0x1b, 0x21`.
+- `Shell_AppendOutboundCommandOpcode_v129` writes one command marker by adding
+  the retail `0x21` offset to the raw opcode byte before later argument and
+  checksum bytes are appended.
+- `Shell_FlushOutboundCommandBuffer_v129` finalizes the current transmit buffer
+  through the shared trailer/checksum helper, suppresses the physical send in
+  retail no-send mode, and resets the buffer afterward.
+- `Shell_ResetHeartbeatState_v129` re-arms heartbeat bookkeeping and clears the
+  current heartbeat state byte during pre/post-version and broader shell-state
+  transitions.
+- `Shell_SelectInboundCommandTable_v129` chooses the active inbound dispatch profile:
+  mode `0` selects the Solaris RPS label/table rooted at `DAT_0047e7d0`, while
+  mode `1` selects the Solaris COMBAT label/table rooted at `DAT_0047ea38`. Invalid
+  modes log the retail protocol-selection error instead of switching tables.
+- `Shell_HandlePreVersionBannerLine_v129` and
+  `Shell_HandlePostVersionBannerLine_v129` are the named banner-line state-machine
+  entries around `Shell_ClassifyBannerLine_v129`; recognized banners trigger
+  version, result-scene, or DROP transitions, while ordinary post-version text
+  falls back to the ESC-delimited stream chunk path.
+- `Shell_CreateQueuedInboundLineBuffer_v129` copies each inbound shell line into an
+  owned buffer descriptor. `Shell_EnqueueQueuedInboundLineBuffer_v129` and
+  `Shell_DequeueQueuedInboundLineBuffer_v129` maintain a FIFO at
+  `DAT_0047f880` / `DAT_0047f884` / `DAT_0047f888`, and
+  `Shell_ClearQueuedInboundLineQueue_v129` drains/frees queued payloads before
+  resetting the counters. Server impact: when multiple shell lines/frames are
+  delivered close together, retail preserves FIFO order rather than coalescing them
+  into one unordered UI update.
+- `Shell_ResetQueuedInboundLineQueueState_v129` is the counter/pointer reset used
+  after queue drain and at shell runtime initialization. The queue-node and payload
+  helpers (`Shell_CreateQueuedInboundLineQueueNode_v129`,
+  `Shell_FreeQueuedInboundLineQueueNode_v129`, and
+  `Shell_FreeQueuedInboundLineBuffer_v129`) are ownership plumbing around that FIFO.
+
+### v1.29 Shell Runtime Loop
+
+The helper and subsystem catalogs also recover the outer shell pump that sits around
+the framing helpers above:
+
+- `Shell_ServiceNetworkStateLoop_v129` is the retail shell/network service loop. It
+  drains the queued inbound-line FIFO through
+  `Shell_DequeueQueuedInboundLineBuffer_v129`, passes each copied line to
+  `Shell_HandlePostVersionBannerLine_v129`, frees the owned buffer through
+  `Shell_FreeQueuedInboundLineBuffer_v129`, then advances sound/auxiliary polling and
+  dispatches the active shell-state tick from `DAT_0047c8d4`.
+- `Shell_RunWorldStateTick_v129` is the shell state-3 branch. After banner and frame
+  handling finish, it polls keyboard state, restores the main shell window when
+  transient auxiliary windows disappear, advances shell/world bitmap animation, refreshes
+  the status strip, and rotates the small frontend text list.
+- `Shell_RunCombatStateTick_v129` is the shell state-4 branch. It polls input, steps
+  `Combat_MainLoop_v129`, and when the post-combat selection flag is armed it refreshes
+  the follow-up target/selection state before returning to the main service loop.
+
+Practical read: retail receive, frame validation, and visible world/combat state
+updates are deliberately decoupled. Shell text/frames are enqueued first, then drained
+in FIFO order by the service loop, then routed through banner classification plus ESC
+validation/dispatch before the active world/combat tick runs. For emulator work, this
+means ordering matters more than "immediate on socket callback" behavior when multiple
+shell lines or frames arrive close together.
+
+The same pass names the low-level frame argument helpers:
+
+- `Frame_DecodeArg_v129` consumes type1 through type4 retail base-85 integers from
+  the active packet cursor, using 2 to 5 `!`-offset digits depending on width.
+- `Frame_DecodeType1Arg_v129` is the named thin wrapper for the common type1
+  integer case used by older world menu, scroll-list, prompt, and message handlers.
+- `Frame_DecodeByteArg_v129` consumes one `!`-offset byte and subtracts `0x21`,
+  yielding the raw 0-84 value used by compact world/combat handlers.
+- `Frame_DecodeStringSpanArg_v129` reads a one-byte encoded string length; ordinary
+  lengths point at inline packet bytes, while the sentinel `-1` form decodes a
+  type1 UI string-table id and returns that localized string span.
+- `Frame_DecodeType1StringSpanArg_v129` reads a type1 length through
+  `Frame_DecodeArg_v129` and returns the following inline packet span. The copying
+  wrappers `Frame_DecodeStringArg_v129` and `Frame_DecodeType1StringArg_v129`
+  append a NUL terminator for UI-facing handlers.
+- `Frame_EncodeArg_v129` writes type1 through type4 integers with the same
+  `!`-offset base-85 digit scheme and clamps to the maximum representable value for
+  the selected width.
+- `Frame_EncodeType1Arg_v129` is the named thin wrapper for the common two-digit
+  type1 integer form used by small command ids and scalar fields.
+- `Frame_EncodeByteArg_v129` writes one raw byte as `value + 0x21`.
+- `Frame_EncodeByteCountedStringArg_v129` writes a one-byte `!`-offset length,
+  capped at `0x54`, then copies the raw string bytes. This is the short inline text
+  form used by several combat/shell send helpers.
+- `Frame_EncodeType1StringArg_v129` writes the string length as a type1 base-85
+  integer through `Frame_EncodeArg_v129`, then appends raw bytes. This is the wider
+  text form used by ComStar/body and world text helpers.
+
+### v1.29 World Submit Helper Crosswalk
+
+The client helper catalog now names the submit helpers behind several older world UI
+surfaces. Treat these as canonical v1.29 client-to-server shapes when a UI surface
+below is recovered or implemented:
+
+- `World_SendMenuSelection_v129`: ordinary list pick, client `cmd7`, carrying
+  `type1 listId` plus `type4 selection`.
+- `World_SendLegacySelectionResponse_v129`: old cmd10-family response, opcode
+  `0x0A`, carrying `type1 followUpCommandId` plus `type4 selectedValue`. Used by
+  cached-entry pickers, numeric prompts, and checkbox/selection widgets.
+- `World_SendLegacyTextResponse_v129`: old cmd08-family text response, opcode
+  `0x08`, carrying `type1 followUpCommandId` plus a byte-counted text payload.
+- `World_SendNumberedTextSelectionResponse_v129`: numbered text-selection reply,
+  opcode `0x09`, fixed subcommand byte `0x01`, then the latched text context and
+  selected row value.
+- `World_SendByteSelection_v129`: compact byte-selection response, opcode `0x05`
+  plus one byte argument.
+- `World_SendTransientNoticeResponse_v129`: interactive transient notice reply,
+  opcode `0x12`, carrying `type1 noticeId`, `type4 response/state`, and the queued
+  notice variant byte.
+- `World_SendTravelCompassSlotSelection_v129`: travel-compass outer-slot pick,
+  opcode `0x17`, using the current page's stored byte payload after checking the
+  slot-availability bit.
+- `World_SendPagedMechListAlternateChoiceTable_v129`: paged mech-list alternate
+  choices, opcode `0x10`, carrying the owning paged-list command id, visible-row
+  count, and one `(choiceIndex, selectedValue)` pair per visible row.
+- `World_SendHotkeySelectionMenuControlFrame_v129`: cmd1d control-frame reply for
+  Cmd57 hotkey menus, subtype `0x09`, latched menu id, and selected hotkey value.
+  The `m` / `M` More row sends sentinel `1000` instead of the literal key code.
+- `World_SendPagedMechListControlFrame_v129` and
+  `World_SendTravelCompassMouseControlFrame_v129` both route through
+  `World_SendCmd1dControlFrame_v129`; use these as cmd1d control-frame families,
+  not as ordinary `cmd7` list picks.
 
 ### 12.1 World UI / display-family map (2026-04-14)
 
@@ -1553,79 +2035,73 @@ Frame-reading helpers referenced below:
 
 ---
 
-## 18b. Cmd36 — User Creation Wizard (`FUN_004161A0`) — RESOLVED
+## 18b. Cmd36 / Cmd37 — ComStar Message Surfaces — CORRECTED 2026-05-02
 
-**Confirmed by decompiling `FUN_004161A0` (Cmd36 handler) in MPBTWIN.EXE.**
+The completed `mpbt-client/scripts/research` catalog supersedes the older Cmd36
+"user creation wizard" interpretation. In the live v1.29 function inventory, Cmd36 and
+Cmd37 are the ComStar read/reply and compose surfaces:
 
-Cmd36 is the **original Kesmai new/returning player detection command**, sent by the real
-server early in the RPS session to present either a "Create New Pilot" wizard or a
-"Continue as Existing Pilot" dialog.
+- `World_Cmd36_MessageView_v129` is at `0x004430B0`.
+- `World_Cmd37_OpenCompose_v129` is at `0x00443D10`.
+- `World_OpenComposeEditor_v129` is the shared compose builder reached by Cmd37, the
+  local inquiry submenu, and the Cmd36 reply hotkey path.
+- `World_ComposeEditor_SubmitMessage_v129` submits outbound client `cmd 21` /
+  opcode `0x15` as recipient id/list plus final type1 body string.
 
-### Wire Format
+### Cmd36 Wire Format
 
 ```
-[B85_4 int: iVar3 / accountId]  [B85 string: dialog display text]
+[type4 reply_target_id] [Frame_ReadString body]
 ```
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `iVar3` | B85_4 (5 bytes) | `0` = new user; non-zero = returning accountId |
-| string | B85 string | Player callsign or prompt text shown in dialog |
+`reply_target_id == 0` opens a read-only message page. A nonzero target latches the
+reply target and enables the retail reply path.
 
-### Client Behaviour
+### Cmd36 Client Behaviour
 
-`FUN_004161A0` reads `iVar3` from the wire and branches:
+- Opens a type-4 read-message shell for the supplied body.
+- Calls `World_ResetComposeEditorState_v129` for the per-window auxiliary buffers.
+- Calls `World_MessageView_ExtractReplyPrefixTags_v129` before display:
+  - scans for inline nine-byte hidden `[p......]` and `[r......]` routing tags
+  - copies those tags into the auxiliary reply-prefix buffer
+  - rewrites the visible message body without those tags
+- Installs `World_MessageView_HandleInput_v129` as the message-view input path:
+  - `m`, `M`, Space, and PageDown advance the paged body
+  - Shift-Tab and PageUp move backward
+  - `World_MessageView_DispatchNormalizedKey_v129` normalizes Escape to Enter and
+    Space to `m` before routing through the active-window dispatcher
+  - `R` opens `World_OpenComposeEditor_v129` only when a nonzero reply target is latched
+  - remaining close actions free the auxiliary buffers and dismiss the stacked shell
 
-**`iVar3 == 0` — New player:**
-- Creates a medium-width dialog (`FUN_004145a0(4)`) at position (0, 0xdd)–(0x280, 0x103)
-- Adds two clickable buttons:
-  - Button `0x0d` — "Proceed as new pilot" (always present)
-  - Button `0x6d` — scroll/more (only if dialog text > 10 lines: `uVar6 != 0`)
-- Sets `DAT_004ddfc0+0x44 = 0x21` (roster ready flag)
-- Keyboard handler at `LAB_00415f50` (scroll up/down, Escape → dismiss)
-- Clicking button `0x0d` → `FUN_004160c0` + `FUN_00411200` → closes dialog, shows arena
+### Cmd37 Wire Format
 
-**`iVar3 != 0` — Returning player:**
-- Same dialog but adds a third button:
-  - Button `0x72` — "Continue as existing pilot"
-  - Button `0x0d` — "Create new pilot instead"
-  - Button `0x6d` — scroll (if text > 10 lines)
-- Keyboard handler at `LAB_00415f50` (same scroll)
-- `DAT_00472c94[0x50d]` set to `LAB_00416170` (ESC/Space → remap to button press)
-- Clicking button `0x72` — "Continue": closes dialog, **then** calls `FUN_00416db0(iVar3, 0)`
-  which opens a second confirm dialog with the player's character data
-- Clicking button `0x0d` — "New": closes dialog, shows arena directly (same as new-user path)
+```
+[type4 count_or_target] [optional type4 target ids...]
+```
 
-### Second Dialog — `FUN_00416db0` (Returning-User Confirm)
+If `0 < count_or_target < 1000`, the value is a recipient count and Cmd37 reads that
+many additional `type4` recipient ids. Otherwise, the first value is treated as one
+target id. The handler then forwards into `World_OpenComposeEditor_v129`.
 
-Opened after clicking "Continue" with `param_1 = accountId`:
-- Creates another dialog with two buttons: `0x132` (OK/confirm) and `0x1b` (cancel)
-- Loads up to 1000 character data entries from a supplied array; if >999, stores as a single int
-- Keyboard at `LAB_00416b90`; scroll at `LAB_00417460`; Escape at `LAB_00416d10`
-- Pressing OK → confirm account → enter arena
-- Pressing Cancel → closes this dialog, returns to the wizard (account selection)
+### Compose Submit Behaviour
 
-### Bypass Conditions
+`World_ComposeEditor_SubmitMessage_v129` prepends the hidden reply-prefix buffer, when
+present, to the typed body before writing the outbound payload. It then appends opcode
+`0x15`, serializes the latched target id or recipient list, writes the final body as a
+type1 string, frees auxiliary buffers, closes the stacked shell, and flushes.
 
-The wizard is triggered **entirely by receiving Cmd36**. There is no client-side allegiance
-or callsign state that prevents it from firing, and there is no prior-message path that
-stores callsign/allegiance into globals checked here.
+### Server / Emulator Notes
 
-**The only way to bypass the wizard is to never send Cmd36.** Our emulator does not send
-Cmd36, which correctly skips both the new-user and returning-user dialog flows entirely.
-
-### Emulator Notes
-
-- We do **not** send Cmd36. Client proceeds from welcome → cmd-3 → Cmd4 arena without
-  any user-creation dialog.
-- The allegiance picker and character name our server previously showed via Cmd7 was our
-  own addition (not related to Cmd36). In the current implementation, character creation
-  happens in the lobby flow when processing the Cmd9 reply and inserting the record into
-  the database; `handleWorldLogin` only consumes `launchRegistry` state for world entry
-  and does not create character data.
-- `FUN_00415f50` (keyboard handler at `LAB_00415f50`) and `FUN_00416170` (ESC/Space remap)
-  are inline label targets inside the Cmd36 dialog; they are not independently reachable
-  from the dispatch table.
+- First-login character creation is `Cmd9_CharacterNameAllegiancePrompt`, not Cmd36.
+- The server should use Cmd36 for inbound ComStar mail when targeting the retail client.
+- Modern REST/Godot ComStar adapters should preserve hidden `[p......]` / `[r......]`
+  tags in canonical message bodies, strip them only for display, and prepend them on
+  replies.
+- Five-character ComStar ID codes are retail base36 display codes over numeric
+  `100000 + accountId` style ids. `System_ParseComstarIdCode_v129` validates exactly
+  five alphanumeric characters, parses case-insensitive base36, applies the retail
+  offset, and rejects out-of-range values; `System_FormatComstarIdCode_v129` subtracts
+  the offset, base36-encodes, uppercases, and left-pads to five characters.
 
 ---
 
@@ -1641,9 +2117,10 @@ Additional world-client senders confirmed after the first real-client M4 pass:
 - The room roster menu uses `FUN_00412e60` + `FUN_004134f0`. Corrected against the local `MPBT.MSG`, message ids `0x120..0x128` are `All`, `Stand`, `New Booth`, `Join`, `Mech Warriors at the current location:`, `Hit ESC to cancel, A for roster of all Mech Warriors.`, `Standing`, `Booth %2d`, `Hit ESC to cancel, n to grab a new booth, s to stand.`.
 - In that menu, `FUN_004134f0` emits `Cmd7(listId=3, selection=1)` for `All`, `selection=2` for `Stand`, `selection=0` for `New Booth`, and `selection = booth + 2` when joining a listed booth entry. Combined with `Cmd11` storing `status - 5` into `DAT_004e1872`, this pins the live social-room presence encoding as `5 = Standing`, `6..12 = Booth 1..7`.
 - The `selection=1` (`All`) path does **not** have a direct local client continuation. The strongest current server-side candidate is still `Cmd48_KeyedTripleStringList` (`0x51`), which is self-contained and carries `item_id + three strings` per row.
-- Tracing the shared list callback further narrows the downstream behavior: the proven `Send a ComStar message` / `Access personnel data` fork is the local synthetic `list_id = 1000` submenu from `FUN_00412980()`, not hidden logic inside `Cmd48` itself. That submenu does **not** need a server round-trip to open compose: option 1 directly calls the local editor `FUN_00416db0(target_id, NULL)`, whose submit path emits client `cmd 21` (`type4(target_id) + string`). Option 2 sends `Cmd7(0x3f2, target_id + 1)` for personnel data.
-- Follow-up RE on world commands `36` / `37` corrects an earlier assumption: `Cmd36` (`FUN_004161a0`) is the received-message / reply viewer, while `Cmd37` (`FUN_00416d40`) is the server-side wrapper that opens the local compose editor. `Cmd36` with a nonzero `reply_target_id` installs `FUN_00415f50`, whose `R` key path calls `FUN_00416db0(reply_target_id, NULL)`. This strongly suggests inbound ComStar mail is not a plain `Cmd3` chat line in the original client.
-- Additional issue #26 boundary from the `Cmd36`/`Cmd37` pass: `FUN_00416db0` still has only three confirmed callers (`FUN_00412190` inquiry submenu, `FUN_00415f50` reply, and `Cmd37_OpenCompose`), and its buttons/messages remain ComStar-specific even when invoked as `FUN_00416db0(0, NULL)`. A later `FUN_00405840` xref sweep corrected the low-id picture: `Cmd9` does have live direct callers for `MPBT.MSG[5]` (`"Enter your character's name"`) and `MPBT.MSG[6]` (`"Choose your allegiance:"`), while no direct `MPBT.MSG[4]` (`"Character Generation"`) or `[7]` (`"Enter choice:"`) caller was found. Strongest current inference: `Cmd9`, not `Cmd36`/`Cmd37`, is the likely authentic online callsign + allegiance prompt; `Cmd37(0)` remains only a workable compatibility bridge discovered by probe.
+- Tracing the shared list callback further narrows the downstream behavior: the proven `Send a ComStar message` / `Access personnel data` fork is the local synthetic `list_id = 1000` submenu from `FUN_00412980()`, not hidden logic inside `Cmd48` itself. That submenu does **not** need a server round-trip to open compose: option 1 directly calls `World_OpenComposeEditor_v129(target_id, NULL)`, whose submit path reaches `World_ComposeEditor_SubmitMessage_v129` and emits client `cmd 21` (`type4(target_id)` or recipient list plus body string). Option 2 sends `Cmd7(0x3f2, target_id + 1)` for personnel data.
+- Follow-up RE on world commands `36` / `37` corrects an earlier assumption: `Cmd36` (`World_Cmd36_MessageView_v129`, `0x004430b0`) is the received-message / reply viewer, while `Cmd37` (`World_Cmd37_OpenCompose_v129`, `0x00443d10`) is the server-side wrapper that opens the local compose editor. `Cmd36` with a nonzero `reply_target_id` installs the message-view input path whose `R` key opens `World_OpenComposeEditor_v129(reply_target_id, NULL)`. This strongly suggests inbound ComStar mail is not a plain `Cmd3` chat line in the original client.
+- Client research catalog follow-up on 2026-05-02 fills in the reply-routing details: `World_MessageView_ExtractReplyPrefixTags_v129` scans received bodies for inline nine-byte `[p......]` / `[r......]` tags, stores them in the read window's auxiliary reply-prefix buffer, and strips them from visible text. `World_ComposeEditor_SubmitMessage_v129` prepends that captured hidden prefix onto the reply body before emitting opcode `0x15` / client `cmd 21`. Server and REST adapters should therefore preserve those tags in canonical bodies and only strip them in presentation layers.
+- Additional issue #26 boundary from the `Cmd36`/`Cmd37` pass: `World_OpenComposeEditor_v129` (`0x00443D80`) still has only the ComStar-related caller family confirmed so far: the local inquiry submenu, the Cmd36 reply path, and `World_Cmd37_OpenCompose_v129`. Its buttons/messages remain ComStar-specific even when invoked with target `0`. A later `FUN_00405840` xref sweep corrected the low-id picture: `Cmd9` does have live direct callers for `MPBT.MSG[5]` (`"Enter your character's name"`) and `MPBT.MSG[6]` (`"Choose your allegiance:"`), while no direct `MPBT.MSG[4]` (`"Character Generation"`) or `[7]` (`"Enter choice:"`) caller was found. Strongest current inference: `Cmd9`, not Cmd36/Cmd37, is the likely authentic online callsign + allegiance prompt; `Cmd37(0)` remains only a workable compatibility bridge discovered by probe.
 - Live GUI packet-capture follow-up on 2026-04-06 narrows that boundary further. For an instrumented first-login probe, forcing `Cmd37(0)` immediately after lobby `cmd 3` produced a real client `cmd 21` reply with `dialogId=0` and a free-text body, then cleanly advanced into the normal House `Cmd7` dialog and `REDIRECT` flow. Capture `1775516456379_e042e0b9-f205-49f1-9880-bd204826dce9.txt` shows the first proven zero-target submit shape:
   `1b 21 36 [type4 zero] [type1 text_len] [raw text] [crc x3] 1b`
   with no decoded inner `0x20` separator byte after the text payload. The captured sample begins `1b 21 36 21 21 21 21 21 21 67 ... 63 33 3b 1b`, so `0x67 - 0x21 = 70` bytes of submitted text.
@@ -1699,6 +2176,12 @@ Additional world-client senders confirmed after the first real-client M4 pass:
 ## 18c. 2D World-Entry Commands — Cmd4, Cmd9, Cmd10, Cmd11, Cmd13 (M4 RE)
 
 **Confirmed by decompiling handlers in MPBTWIN.EXE via Ghidra.**
+
+**Version scope:** this section captures an older v1.23/M4 room-presence interpretation.
+The v1.29 client catalog now names Cmd10-Cmd12 as the cached named-entry list/text/state
+family at `0x0042EA30`, `0x0042EC90`, and `0x0042ED90`. Do not mechanically apply the
+room-presence Cmd10/Cmd11/Cmd12 wire semantics below to v1.29 without a compatibility
+bridge or fresh packet proof.
 
 This section corrects §18's command-table semantics for Cmd10/11/13 (the entry-game
 world-room commands) and documents the confirmed wire formats used in our M4 server init.
@@ -2255,8 +2738,8 @@ Two server command handlers now have concrete map semantics:
 
 | Cmd | Wire | Handler | Semantics |
 |-----|------|---------|-----------|
-| 40 | `0x49` | `MapOpenInnerSphere` (`0x0040ecb0`) | Reads `type1 contextId`, `type1 currentRoomId`, `type4 value/cost`, then opens the Inner Sphere map. |
-| 43 | `0x4c` | `MapOpenSolaris` (`0x0040eed0`) | Reads `type1 contextId`, `type1 currentRoomIdPlusOne`, then 26 `type1` values used to populate Solaris room/sector counters before opening the Solaris map. |
+| 40 | `0x49` | `World_Cmd40_LocationBrowser_v129` (`0x00432540`) | Shared location/browser builder. Earlier notes described this as the Inner Sphere map opener; the v1.29 catalog pins the current entry point and name. |
+| 43 | `0x4c` | `World_Cmd43_GroupedLocationBrowser_v129` (`0x00432800`) | Grouped Solaris location browser / travel-mode aggregator. Earlier notes described this as the Solaris map opener; the v1.29 catalog pins the current entry point and name. |
 
 The context id controls local button text / behavior. Confirmed cases from the
 handler conditionals and `MPBT.MSG`:
@@ -6031,7 +6514,7 @@ world/Solaris UI routing is not.**
     sequence that would require a different server-side packet shape.
 - Fresh 2026-04-24 Ghidra confirmation: the later client's actor rate/bias
   packet is now pinned cleanly as well.
-  - `Combat_Cmd73_UpdateActorRateFields_v129` decompiles at `0x0042AC20`.
+  - `Combat_Cmd73_UpdateActorRateFields_v129` decompiles at `0x0042ABA0`.
   - Its body is still the same narrow three-byte form seen in the older client:
     - actor slot byte
     - rate field A byte
@@ -6082,29 +6565,23 @@ world/Solaris UI routing is not.**
 
 #### Early anti-hack / runtime-guard pass
 
-- Fresh 2026-04-24 `v1.29` string and import sweep found explicit registry-key
+- The earlier 2026-04-24 raw string/import sweep found explicit registry-key
   strings for:
   - `Software\\Kesmai\\MultiPlayer Battletech Solaris\\NoGameCPUCheck`
   - `Software\\Kesmai\\MultiPlayer Battletech Solaris\\NoSpeechCPUCheck`
-- However, the follow-up whole-binary disassembly scan and registry-import walk
-  did **not** recover an ordinary text-section reference to those exact string
-  addresses.
-  - The startup/registry call clusters recovered so far (`0x0041189F`,
-    `0x00414F1C`, `0x004150CD`, `0x004151CD`, plus later config helpers around
-    `0x0043D730` / `0x0044CEC0` / `0x0044CF00`) currently resolve to the older
-    generic config/override path rooted at:
-    - `Software\\Kesmai\\MultiPlayer Battletech Solaris`
-    - value name `Override`
-    - the `Config` subkey save/load helpers
-  - Raw `.text` scans for the exact `NoGameCPUCheck` / `NoSpeechCPUCheck`
-    string addresses also came back empty in the current binary.
-- Practical read: those CPU-check strings are definitely present in the retail
-  `v1.29` client, but in the currently recovered static surface they look
-  **unreferenced or at least not directly referenced by normal text-section
-  code**. Treat them as a known lead, not yet as an active confirmed guard path.
-- Better next static target after this dead-end is the `v1.27+` low-jump-jet
-  branch or Team Sanctioned Battle deltas, where a protocol- or gameplay-visible
-  carry-forward difference is more likely to be recoverable from ordinary code.
+- Later client-catalog recovery supersedes the older "string-only lead" caveat.
+  The named v1.29 functions now identify both paths:
+  - `System_OpenNoGameCpuCheckDialog_v129` checks the `NoGameCPUCheck` override
+    key, compares the processor type against threshold `0x1E6`, and opens dialog
+    resource `0x77` when the game-speed check fails.
+  - `System_ResolveSpeechCpuCheckMode_v129` checks the `NoSpeechCPUCheck`
+    override key plus optional `Override` value, compares against speech threshold
+    `0x24A`, and opens dialog resource `0x78` when the speech path needs an
+    override decision.
+- Practical read: these are confirmed local frontend/runtime guards in v1.29, not
+  server protocol. Keep them in the retail-client harness and Settings/runtime
+  parity backlog, but do not invent server state for them unless a later bounded
+  slice finds a wire-visible dependency.
 
 #### Low-jump-jet carry-forward (`v1.27+`) — early v1.29 pass
 
@@ -6230,6 +6707,19 @@ The highest-risk `v1.23` carry-forward mistakes are now known:
     - `Reload`
     - `Buy Extra Ammo`
     - `Name Mech`
+  - The subsystem catalog also recovers the shared paged-list shell under
+    `Cmd26`, `Cmd27`, and `Cmd32`: all three feed `World_OpenPagedMechListWindow_v129`,
+    which builds the same four-slot chooser, installs the pointer/input handlers, and
+    redraws the shared highlight state before user actions are accepted.
+  - Reply shape is context-dependent rather than uniform:
+    - ordinary row picks can answer through `World_SendMenuSelection_v129`
+    - alternate-choice rows answer through `World_SendPagedMechListAlternateChoiceTable_v129`
+      (`cmd 0x10`)
+    - control-style actions route through `World_SendPagedMechListControlFrame_v129`,
+      which uses `World_SendCmd1dControlFrame_v129`
+  - Practical read: server-side mech-list flows should preserve which paged-list family
+    is active before interpreting replies, because the same window can answer through
+    `cmd7`, `cmd0x10`, or `cmd1d` depending on context.
 
 - `Cmd41` no longer reads best as a plain standings list in `v1.29`.
   - Current live name/classification is `World_Cmd41_NameMechScoreMatrix_v129`.
@@ -6750,7 +7240,7 @@ The highest-risk `v1.23` carry-forward mistakes are now known:
     selection contract
 - Fresh 2026-04-24 Ghidra confirmation also recovers more of the neighboring
   late-world list family in `v1.29`.
-  - `World_Cmd37_OpenCompose_v129` is still present at `0x00443FB0`.
+  - `World_Cmd37_OpenCompose_v129` is present at `0x00443D10`.
     - It reads a `type4` count-or-target followed by optional additional
       target ids, then forwards into the local compose builder.
     - This is still the server wrapper for opening the ComStar compose window,
