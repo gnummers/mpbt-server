@@ -1327,6 +1327,15 @@ The table rows for known v1.29 world and combat command names now match the clie
 function catalog. Remaining unnamed rows and older narrative sections should still be
 reconciled in bounded feature slices rather than by mechanically overwriting old prose.
 
+The repo-visible symbol dictionary was synced from the same client research
+catalogs on 2026-05-05. `symbols.json` now carries a dedicated
+`MPBTWIN.EXE v1.29` section with all 1,290 saved `retail_function_catalog.gd`
+rows represented as 1,285 unique names, preserves the five duplicate-name
+address rows in `also_at`, imports command/helper summaries where available,
+and records subsystem membership from `retail_subsystem_catalog.gd` for 1,114
+functions. Treat that section as the machine-readable companion to the v1.29
+catalog notes here.
+
 Cmd10–13 follow-up from the subsystem catalog: the v1.29 cached named-entry cluster is
 not just a text/status side channel. `Cmd10` seeds or reseeds the shared cached-entry
 table, while `Cmd11` / `Cmd12` are incremental updates that resolve existing slots
