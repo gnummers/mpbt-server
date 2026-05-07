@@ -40,7 +40,7 @@
  *   GET    /comstar/unread       →  { ok: true, count: number }
  *                                    Header: X-Username
  *   POST   /comstar              →  { ok: true }
- *                                    Body: { to, subject (max 100), body (max 1000) }
+ *                                    Body: { to, body }
  *                                    Header: X-Username
  *                                    Broadcasts comstar_new_message { to } to all WS clients
  *   PATCH  /comstar/:id/read     →  { ok: true } or 404
@@ -58,7 +58,7 @@ import { Logger } from './util/logger.js';
 import { loadSolarisRooms } from './data/maps.js';
 import { WORLD_MECHS } from './world/world-data.js';
 import { MECH_STATS } from './data/mech-stats.js';
-import { findCharacterByDisplayName, updateCharacterMech, listCharacters } from './db/characters.js';
+import { findCharacter, findCharacterByDisplayName, updateCharacterMech, listCharacters } from './db/characters.js';
 import { listAllDuelResults } from './db/duel-results.js';
 import { computeSolarisStandings } from './world/solaris-rankings.js';
 import { presenceStore } from './world/presence.js';
@@ -67,12 +67,14 @@ import { arenaQueue } from './world/arena-queue.js';
 import { combatWsManager } from './world/combat-ws.js';
 import { randomUUID } from 'crypto';
 import {
-  listInbox,
-  countUnread,
-  sendComstarModern,
-  markReadById,
-  softDelete,
-} from './db/comstar_modern.js';
+  COMSTAR_UNREAD_LIMIT,
+  countSavedUnreadMessages,
+  listSavedUnreadMessages,
+  markSaved,
+  markSavedMessageReadById,
+  storeMessage,
+} from './db/messages.js';
+import { buildComstarDeliveryText } from './world/world-scene.js';
 
 const _pkg = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
@@ -102,6 +104,39 @@ function jsonError(res: http.ServerResponse, status: number, message: string): v
     'Content-Length': Buffer.byteLength(payload),
   });
   res.end(payload);
+}
+
+const COMSTAR_ID_BASE = 100_000;
+const COMSTAR_CODE_LENGTH = 5;
+
+function formatComstarCode(comstarId: number): string {
+  if (!Number.isFinite(comstarId) || comstarId < COMSTAR_ID_BASE) {
+    return String(comstarId);
+  }
+  return (comstarId - COMSTAR_ID_BASE).toString(36).toUpperCase().padStart(COMSTAR_CODE_LENGTH, '0');
+}
+
+function parseComstarCode(code: string): number | null {
+  const normalized = code.trim().toUpperCase();
+  if (!/^[0-9A-Z]{5}$/.test(normalized)) return null;
+  const offset = Number.parseInt(normalized, 36);
+  if (!Number.isFinite(offset) || offset < 0) return null;
+  return COMSTAR_ID_BASE + offset;
+}
+
+function normalizeComposeBodyForRetail(body: string): string {
+  return body.replace(/\r\n?/g, '\n').replace(/\n/g, '\\');
+}
+
+function extractRetailVisibleBody(fullBody: string): string {
+  const slash = fullBody.indexOf('\\');
+  const visible = slash >= 0 ? fullBody.slice(slash + 1) : fullBody;
+  return visible.replace(/\\/g, '\n');
+}
+
+function buildRetailPreview(body: string): string {
+  const firstLine = body.split('\n').find(line => line.trim().length > 0) ?? '';
+  return firstLine.slice(0, 84);
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {
@@ -456,7 +491,7 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
       if (!username) { jsonError(res, 400, 'X-Username header required'); return; }
       const character = await findCharacterByDisplayName(username);
       if (!character) { jsonError(res, 404, 'character not found'); return; }
-      const count = await countUnread(character.account_id);
+      const count = await countSavedUnreadMessages(character.account_id);
       jsonOk(res, { ok: true, count });
       return;
     }
@@ -466,18 +501,20 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
       if (!username) { jsonError(res, 400, 'X-Username header required'); return; }
       const character = await findCharacterByDisplayName(username);
       if (!character) { jsonError(res, 404, 'character not found'); return; }
-      const rows = await listInbox(character.account_id);
-      const unreadCount = rows.filter((r) => r.read_at === null).length;
+      const rows = await listSavedUnreadMessages(character.account_id, COMSTAR_UNREAD_LIMIT);
+      const unreadCount = await countSavedUnreadMessages(character.account_id);
       jsonOk(res, {
         ok: true,
         unreadCount,
         messages: rows.map((r) => ({
-          id:      r.id,
-          from:    r.from_name,
-          subject: r.subject,
-          body:    r.body,
-          sentAt:  r.sent_at.toISOString(),
-          readAt:  r.read_at?.toISOString() ?? null,
+          id:              r.id,
+          from:            r.sender_display_name ?? formatComstarCode(r.sender_comstar_id),
+          fromComstarCode: formatComstarCode(r.sender_comstar_id),
+          replyTargetId:   r.sender_comstar_id,
+          preview:         buildRetailPreview(extractRetailVisibleBody(r.body)),
+          body:            extractRetailVisibleBody(r.body),
+          sentAt:          r.sent_at.toISOString(),
+          readAt:          r.read_at?.toISOString() ?? null,
         })),
       });
       return;
@@ -491,23 +528,37 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
       let parsed: unknown;
       try { parsed = JSON.parse(rawBody); } catch { jsonError(res, 400, 'invalid JSON body'); return; }
       const p = parsed as Record<string, unknown>;
-      const to      = typeof p?.to === 'string'      ? (p.to as string).trim()      : '';
-      const subject = typeof p?.subject === 'string' ? (p.subject as string).trim() : '';
-      const body    = typeof p?.body === 'string'    ? (p.body as string).trim()    : '';
-      if (!to)                        { jsonError(res, 400, 'to is required'); return; }
-      if (subject.length > 100)       { jsonError(res, 400, 'subject must be 100 characters or fewer'); return; }
-      if (!body)                      { jsonError(res, 400, 'body is required'); return; }
-      if (body.length > 1000)         { jsonError(res, 400, 'body must be 1000 characters or fewer'); return; }
-      if (to.toLowerCase() === username.toLowerCase()) { jsonError(res, 400, 'cannot send to yourself'); return; }
+      const to = typeof p?.to === 'string' ? (p.to as string).trim() : '';
+      const body = typeof p?.body === 'string' ? (p.body as string).trim() : '';
+      if (!to) { jsonError(res, 400, 'to is required'); return; }
+      if (!body) { jsonError(res, 400, 'body is required'); return; }
       const sender = await findCharacterByDisplayName(username);
       if (!sender) { jsonError(res, 404, 'sender character not found'); return; }
-      const recipient = await findCharacterByDisplayName(to);
+      const parsedComstarId = parseComstarCode(to);
+      let recipient =
+        parsedComstarId !== null
+          ? await findCharacter(parsedComstarId - COMSTAR_ID_BASE)
+          : null;
+      if (!recipient) {
+        recipient = await findCharacterByDisplayName(to);
+      }
       if (!recipient) { jsonError(res, 404, 'recipient not found'); return; }
-      const msg = await sendComstarModern(sender.account_id, recipient.account_id, username, subject, body);
-      if (!msg) { jsonError(res, 500, 'failed to send message'); return; }
+      if (recipient.account_id === sender.account_id) { jsonError(res, 400, 'cannot send to yourself'); return; }
+      const retailBody = buildComstarDeliveryText(
+        sender.display_name,
+        normalizeComposeBodyForRetail(body),
+      );
+      const msg = await storeMessage(
+        sender.account_id,
+        recipient.account_id,
+        COMSTAR_ID_BASE + sender.account_id,
+        retailBody,
+      );
+      if (!msg) { jsonError(res, 409, 'recipient mailbox is full'); return; }
+      await markSaved([msg.id]);
       wsBroadcaster.broadcast('comstar_new_message', { to: recipient.display_name });
-      apiLog.info('comstar: %s → %s subject=%s', username, to, subject.slice(0, 40));
-      jsonOk(res, { ok: true });
+      apiLog.info('comstar: %s → %s body=%s', username, recipient.display_name, body.slice(0, 40));
+      jsonOk(res, { ok: true, queued: true });
       return;
     }
 
@@ -518,7 +569,7 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
         if (!username) { jsonError(res, 400, 'X-Username header required'); return; }
         const character = await findCharacterByDisplayName(username);
         if (!character) { jsonError(res, 404, 'character not found'); return; }
-        const updated = await markReadById(Number(comstarReadMatch[1]), character.account_id);
+        const updated = await markSavedMessageReadById(Number(comstarReadMatch[1]), character.account_id);
         if (!updated) { jsonError(res, 404, 'message not found'); return; }
         jsonOk(res, { ok: true });
         return;
@@ -532,7 +583,7 @@ export function startApiServer(log: Logger, host: string, port: number): http.Se
         if (!username) { jsonError(res, 400, 'X-Username header required'); return; }
         const character = await findCharacterByDisplayName(username);
         if (!character) { jsonError(res, 404, 'character not found'); return; }
-        const deleted = await softDelete(Number(comstarDeleteMatch[1]), character.account_id);
+        const deleted = await markSavedMessageReadById(Number(comstarDeleteMatch[1]), character.account_id);
         if (!deleted) { jsonError(res, 404, 'message not found'); return; }
         jsonOk(res, { ok: true });
         return;

@@ -23,6 +23,10 @@ export interface MessageRow {
   read_at: Date | null;
 }
 
+export interface SavedMessageListRow extends MessageRow {
+  sender_display_name: string | null;
+}
+
 /**
  * Persist a ComStar message.
  *
@@ -125,6 +129,30 @@ export async function fetchNextSavedUnreadMessage(
 }
 
 /**
+ * List saved unread messages for the terminal inbox, oldest first.
+ */
+export async function listSavedUnreadMessages(
+  recipientAccountId: number,
+  limit = 50,
+): Promise<SavedMessageListRow[]> {
+  const res = await pool.query<SavedMessageListRow>(
+    `SELECT m.id, m.sender_account_id, m.recipient_account_id,
+            m.sender_comstar_id, m.body, m.sent_at, m.delivered_at,
+            m.saved_at, m.read_at, c.display_name AS sender_display_name
+     FROM messages m
+     LEFT JOIN characters c
+       ON c.account_id = m.sender_account_id
+     WHERE m.recipient_account_id = $1
+       AND m.saved_at IS NOT NULL
+       AND m.read_at IS NULL
+     ORDER BY m.sent_at ASC, m.id ASC
+     LIMIT $2`,
+    [recipientAccountId, limit],
+  );
+  return res.rows;
+}
+
+/**
  * Mark a list of message IDs as delivered (sets delivered_at = now() when unset).
  * Safe to call with an empty array (no-op).
  */
@@ -164,4 +192,25 @@ export async function markRead(ids: number[]): Promise<void> {
      WHERE id = ANY($1::int[])`,
     [ids],
   );
+}
+
+/**
+ * Mark one saved message as read for its recipient.
+ */
+export async function markSavedMessageReadById(
+  messageId: number,
+  recipientAccountId: number,
+): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE messages
+     SET delivered_at = COALESCE(delivered_at, now()),
+         read_at = COALESCE(read_at, now())
+     WHERE id = $1
+       AND recipient_account_id = $2
+       AND saved_at IS NOT NULL
+       AND read_at IS NULL
+     RETURNING id`,
+    [messageId, recipientAccountId],
+  );
+  return (res.rowCount ?? 0) > 0;
 }
