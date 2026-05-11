@@ -166,6 +166,11 @@ import {
   sendMechVariantPicker,
 } from './world-scene.js';
 import {
+  clearLocalCollapse,
+  consumeDeferredLocalCollapseOnLanding,
+  markLocalCollapse,
+} from './combat-transition-state.js';
+import {
   type SolarisTierKey,
   type SolarisClassKey,
   type SolarisStanding,
@@ -2375,13 +2380,11 @@ function sendCombatLegLossCollapse(
         `before local Cmd70/8 collapse: ${reason}`,
         `${stepLabel}_CMD73_BEFORE`,
       );
-      session.combatLastLocalCollapseAt = Date.now();
-      session.combatLocalDowned = true;
-      session.combatRecoveryExperimentPending = true;
+      markLocalCollapse(session);
+    } else if (slot === 0 && subcommand === 6) {
+      consumeDeferredLocalCollapseOnLanding(session);
     } else if (slot === 0 && subcommand === 0) {
-      session.combatLocalDowned = false;
-      session.combatDeferredLocalCollapsePending = false;
-      session.combatRecoveryExperimentPending = false;
+      clearLocalCollapse(session);
     }
     const packet = buildCmd70ActorTransitionPacket(slot, subcommand, nextSeq(session));
     if (capture) {
@@ -11103,11 +11106,7 @@ export function handleCombatActionFrame(
     session.combatJumpAltitude = 0;
     session.combatAltitudeRaw = 0;
     recordCombatLanding(session, landedFromAltitude);
-    if (session.combatDeferredLocalCollapsePending) {
-      session.combatDeferredLocalCollapsePending = false;
-      session.combatLastLocalCollapseAt = Date.now();
-      session.combatLocalDowned = true;
-      session.combatRecoveryExperimentPending = true;
+    if (consumeDeferredLocalCollapseOnLanding(session)) {
       connLog.info(
         '[world/combat] cmd-12 jump action=6 completed pending local deferred collapse (quietCmd65=%s)',
         session.combatSuppressLocalCmd65WhileDowned ? 'yes' : 'no',
